@@ -7,18 +7,21 @@
 
 
 const int endCharLength = 1;
-const float maxCharWidth = 80;
-const float maxCharHeight = 80;
-const float fontSize = 40;
-const float fontSpacing = 5;
-const char availableChars[] = " abcdefghijklmnopqrstuvwxyzABDCEFGHIJKLMNOPQRSTUVWXYZ1234567890-=!@#$%^&*()_+[];',./{}:\"<>?|`~\n\t";
+float maxCharWidth = 128;
+float maxCharHeight = 128;
+float fontXSpacing = 10;
+float fontYSpacing = 20;
+const float fontSize = 24;
+const char availableChars[] = " abcdefghijklmnopqrstuvwxyzABDCEFGHIJKLMNOPQRSTUVWXYZ1234567890-=!@#$%^&*()_+[];',./{}:\"<>?|`~\n\t\\";
 
 static struct {
+    int startLine;
     int caretBufferIndex;
-    int targetCaretCollumnIndex;
+    int caretRow;
+    int caretCollumn;
     int newLineCount;
     int bufferCount;
-    char buffer[MAX_INPUT_CHARS + 1];
+    char* buffer;
 } text;
 
 static int SearchLeft(const char* buffer, int caret, char c) {
@@ -36,7 +39,7 @@ static void InsertChar(char c) {
     text.buffer[text.caretBufferIndex] = c;
     text.bufferCount++;
     text.caretBufferIndex++;
-    text.targetCaretCollumnIndex++;
+    text.caretCollumn++;
 }
 
 int main(void)
@@ -58,8 +61,6 @@ int main(void)
     SetTextLineSpacing(0); 
 
     //// Editor State
-
-
     Rectangle textBox = { 5, 20, screenWidth - 10, screenHeight - 25 };
     bool mouseOnText = false;
     int framesCounter = 0;
@@ -70,17 +71,20 @@ int main(void)
         bool backspacePressed;
     } input;
 
-    //// Debug Text
-    char defaultText[] = "\tTest Test\nTest\nTest Test\n";
-    text.bufferCount = sizeof(defaultText);
-    for (int i = 0; i < text.bufferCount; ++i)
-        if (defaultText[i] == '\n') text.newLineCount++;
-    memcpy(text.buffer, defaultText, sizeof(defaultText));
+    //// File
+    text.buffer = LoadFileText("./src/main.c");
+    while (text.buffer[text.bufferCount] != '\0') {
+        if (text.buffer[text.bufferCount] == '\n') text.newLineCount++;
+        text.bufferCount++;
+    }
     
     //// Loop
     while (!WindowShouldClose())   
     {
         framesCounter++;
+
+        maxCharWidth = (textBox.width / fontXSpacing) - 1;
+        maxCharHeight = (textBox.height / fontYSpacing) - 1;
         
         //// Input 
         {
@@ -89,9 +93,7 @@ int main(void)
             input.leftMousePressed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
             input.shiftPressed = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
             input.backspacePressed = IsKeyDown(KEY_BACKSPACE);
-            
-
-            
+                        
             int key = GetKeyPressed();
             if (key == 0) {
                 if (IsKeyPressedRepeat(KEY_BACKSPACE)) key = KEY_BACKSPACE;
@@ -104,18 +106,16 @@ int main(void)
             while (key > 0)
             {
                 switch (key) {
-                    case KEY_LEFT:
-                        if (text.caretBufferIndex > 0) {
+                    case KEY_LEFT: if (text.caretBufferIndex > 0) {
                             text.caretBufferIndex--;
                             int currentLineStart = SearchLeft(text.buffer, text.caretBufferIndex, '\n');
-                            text.targetCaretCollumnIndex = text.caretBufferIndex - currentLineStart;
+                            text.caretCollumn = text.caretBufferIndex - currentLineStart;
                         }
                         break;
-                    case KEY_RIGHT:
-                        if (text.caretBufferIndex <= (text.bufferCount - text.newLineCount)) {
+                    case KEY_RIGHT: if (text.caretBufferIndex <= (text.bufferCount - text.newLineCount)) {
                             text.caretBufferIndex++;
                             int currentLineStart = SearchLeft(text.buffer, text.caretBufferIndex, '\n');
-                            text.targetCaretCollumnIndex = text.caretBufferIndex - currentLineStart;
+                            text.caretCollumn = text.caretBufferIndex - currentLineStart;
                         }
                         break;
                     case KEY_UP: {
@@ -124,10 +124,16 @@ int main(void)
                         int upLineStart = SearchLeft(text.buffer, upLineEnd, '\n');
                         int upLineDiff = upLineEnd - upLineStart;
 
-                        text.caretBufferIndex = upLineStart + (text.targetCaretCollumnIndex < upLineDiff ? text.targetCaretCollumnIndex : upLineDiff);
+                        text.caretBufferIndex = upLineStart + (text.caretCollumn < upLineDiff ? text.caretCollumn : upLineDiff);
+                        text.caretRow--;
                         
                         if (text.caretBufferIndex < 0)
                             text.caretBufferIndex = 0;
+
+                        if (text.caretRow < 0) {
+                            text.caretRow = 0;
+                            text.startLine--;
+                        }
 
                         break;
                     }
@@ -138,15 +144,20 @@ int main(void)
                         int downLineEnd = SearchRight(text.buffer, downLineStart, '\n', text.bufferCount);
                         int downLineDiff = downLineEnd - downLineStart;
 
-                        text.caretBufferIndex = downLineStart + (text.targetCaretCollumnIndex < downLineDiff ? text.targetCaretCollumnIndex : downLineDiff );
+                        text.caretBufferIndex = downLineStart + (text.caretCollumn < downLineDiff ? text.caretCollumn : downLineDiff);
+                        text.caretRow++;        
                         
                         if (text.caretBufferIndex >= text.bufferCount)
                             text.caretBufferIndex = text.bufferCount - 2;
 
+                        if (text.caretRow > maxCharHeight - 1) {
+                            text.caretRow = maxCharHeight - 1;
+                            text.startLine++;
+                        }
+
                         break;
                     }
-                    case KEY_BACKSPACE:
-                        if (text.bufferCount > 0) {
+                    case KEY_BACKSPACE: if (text.bufferCount > 0) {
                             if (text.buffer[text.caretBufferIndex - 1] == '\n') 
                                 text.newLineCount--;
                             
@@ -155,8 +166,7 @@ int main(void)
                             text.caretBufferIndex--;
                         }
                         break;
-                    case KEY_DELETE:
-                        if (text.bufferCount > 0 && text.caretBufferIndex < text.bufferCount - 1) {
+                    case KEY_DELETE: if (text.bufferCount > 0 && text.caretBufferIndex < text.bufferCount - 1) {
                             if (text.buffer[text.caretBufferIndex] == '\n') 
                                 text.newLineCount--;
                             
@@ -165,20 +175,12 @@ int main(void)
                         }
                         break;
 
-
-                        InsertChar('\n');
-
-                        break;
-
                     case 'A' ... 'Z': 
                         key = (input.shiftPressed ? 'A' : 'a') + (key - KEY_A); 
                         InsertChar(key); 
                         break;
 
-                    case KEY_ENTER: 
-                        InsertChar('\n'); 
-                        text.newLineCount++;
-                        break;
+                    case KEY_ENTER: InsertChar('\n'); text.newLineCount++; break;
 
                     case KEY_TAB: 
                         InsertChar('\t'); 
@@ -225,24 +227,30 @@ int main(void)
             float frameTime = GetFrameTime();
 
             DrawText(TextFormat("frameTime: %f/", frameTime), 512, 0, 20, GRAY);
-            DrawText(TextFormat("INPUT CHARS: %i/%i %i", text.bufferCount, MAX_INPUT_CHARS, text.caretBufferIndex), 0, 0, 20, DARKGRAY);
+            DrawText(TextFormat("INPUT CHARS: %i %i", text.bufferCount, text.caretBufferIndex), 0, 0, 20, DARKGRAY);
 
             DrawRectangleRec(textBox, LIGHTGRAY);
             DrawRectangleLines((int)textBox.x, (int)textBox.y, (int)textBox.width, (int)textBox.height, DARKGRAY);
             
-            bool blink = ((framesCounter/20)%2) == 0;
+            // bool blink = ((framesCounter/20) % 2) == 0;
             
             Vector2 mousePosition = GetMousePosition();
-            float xSpacing = 20;
-            float ySpacing = 40;
+
             int index = 0;
+            int startLineCount = 0;
+            while (startLineCount < text.startLine) {
+                if (text.buffer[index] == '\n' || text.buffer[index] == '\0')
+                    startLineCount++;
+                index++;
+            }
+
             for (int y = 0; y < maxCharHeight; ++y) {
                 for (int x = 0; x < maxCharWidth; ++x) {
-                    Vector2 position = {textBox.x + xSpacing * x, textBox.y + ySpacing * y};
-                    Rectangle rect = (Rectangle){position.x, position.y, xSpacing, ySpacing};
+                    Vector2 position = {textBox.x + fontXSpacing * x, textBox.y + fontYSpacing * y};
+                    Rectangle rect = (Rectangle){position.x, position.y, fontXSpacing, fontYSpacing};
 
-                    if (index == text.caretBufferIndex && blink) {
-                        DrawLineEx((Vector2){position.x, position.y}, (Vector2){position.x, position.y + fontSize}, 2, ORANGE);
+                    if (index == text.caretBufferIndex) {
+                        DrawLineEx((Vector2){position.x, position.y}, (Vector2){position.x, position.y + fontSize}, 4, ORANGE);
                     }
                     
                     if (input.leftMousePressed && CheckCollisionPointRec(mousePosition, rect)){
