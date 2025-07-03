@@ -14,7 +14,7 @@ float fontYSpacing = 20;
 const float fontSize = 24;
 const char availableChars[] = " abcdefghijklmnopqrstuvwxyzABDCEFGHIJKLMNOPQRSTUVWXYZ1234567890-=!@#$%^&*()_+[];',./{}:\"<>?|`~\n\t\\";
 
-static struct {
+typedef struct TextBuffer {
 	int startLine;
 	int caretBufferIndex;
 	int caretRow;
@@ -24,11 +24,20 @@ static struct {
 	char* buffer;
 	char* path;
 	bool dirty;
-} text;
+} TextBuffer;
+
+static TextBuffer text;
 
 static int SearchLeft(const char* buffer, int caret, char c) {
 	while (buffer[caret - 1] != c && caret > 0) caret--;    
 	return caret;
+}
+
+static int SearchLeftBuffer(const TextBuffer* pText, char c) {
+	const char* pBuffer = pText->buffer;
+	int index = pText->caretBufferIndex;
+	while (pBuffer[index - 1] != c && index > 0) index--;    
+	return index;
 }
 
 static int SearchRight(const char* buffer, int caret, char c, int max) {
@@ -45,13 +54,21 @@ static void InsertChar(char c) {
 	text.dirty = true;
 }
 
+static inline int CurrentLineStartIndex(const TextBuffer* pText) {
+	return SearchLeft(pText->buffer, pText->caretBufferIndex, '\n');;
+}
+
+static inline int CurrentCollumnIndex(const TextBuffer* pText) {
+	return text.caretBufferIndex - CurrentLineStartIndex(pText);
+}
+
 #define KEY_SHIFT_OFFSET   0b10000000000000000000000000000000
 #define KEY_ALT_OFFSET     0b01000000000000000000000000000000
 #define KEY_CONTROL_OFFSET 0b00100000000000000000000000000000
 
 int main(void)
 {
-	// Initialization
+	//// Initialization
 	SetConfigFlags(FLAG_VSYNC_HINT);
 	EnableEventWaiting();
 
@@ -127,20 +144,18 @@ int main(void)
 
 					case KEY_LEFT: if (text.caretBufferIndex > 0) {
 							text.caretBufferIndex--;
-							int currentLineStart = SearchLeft(text.buffer, text.caretBufferIndex, '\n');
-							text.caretCollumn = text.caretBufferIndex - currentLineStart;
+							text.caretCollumn = CurrentCollumnIndex(&text);
 						}
 						break;
 
 					case KEY_RIGHT: if (text.caretBufferIndex <= (text.bufferCount - text.newLineCount)) {
 							text.caretBufferIndex++;
-							int currentLineStart = SearchLeft(text.buffer, text.caretBufferIndex, '\n');
-							text.caretCollumn = text.caretBufferIndex - currentLineStart;
+							text.caretCollumn = CurrentCollumnIndex(&text);
 						}
 						break;
 
 					case KEY_UP: {
-						int currentLineStart = SearchLeft(text.buffer, text.caretBufferIndex, '\n');                        
+						int currentLineStart = CurrentLineStartIndex(&text);                        
 						int upLineEnd = currentLineStart - endCharLength;
 						int upLineStart = SearchLeft(text.buffer, upLineEnd, '\n');
 						int upLineDiff = upLineEnd - upLineStart;
@@ -159,7 +174,7 @@ int main(void)
 						break;
 					}
 					case KEY_DOWN: {
-						int currentLineStart = SearchLeft(text.buffer, text.caretBufferIndex, '\n');
+						int currentLineStart = CurrentLineStartIndex(&text);      
 						int currentLineEnd = SearchRight(text.buffer, text.caretBufferIndex, '\n', text.bufferCount);
 						int downLineStart = currentLineEnd + endCharLength;
 						int downLineEnd = SearchRight(text.buffer, downLineStart, '\n', text.bufferCount);
@@ -223,12 +238,12 @@ int main(void)
 						InsertChar('a' + (key - KEY_A)); 
 						break;
 
-					case '0' ... '9': 
-						InsertChar(key); 
+					case KEY_KP_0 ... KEY_KP_9: 
+						InsertChar('0' + (key - KEY_KP_0)); 
 						break;
 
-					case 'KEY_KP_0' ... 'KEY_KP_9': 
-						InsertChar('0' + (key - KEY_A)); 
+					case '0' ... '9': 
+						InsertChar(key); 
 						break;
 
 					case '`':  InsertChar(key); break;
@@ -297,31 +312,42 @@ int main(void)
 				index++;
 			}
 
+			const int tabWidth = 4;
+
 			for (int y = 0; y < maxCharHeight; ++y) {
 				int tabCount = 0;
-				for (int x = 0; x < maxCharWidth; ++x) {
-					Vector2 position = {textBox.x + (fontXSpacing * x) + (tabCount * fontXSpacing * 4), textBox.y + (fontYSpacing * y)};
+				for (int x = 0; x < maxCharWidth - (tabCount * tabWidth); ++x) {
 
+					Vector2 position = {
+						textBox.x + (fontXSpacing * x) + (tabCount * fontXSpacing * 4), 
+						textBox.y + (fontYSpacing * y)
+					};										
+
+					if (index == text.caretBufferIndex)
+						DrawLineEx((Vector2){position.x, position.y}, (Vector2){position.x, position.y + fontSize}, 4, ORANGE);
+
+					Rectangle rect = {position.x, position.y, fontXSpacing, fontYSpacing};
 					switch (text.buffer[index]) {
 						case '\0':
 							goto FinishDrawingText;
 						case '\n':
 							index++;
+							rect.width = textBox.width - rect.width;
+							if (input.leftMousePressed && CheckCollisionPointRec(mousePosition, rect)){
+								text.caretBufferIndex = index - 1;
+								text.caretCollumn = CurrentCollumnIndex(&text);
+							}
 							goto NextLine;
 						case '\t':
 							tabCount++;
+							rect.width += (tabCount * fontXSpacing * tabWidth);
 							break;
 					}
 				
-					Rectangle rect = {position.x, position.y, (fontXSpacing) + (tabCount * fontXSpacing * 4), fontYSpacing};
-
-					if (index == text.caretBufferIndex) {
-						DrawLineEx((Vector2){position.x, position.y}, (Vector2){position.x, position.y + fontSize}, 4, ORANGE);
-					}
-					
 					if (input.leftMousePressed && CheckCollisionPointRec(mousePosition, rect)){
 						float xDiff = mousePosition.x - (rect.x + (rect.width / 2));
 						text.caretBufferIndex = xDiff > 0 ? index + 1 : index;
+						text.caretCollumn = CurrentCollumnIndex(&text);
 					}
 										
 					int codePointSize;
