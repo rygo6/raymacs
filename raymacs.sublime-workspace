@@ -1,0 +1,679 @@
+{
+	"auto_complete":
+	{
+		"selected_items":
+		[
+			[
+				"text",
+				"textBox"
+			]
+		]
+	},
+	"buffers":
+	[
+		{
+			"file": "Makefile",
+			"settings":
+			{
+				"buffer_size": 2207,
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"file": "src/main.c",
+			"settings":
+			{
+				"buffer_size": 10717,
+				"encoding": "UTF-8",
+				"line_ending": "Windows"
+			},
+			"undo_stack":
+			[
+				[
+					31,
+					3,
+					"left_delete",
+					null,
+					"AwAAAJoiAAAAAAAAmiIAAAAAAAC+AAAAICAgICAgICAgICAgLy8gVmVjdG9yMiBwb3NpdGlvbiA9IChWZWN0b3IyKXsoaW50KXRleHRCb3gueCArIGZvbnRTcGFjaW5nLCAoaW50KXRleHRCb3gueSArIGZvbnRTcGFjaW5nfTsKICAgICAgICAgICAgLy8gRHJhd1RleHRFeChmb250LCBtYWluQnVmZmVyLCBwb3NpdGlvbiwgZm9udFNpemUsIGZvbnRTcGFjaW5nLCBNQVJPT04pO5kiAAAAAAAAmSIAAAAAAAABAAAACpgiAAAAAAAAmCIAAAAAAAABAAAACg",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAABYIwAAAAAAAJoiAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					49,
+					2,
+					"left_delete",
+					null,
+					"AgAAAHoiAAAAAAAAeiIAAAAAAAATAAAAbW91c2VPblRleHQgPyBSRUQgOnkiAAAAAAAAeSIAAAAAAAABAAAAIA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAACNIgAAAAAAAHoiAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					52,
+					1,
+					"insert",
+					{
+						"characters": "\n"
+					},
+					"AQAAAN8hAAAAAAAA4CEAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAADfIQAAAAAAAN8hAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					64,
+					1,
+					"reindent",
+					null,
+					"AQAAAOAhAAAAAAAA7CEAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAADgIQAAAAAAAOAhAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					65,
+					1,
+					"insert",
+					{
+						"characters": "\t"
+					},
+					"AQAAAOwhAAAAAAAA8CEAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAADsIQAAAAAAAOwhAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					66,
+					1,
+					"left_delete",
+					null,
+					"AQAAAOwhAAAAAAAA7CEAAAAAAAAEAAAAICAgIA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAADwIQAAAAAAAPAhAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					74,
+					1,
+					"paste",
+					null,
+					"AQAAAOwhAAAAAAAAMyIAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAADsIQAAAAAAAOwhAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					77,
+					1,
+					"unindent",
+					null,
+					"AQAAAOAhAAAAAAAA4CEAAAAAAAAEAAAAICAgIA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAADwIQAAAAAAAPAhAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					113,
+					1,
+					"insert",
+					{
+						"characters": "I"
+					},
+					"AQAAAP0hAAAAAAAA/iEAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAD9IQAAAAAAAP0hAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					114,
+					1,
+					"left_delete",
+					null,
+					"AQAAAP0hAAAAAAAA/SEAAAAAAAABAAAASQ",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAD+IQAAAAAAAP4hAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					115,
+					1,
+					"insert",
+					{
+						"characters": "Pad"
+					},
+					"AwAAAP0hAAAAAAAA/iEAAAAAAAAAAAAA/iEAAAAAAAD/IQAAAAAAAAAAAAD/IQAAAAAAAAAiAAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAD9IQAAAAAAAP0hAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					123,
+					1,
+					"paste",
+					null,
+					"AgAAAAUiAAAAAAAADCIAAAAAAAAAAAAADCIAAAAAAAAMIgAAAAAAACsAAAA1LCAyMCwgc2NyZWVuV2lkdGggLSAxMCwgc2NyZWVuSGVpZ2h0IC0gMjUg",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAwIgAAAAAAAAUiAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					124,
+					1,
+					"insert",
+					{
+						"characters": " "
+					},
+					"AQAAAAwiAAAAAAAADSIAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAMIgAAAAAAAAwiAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					125,
+					1,
+					"left_delete",
+					null,
+					"AQAAAAwiAAAAAAAADCIAAAAAAAABAAAAIA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAANIgAAAAAAAA0iAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					126,
+					1,
+					"insert",
+					{
+						"characters": ".xx"
+					},
+					"AwAAAAwiAAAAAAAADSIAAAAAAAAAAAAADSIAAAAAAAAOIgAAAAAAAAAAAAAOIgAAAAAAAA8iAAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAMIgAAAAAAAAwiAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					127,
+					1,
+					"insert",
+					{
+						"characters": " "
+					},
+					"AQAAAA8iAAAAAAAAECIAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAPIgAAAAAAAA8iAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					128,
+					2,
+					"left_delete",
+					null,
+					"AgAAAA8iAAAAAAAADyIAAAAAAAABAAAAIA4iAAAAAAAADiIAAAAAAAABAAAAeA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAQIgAAAAAAABAiAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					129,
+					1,
+					"insert",
+					{
+						"characters": " -1"
+					},
+					"AwAAAA4iAAAAAAAADyIAAAAAAAAAAAAADyIAAAAAAAAQIgAAAAAAAAAAAAAQIgAAAAAAABEiAAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAOIgAAAAAAAA4iAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					130,
+					1,
+					"left_delete",
+					null,
+					"AQAAABAiAAAAAAAAECIAAAAAAAABAAAAMQ",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAARIgAAAAAAABEiAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					131,
+					1,
+					"insert",
+					{
+						"characters": "4"
+					},
+					"AQAAABAiAAAAAAAAESIAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAQIgAAAAAAABAiAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					132,
+					1,
+					"left_delete",
+					null,
+					"AQAAABAiAAAAAAAAECIAAAAAAAABAAAANA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAARIgAAAAAAABEiAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					133,
+					1,
+					"insert",
+					{
+						"characters": " 4,"
+					},
+					"AwAAABAiAAAAAAAAESIAAAAAAAAAAAAAESIAAAAAAAASIgAAAAAAAAAAAAASIgAAAAAAABMiAAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAQIgAAAAAAABAiAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					134,
+					1,
+					"insert",
+					{
+						"characters": " text"
+					},
+					"BQAAABMiAAAAAAAAFCIAAAAAAAAAAAAAFCIAAAAAAAAVIgAAAAAAAAAAAAAVIgAAAAAAABYiAAAAAAAAAAAAABYiAAAAAAAAFyIAAAAAAAAAAAAAFyIAAAAAAAAYIgAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAATIgAAAAAAABMiAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					136,
+					1,
+					"insert_completion",
+					{
+						"completion": "textBox",
+						"format": "text",
+						"keep_prefix": false,
+						"must_insert": false,
+						"trigger": "textBox"
+					},
+					"AgAAABQiAAAAAAAAFCIAAAAAAAAEAAAAdGV4dBQiAAAAAAAAGyIAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAYIgAAAAAAABgiAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					137,
+					1,
+					"insert",
+					{
+						"characters": ".y"
+					},
+					"AgAAABsiAAAAAAAAHCIAAAAAAAAAAAAAHCIAAAAAAAAdIgAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAbIgAAAAAAABsiAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					138,
+					1,
+					"insert",
+					{
+						"characters": " +"
+					},
+					"AgAAAB0iAAAAAAAAHiIAAAAAAAAAAAAAHiIAAAAAAAAfIgAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAdIgAAAAAAAB0iAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					139,
+					1,
+					"insert",
+					{
+						"characters": " 4,"
+					},
+					"AwAAAB8iAAAAAAAAICIAAAAAAAAAAAAAICIAAAAAAAAhIgAAAAAAAAAAAAAhIgAAAAAAACIiAAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAfIgAAAAAAAB8iAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					140,
+					1,
+					"insert",
+					{
+						"characters": " tes"
+					},
+					"BAAAACIiAAAAAAAAIyIAAAAAAAAAAAAAIyIAAAAAAAAkIgAAAAAAAAAAAAAkIgAAAAAAACUiAAAAAAAAAAAAACUiAAAAAAAAJiIAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAiIgAAAAAAACIiAAAAAAAAAAAAAAAA8L8"
+				]
+			]
+		}
+	],
+	"build_system": "Packages/Makefile/Make.sublime-build",
+	"build_system_choices":
+	[
+		[
+			[
+				[
+					"Packages/Makefile/Make.sublime-build",
+					""
+				],
+				[
+					"Packages/Makefile/Make.sublime-build",
+					"Clean"
+				]
+			],
+			[
+				"Packages/Makefile/Make.sublime-build",
+				""
+			]
+		]
+	],
+	"build_varint": "",
+	"command_palette":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+			[
+				"package",
+				"Package Control: Remove Package"
+			],
+			[
+				"Preferences",
+				"Preferences: CTags Settings"
+			],
+			[
+				"instal ",
+				"Package Control: Install Package"
+			]
+		],
+		"width": 0.0
+	},
+	"console":
+	{
+		"height": 0.0,
+		"history":
+		[
+		]
+	},
+	"distraction_free":
+	{
+		"menu_visible": true,
+		"show_minimap": false,
+		"show_open_files": false,
+		"show_tabs": false,
+		"side_bar_visible": false,
+		"status_bar_visible": false
+	},
+	"expanded_folders":
+	[
+		"/C/UnitySrc/raymacs",
+		"/C/UnitySrc/raymacs/src"
+	],
+	"file_history":
+	[
+		"/C/Users/Ryan/Downloads/GTFTrainingProject/Assets/Tests/GraphicsTests.cs",
+		"/C/Users/Ryan/AppData/LocalLow/Unity/PolySpatialTest/Logs/VisitedGenericProperties_WindowsPlayer_6000.0.22f1_mono",
+		"/C/Users/Ryan/Downloads/GTFTrainingProject/Packages/manifest.json",
+		"/C/UnitySrc/polyspatial/Projects/PolySpatialTest/Packages/manifest.json",
+		"/C/Users/Ryan/Downloads/GTFTrainingProject/Packages/packages-lock.json",
+		"/C/UnitySrc/polyspatial/Projects/SerializationTest/Packages/manifest.json",
+		"/C/Users/Ryan/Desktop/fileb.txt",
+		"/C/Users/Ryan/Desktop/filea.txt",
+		"/C/UnitySrc/polyspatial/Projects/PolySpatialTest/Library/Artifacts/06/06f710d81fd559d52dc664b00d95c1cd",
+		"/C/UnitySrc/ignore.conf",
+		"/C/UnitySrc/polyspatial/Projects/PolySpatialTest/Logs/PolySpatialSerialization_UserAssemblyPostProcessing_Unity.RenderPipelines.Universal.Runtime.log",
+		"/C/UnitySrc/polyspatial/Projects/PolySpatialTest/Logs/PolySpatialSerialization_UserAssemblyPostProcessing_Unity.RenderPipelines.GPUDriven.Runtime.log",
+		"/C/UnitySrc/polyspatial/Projects/PolySpatialTest/Logs/PolySpatialSerialization_UserAssemblyPostProcessing_Unity.RenderPipelines.Core.Runtime.log",
+		"/C/UnitySrc/polyspatial/Projects/PolySpatialTest/Logs/PolySpatialSerialization_UserAssemblyPostProcessing_Unity.PolySpatial.Serialization.log",
+		"/C/UnitySrc/polyspatial/Projects/PolySpatialTest/Logs/PolySpatialSerialization_UserAssemblyPostProcessing_Unity.PolySpatial.log",
+		"/C/UnitySrc/polyspatial/Projects/PolySpatialTest/Logs/PolySpatialSerialization_BuiltInAssemblyPostProcessing_Unity.PolySpatial.Serialization.Generated.log",
+		"/C/UnitySrc/polyspatial/Projects/PolySpatialTest/PolySpatialSerialization_UserAssemblyPostProcessing_Unity.PolySpatial.Serialization_bak.log",
+		"/C/UnitySrc/polyspatial/Projects/PolySpatialTest/PolySpatialSerialization_BuiltInAssemblyPostProcessing_Unity.PolySpatial.Serialization.Generated_bak.log",
+		"/C/Users/Ryan/Downloads/VisitedGenericProperties_IPhonePlayer_6000.2.0a8_il2cpp.log",
+		"/C/Users/Ryan/Downloads/VisitedGenericProperties_OSXEditor_6000.2.0a8_mono.log",
+		"/C/UnitySrc/polyspatial/Projects/PolySpatialTest/Logs/VisitedGenericProperties_WindowsEditor_6000.0.22f1_mono.log",
+		"/C/UnitySrc/raymacs/build.bat",
+		"/C/UnitySrc/raymacs/Makefile",
+		"/C/Users/Ryan/AppData/LocalLow/Unity/PolySpatialTest/VisitedProperties.txt",
+		"/C/Users/Ryan/AppData/LocalLow/Unity/PolySpatialTest/SortedTypes.txt",
+		"/C/UnitySrc/polyspatial/Projects/PolySpatialTest/SerializeTypeInclusions2",
+		"/C/UnitySrc/polyspatial/Projects/PolySpatialTest/SerializeTypeInclusions",
+		"/C/UnitySrc/polyspatial/Projects/PolySpatialTest/SerializeTypeInclusions.cs",
+		"/C/UnitySrc/polyspatial/.yamato/metafiles/package-visionos.metafile",
+		"/C/UnitySrc/polyspatial/.yamato/metafiles/package.metafile",
+		"/C/UnitySrc/polyspatial/.yamato/package-test.yml",
+		"/C/UnitySrc/polyspatial/.yamato/package-visionos-build.yml",
+		"/C/UnitySrc/polyspatial/Packages/com.unity.polyspatial/Extensions/Collections/Unity.PolySpatial.CollectionsExtensions.asmref",
+		"/C/UnitySrc/polyspatial/Packages/com.unity.polyspatial/package.json",
+		"/C/UnitySrc/polyspatial/.yamato/e2e-test.yml",
+		"/C/UnitySrc/polyspatial/Projects/PolySpatialTest/Packages/packages-lock.json",
+		"/C/UnitySrc/polyspatial/Projects/PlayToDevice/Packages/manifest.json",
+		"/C/UnitySrc/polyspatial/Projects/URPSamples/Packages/manifest.json",
+		"/C/UnitySrc/polyspatial/Packages/com.unity.polyspatial.serialization/package.json",
+		"/C/UnitySrc/polyspatial/Packages/com.unity.polyspatial.serialization/CodeGen.meta",
+		"/C/UnitySrc/polyspatial/Projects/PolySpatialSamples/Assets/Scripts/ColorRandomizer.cs",
+		"/C/Users/Ryan/Desktop/CollectionsExtensions.cs",
+		"/C/Users/Ryan/AppData/LocalLow/DefaultCompany/PerformanceTest/Player.log",
+		"/C/UnitySrc/quantum/Tools/build-binary-assemblies.sh",
+		"/C/UnitySrc/UTransportTests/Assets/Samples/Unity Transport/2.3.0/Jobified Client and Server/Scripts/JobifiedServerBehaviour.cs",
+		"/C/UnitySrc/ECSTest/Assets/Scripts/AddComponentsExample.cs",
+		"/C/UnitySrc/ECSTest/Assets/Scripts/Test.cs",
+		"/C/UnitySrc/UTransportTests/Assets/Samples/Unity Transport/2.3.0/Jobified Client and Server/Scripts/JobifiedClientBehaviour.cs",
+		"/C/UnitySrc/com.unity.runtime-scene-serialization/Runtime/Adapters/JsonAdapter.Component.cs",
+		"/C/UnitySrc/com.unity.runtime-scene-serialization/Runtime/Adapters/JsonAdapter.GameObject.cs",
+		"/C/UnitySrc/polyspatial/Projects/PerformanceTest/Packages/manifest.json",
+		"/C/UnitySrc/polyspatial/Projects/PerformanceTest/Assets/Terrain/TerrainA.asset",
+		"/C/UnitySrc/polyspatial/Projects/PolySpatialShell/Assets/PolySpatial/Shell/Scripts/Platform/DeviceSceneBootstrap.cs",
+		"/C/UnitySrc/polyspatial/Projects/PolySpatialShell/Assets/PolySpatial/Shell/Scripts/AppVolume/PolySpatialAppVolumeContent.cs",
+		"/C/UnitySrc/TipTap/Projects/TipTap-Server/Packages/manifest.json",
+		"/C/UnitySrc/polyspatial/Projects/PolySpatialShell/Assets/PolySpatial/Shell/Scripts/AppVolume/ShaderClippingUtilities.cs",
+		"/C/UnitySrc/polyspatial/Projects/PolySpatialShell/Assets/PolySpatial/Shell/Scripts/Platform/SystemBootstrap.cs",
+		"/C/UnitySrc/polyspatial/Packages/com.unity.playtodevice/package.json",
+		"/C/UnitySrc/quantum/Projects/PerformanceTest/Packages/manifest.json",
+		"/C/UnitySrc/polyspatial/Projects/SimpleSamples/Packages/manifest.json",
+		"/C/UnitySrc/polyspatial/Packages/com.unity.polyspatial.visionos/package.json",
+		"/C/UnitySrc/quantum/Projects/BoatAttack/Packages/manifest.json",
+		"/C/Users/Ryan/AppData/Local/Unity/Editor/Editor.log",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.extensions/Editor/DummyEditor.cs",
+		"/C/UnitySrc/com.unity.runtime-scene-serialization/package.json",
+		"/C/UnitySrc/quantum/Projects/BoatAttack/TestRunnerOptions.json",
+		"/C/UnitySrc/BoatAttack/Packages/manifest.json",
+		"/C/UnitySrc/quantum/Projects/PerformanceTest/Library/Bee/artifacts/StandaloneWindows64_CodeGen/Unity.PolySpatial.Serialization.CodeGen.rsp2",
+		"/C/UnitySrc/quantum/Projects/PerformanceTest/Library/Bee/artifacts/StandaloneWindows64_CodeGen/Unity.PolySpatial.Serialization.CodeGen.rsp",
+		"/C/UnitySrc/quantum/Projects/PerformanceTest/Library/Bee/artifacts/StandaloneWindows64_CodeGen/FlatSharp.Runtime.Extensions.rsp2",
+		"/C/Users/Ryan/.Editors/6000.0.22f1-001fa5a8e29a/Data/Tools/Compilation/Unity.SourceGenerators/Unity.SourceGenerators.deps.json",
+		"/C/Users/Ryan/AppData/Local/Unity/Editor/upm.log",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/package.json",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/README.md",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/Editor/Unity.PolySpatial.Serialization.Editor.asmdef",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/Runtime/Unity.PolySpatial.Serialization.asmdef",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/Tests/Editor/Unity.PolySpatial.Serialization.Editor.Tests.asmdef",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/com.unity.serialization/Editor/Unity.Serialization.Editor/SessionState.cs",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.extensions/Tests/Runtime/Unity.PolySpatial.Extensions.Runtime.Tests.asmdef",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/Tests/Runtime/Unity.PolySpatial.Serialization.RuntimeTests.asmdef",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/Tests/Runtime/Unity.PolySpatial.Serialization.Tests.asmdef",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial/Tests/Runtime/Unity.PolySpatial.FunctionalTests.asmdef",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/Documentation~/projectMetadata.json",
+		"/C/UnitySrc/com.unity.package-starter-kit/Runtime/Unity.YourPackageName.SubGroup.asmdef",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/Documentation~/filter.yml",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/Tests/Editor/Unity.PolySpatial.Extensions.Editor.Tests.asmdef",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/Tests/Editor/EditorExampleTest.cs",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/Tests/Runtime/Unity.PolySpatial.Extensions.Runtime.Tests.asmdef",
+		"/C/UnitySrc/com.unity.package-starter-kit/package.json",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/Documentation~/index.md",
+		"/C/UnitySrc/ReflectionSerialization/Components.txt",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/.editorconfig",
+		"/C/UnitySrc/com.unity.properties/Properties/Packages/com.unity.serialization/package.json",
+		"/C/UnitySrc/com.unity.properties/Properties/Packages/com.unity.properties/package.json",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/LICENSE.md",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/CONTRIBUTING.md",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/CHANGELOG.md.meta",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/CHANGELOG.md",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/.gitignore",
+		"/C/UnitySrc/quantum/Packages/com.unity.polyspatial.serialization/.npmignore",
+		"/C/UnitySrc/quantum/.yamato/perf-test.yml",
+		"/C/UnitySrc/quantum/Projects/PerformanceTest/RealityKitPerformanceDataBaseline.json",
+		"/C/UnitySrc/quantum/.yamato/metafiles/perf-test.metafile",
+		"/C/UnitySrc/quantum/Projects/PerformanceTest/UnityPerformanceDataBaseline.json",
+		"/C/UnitySrc/quantum/Projects/PerformanceTest/README.md",
+		"/C/UnitySrc/quantum/README.md",
+		"/C/UnitySrc/quantum/Projects/PerformanceTest/PerformanceDataBaseline.json",
+		"/C/Users/Ryan/Downloads/UnityPerformanceDataBaseline.json",
+		"/C/UnitySrc/quantum/Tools/pbrtest/windows/UnityPerformanceBenchmarkReporter.runtimeconfig.json",
+		"/C/UnitySrc/quantum/Tools/pbrtest/windows/UnityPerformanceBenchmarkReporter.deps.json",
+		"/C/UnitySrc/quantum/Tools/pbrtest/macOS/Microsoft.NETCore.App.deps.json",
+		"/C/UnitySrc/quantum/Tools/pbrtest/macOS/UnityPerformanceBenchmarkReporter.runtimeconfig.json",
+		"/C/UnitySrc/quantum/Tools/pbrtest/macOS/UnityPerformanceBenchmarkReporter.deps.json",
+		"/C/UnitySrc/quantum/Tools/RunPerfBenchmarkReporter.py",
+		"/C/UnitySrc/quantum/.yamato/metafiles/package.metafile",
+		"/C/UnitySrc/quantum/Projects/PolySpatialSamples/Assets/Editor/ScraperTools.cs",
+		"/C/UnitySrc/quantum/.yamato/api-test.yml",
+		"/C/UnitySrc/quantum/Projects/PerformanceTest/AllPerformanceData.json",
+		"/C/UnitySrc/quantum/Projects/PerformanceTest/output.json",
+		"/C/UnitySrc/quantum/Projects/PerformanceTest/UnityPerformanceDataBaseline - Copy.json",
+		"/C/UnitySrc/quantum/.yamato/package-validate.yml",
+		"/C/UnitySrc/quantum/.yamato/project-coverage.yml",
+		"/C/UnitySrc/quantum/.yamato/package-test.yml",
+		"/C/UnitySrc/quantum/Tools/filter-ci-logs.py",
+		"/C/UnitySrc/quantum/.yamato/metafiles/common.metafile",
+		"/C/UnitySrc/quantum/Projects/visionOSTemplate/Packages/manifest.json",
+		"/C/Users/Ryan/Downloads/IN-80724_shuriken-unity-share/Packages/manifest.json",
+		"/C/Users/Ryan/Downloads/visionOSTemplate-2.0.0-pre.4/Packages/manifest.json"
+	],
+	"find":
+	{
+		"height": 28.0
+	},
+	"find_in_files":
+	{
+		"height": 101.0,
+		"where_history":
+		[
+		]
+	},
+	"find_state":
+	{
+		"case_sensitive": false,
+		"find_history":
+		[
+			"mouseOnText"
+		],
+		"highlight": true,
+		"in_selection": false,
+		"preserve_case": false,
+		"regex": false,
+		"replace_history":
+		[
+		],
+		"reverse": false,
+		"scrollbar_highlights": true,
+		"show_context": true,
+		"use_buffer2": true,
+		"use_gitignore": true,
+		"whole_word": false,
+		"wrap": true
+	},
+	"groups":
+	[
+		{
+			"sheets":
+			[
+				{
+					"buffer": 0,
+					"file": "Makefile",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 2207,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								269,
+								269
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Makefile/Makefile.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 1,
+					"stack_multiselect": false,
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"file": "src/main.c",
+					"selected": true,
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 10717,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								8275,
+								8275
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/C++/C.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 3363.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 0,
+					"stack_multiselect": false,
+					"type": "text"
+				}
+			]
+		}
+	],
+	"incremental_find":
+	{
+		"height": 28.0
+	},
+	"input":
+	{
+		"height": 0.0
+	},
+	"layout":
+	{
+		"cells":
+		[
+			[
+				0,
+				0,
+				1,
+				1
+			]
+		],
+		"cols":
+		[
+			0.0,
+			1.0
+		],
+		"rows":
+		[
+			0.0,
+			1.0
+		]
+	},
+	"menu_visible": true,
+	"output.exec":
+	{
+		"height": 273.0
+	},
+	"output.find_results":
+	{
+		"height": 0.0
+	},
+	"pinned_build_system": "Packages/Makefile/Make.sublime-build",
+	"project": "raymacs.sublime-project",
+	"replace":
+	{
+		"height": 52.0
+	},
+	"save_all_on_build": true,
+	"select_file":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"select_project":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"select_symbol":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"selected_group": 0,
+	"settings":
+	{
+	},
+	"show_minimap": true,
+	"show_open_files": false,
+	"show_tabs": true,
+	"side_bar_visible": true,
+	"side_bar_width": 246.0,
+	"status_bar_visible": true,
+	"template_settings":
+	{
+	}
+}
