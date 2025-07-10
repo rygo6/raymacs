@@ -29,38 +29,96 @@ typedef struct TextBuffer {
 } TextBuffer;
 
 static int SearchLeft(const char* pBuffer, int index, char c) {
-	while (pBuffer[index - 1] != c && index > 0) index--;    
+	while (pBuffer[index] != c && index >= 0) index--;    
 	return index;
 }
 
-static int SearchLeftAndCount(const char* pBuffer, int index, char searchChar, char countChar, int *pCount) {
-	while (pBuffer[index - 1] != searchChar && index > 0) {
+static int SearchRight(const char* pBuffer, int index, char c) {
+	while (pBuffer[index] != c && pBuffer[index] != '\0') index++;    
+	return index;
+}
+
+static inline int CurrentCollumnIndex(const TextBuffer* pText) {
+	return pText->caretBufferIndex - (SearchLeft(pText->buffer, pText->caretBufferIndex, '\n') + endCharLength);  
+}
+
+static bool SearchLeftAndCount(const char* pBuffer, char searchChar, char countChar, int* pFoundIndex, int *pCount) {
+	int index = *pFoundIndex;
+	while (pBuffer[index] != searchChar) {
 		if (pBuffer[index] == countChar) *pCount = *pCount + 1;
-		index--;    
+		if (index <= 0) return false;
+		index--; 
 	}
-	return index;
+	*pFoundIndex = index;
+	return true;
 }
 
-static int SearchRight(const char* pBuffer, int index, char c, int max) {
-	while (pBuffer[index] != c && index < max) index++;    
-	return index;
-}
-
-static int SearchRightAndCount(const char* pBuffer, int index, char searchChar, int max, char countChar, int *pCount) {
-	while (pBuffer[index] != searchChar && index < max) {
+static bool SearchRightAndCount(const char* pBuffer, char searchChar, char countChar, int* pFoundIndex, int *pCount) {
+	int index = *pFoundIndex;
+	while (pBuffer[index] != searchChar) {
 		if (pBuffer[index] == countChar) *pCount = *pCount + 1;
+		if (pBuffer[index] == '\0') return false;
 		index++;    
 	}
-	return index;
+	*pFoundIndex = index;
+	return true;
 }
 
-static inline int SearchLeftText(const TextBuffer* pText, char c) {
-	return SearchLeft(pText->buffer, pText->caretBufferIndex, c);
+static void textMoveUpStartLine(TextBuffer* pText) {
+	if (pText->caretRow < 0) {
+		pText->startLine += pText->caretRow;
+		pText->caretRow = 0;
+
+		if (pText->startLine < 0)
+			pText->startLine = 0;
+	}
 }
 
-static inline int SearchRightText(const TextBuffer* pText, char c) {
-	return SearchRight(pText->buffer, pText->caretBufferIndex, c, pText->bufferCount);
+static void textMoveDownStartLine(TextBuffer* pText) {
+	int iMaxCharHeight = maxCharHeight - 1;
+	if (pText->caretRow > iMaxCharHeight) {
+		pText->startLine += pText->caretRow - iMaxCharHeight;
+		pText->caretRow = iMaxCharHeight;
+	}
+} 
+
+static void MoveLeftText(TextBuffer* pText, char c, bool caretToRight, bool skipImmediateMatch) {
+	int newLineCount = 0;
+	int newIndex = pText->caretBufferIndex;
+	if (skipImmediateMatch) {
+		if (caretToRight && newIndex >= 0) {
+			if      (pText->buffer[newIndex - 1] == '\n') { newIndex--; newLineCount++; }
+			else if (pText->buffer[newIndex - 1] == c)      newIndex--;
+		}
+		if      (pText->buffer[newIndex] == '\n') { newIndex--; newLineCount++; }
+		else if (pText->buffer[newIndex] == c)      newIndex--;
+	}
+	if (!SearchLeftAndCount(pText->buffer, c, '\n', &newIndex, &newLineCount)) return;
+	if (caretToRight) newIndex++;
+	if (newIndex <= 0) return;
+
+	pText->caretBufferIndex = newIndex;
+	pText->caretRow -= newLineCount;
+	pText->caretCollumn = CurrentCollumnIndex(pText);
+	textMoveUpStartLine(pText);
 }
+
+static void MoveRightText(TextBuffer* pText, char c, bool caretToRight, bool skipImmediateMatch) {
+	int newLineCount = 0;
+	int newIndex = pText->caretBufferIndex;
+	if (skipImmediateMatch){
+		if      (pText->buffer[newIndex] == '\n') { newIndex++; newLineCount++; }
+		else if (pText->buffer[newIndex] == c) newIndex++;
+	}
+	if (!SearchRightAndCount(pText->buffer, c, '\n', &newIndex, &newLineCount))	return;
+	if (caretToRight) newIndex++;
+	if (newIndex >= pText->bufferCount - endCharLength)	return;
+
+	pText->caretBufferIndex = newIndex;
+	pText->caretRow += newLineCount;
+	pText->caretCollumn = CurrentCollumnIndex(pText);
+	textMoveDownStartLine(pText);
+} 
 
 static void InsertChar(TextBuffer* pText, char c) {
 	memmove(pText->buffer + pText->caretBufferIndex + 1, pText->buffer + pText->caretBufferIndex, pText->bufferCount - pText->caretBufferIndex - 1);
@@ -69,71 +127,6 @@ static void InsertChar(TextBuffer* pText, char c) {
 	pText->caretBufferIndex++;
 	pText->caretCollumn++;
 	pText->dirty = true;
-}
-
-static inline int CurrentLineStartIndex(const TextBuffer* pText) {
-	return SearchLeftText(pText,'\n');
-}
-
-static inline int CurrentLineEndIndex(const TextBuffer* pText) {
-	return SearchRightText(pText,'\n');
-}
-
-static inline int CurrentCollumnIndex(const TextBuffer* pText) {
-	return pText->caretBufferIndex - CurrentLineStartIndex(pText);
-}
-
-static void textMoveUpStartLine(TextBuffer* pText) {
-	if (pText->caretBufferIndex < 0)	
-		pText->caretBufferIndex = 0;
-
-	LOG("%d %d\n", pText->startLine, pText->caretRow);
-	if (pText->caretRow < 0) {
-		pText->startLine += pText->caretRow;
-		pText->caretRow = 0;
-
-		if (pText->startLine < 0)
-			pText->startLine = 0;
-	}
-} 
-
-static void textMoveDownStartLine(TextBuffer* pText) {
-	if (pText->caretBufferIndex < 0)
-		pText->caretBufferIndex = 0;
-
-	int iMaxCharHeight = maxCharHeight - 1;
-	LOG("%d %d %d\n", pText->startLine, pText->caretRow, iMaxCharHeight);
-	if (pText->caretRow > iMaxCharHeight) {
-		pText->startLine += pText->caretRow - iMaxCharHeight;
-		pText->caretRow = iMaxCharHeight;
-	}
-} 
-
-static void MoveLeftText(TextBuffer* pText, char c) {
-	if (pText->caretBufferIndex <= 0) 
-		return;
-
-	int newLineCount = 0;
-	pText->caretBufferIndex = SearchLeftAndCount(pText->buffer, pText->caretBufferIndex - 1, c, '\n', &newLineCount);
-	pText->caretRow -= newLineCount;
-	pText->caretCollumn = CurrentCollumnIndex(pText);
-
-	textMoveUpStartLine(pText);
-}
-
-static void MoveRightText(TextBuffer* pText, char c) {
-	// if (pText->caretBufferIndex >= (pText->bufferCount - pText->newLineCount))
-	if (pText->caretBufferIndex >= pText->bufferCount)
-		return;
-
-	int newLineCount = 0;
-	pText->caretBufferIndex = SearchRightAndCount(pText->buffer, pText->caretBufferIndex + 1, c, pText->bufferCount, '\n', &newLineCount) + 1;
-	pText->caretRow += newLineCount;
-	pText->caretCollumn = CurrentCollumnIndex(pText);
-
-	LOG("%d\n", newLineCount);
-
-	textMoveDownStartLine(pText);
 }
 
 static TextBuffer text;
@@ -221,7 +214,7 @@ int main(void)
 				switch (key | input.modifierCombination) {
 
 					case KEY_CONTROL_OFFSET | KEY_LEFT:
-						MoveLeftText(pText, ' ');
+						MoveLeftText(pText, ' ', true, true);
 						break;
 
 					case KEY_LEFT: 
@@ -229,55 +222,64 @@ int main(void)
 							break;
 
 						text.caretBufferIndex--;
-						text.caretCollumn = CurrentCollumnIndex(&text);
+						text.caretCollumn = CurrentCollumnIndex(pText);
+
+						textMoveUpStartLine(pText);
 						break;
 
 					case KEY_CONTROL_OFFSET | KEY_RIGHT:
-						MoveRightText(pText, ' ');
+						MoveRightText(pText, ' ', true, true);
 						break;
 
 					case KEY_RIGHT: 
-						if (text.caretBufferIndex >= (text.bufferCount - text.newLineCount))
+												LOG("%d\n", text.caretBufferIndex);
+						if (text.caretBufferIndex >= text.bufferCount - endCharLength)
 							break;
+
+						if (pText->buffer[pText->caretBufferIndex] == '\n')
+							pText->caretRow++;
 						
-						text.caretBufferIndex++;		
-						text.caretCollumn = CurrentCollumnIndex(&text);
+						pText->caretBufferIndex++;		
+						pText->caretCollumn = CurrentCollumnIndex(pText);
+
+						textMoveDownStartLine(pText);
 						break;
 
 					case KEY_CONTROL_OFFSET | KEY_UP:
-						MoveLeftText(pText, '{');
+						MoveLeftText(pText, '{', false, true);
 						break;
 
 					case KEY_UP: {
-						int currentLineStart = CurrentLineStartIndex(&text);                        
-						int upLineEnd = currentLineStart - endCharLength;
-						int upLineStart = SearchLeft(text.buffer, upLineEnd, '\n');
+						int upLineEnd = SearchLeft(pText->buffer, pText->caretBufferIndex - 1, '\n');        
+						int upLineStart = SearchLeft(pText->buffer, upLineEnd - endCharLength, '\n') + endCharLength;
 						int upLineDiff = upLineEnd - upLineStart;
+						if (upLineStart < 0)
+							break;
 
 						text.caretBufferIndex = upLineStart + (text.caretCollumn < upLineDiff ? text.caretCollumn : upLineDiff);
 						text.caretRow--;
 					
 						textMoveUpStartLine(pText);
-
 						break;
 					}
 
 					case KEY_CONTROL_OFFSET | KEY_DOWN:
-						MoveRightText(pText, '{');
+						MoveRightText(pText, '{', false, true);
 						break;
 
-					case KEY_DOWN: {
-						int currentLineStart = CurrentLineStartIndex(&text);      
-						int currentLineEnd = CurrentLineEndIndex(&text);
+					case KEY_DOWN: { 
+						int currentLineEnd = SearchRight(pText->buffer, pText->caretBufferIndex, '\n');
 						int downLineStart = currentLineEnd + endCharLength;
-						int downLineEnd = SearchRight(text.buffer, downLineStart, '\n', text.bufferCount);
+						int downLineEnd = SearchRight(pText->buffer, downLineStart, '\n');
+						if (downLineStart >= text.bufferCount - endCharLength)
+							break;
+
 						int downLineDiff = downLineEnd - downLineStart;
 
 						text.caretBufferIndex = downLineStart + (text.caretCollumn < downLineDiff ? text.caretCollumn : downLineDiff);
 						text.caretRow++;        
 
 						textMoveDownStartLine(pText);
-
 						break;
 					}
 					case KEY_BACKSPACE: if (text.bufferCount > 0) {
