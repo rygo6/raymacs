@@ -4,6 +4,24 @@
 #include <stdint.h>
 #include <string.h>
 
+//      0  1    2
+// 369  
+// bcioolharnline
+// 012345678901234
+
+typedef uint8_t     u8;
+typedef uint16_t    u16;
+typedef uint32_t    u32;
+typedef uint64_t    u64;
+typedef int8_t      i8;
+typedef int16_t     i16;
+typedef int32_t     i32;
+typedef int64_t     i64;
+typedef _Float16    f16;
+typedef float       f32;
+typedef double      f64;
+typedef const char* str;
+
 #define MAX_INPUT_CHARS 2048
 
 #define LOG(...) printf(__VA_ARGS__);
@@ -24,8 +42,8 @@ typedef struct TextBuffer {
 	int newLineCount;
 	int bufferCount;
 	char* buffer;
-	char* path;
 	bool dirty;
+	char* path;
 } TextBuffer;
 
 static int SearchLeft(const char* pBuffer, int index, char c) {
@@ -159,12 +177,13 @@ int main(void)
 	int framesCounter = 0;
 	
 	struct {
-		bool leftMouse;
-		bool shift;
-		bool ctrl;
-		bool alt;
-		bool back;
-		uint32_t modifierCombination;
+		float scrollMouse;
+		bool  leftMouse;
+		bool  shift;
+		bool  ctrl;
+		bool  alt;
+		bool  back;
+		u32   modifierCombination;
 	} input;
 
 	//// File
@@ -188,11 +207,12 @@ int main(void)
 		{
 			SetMouseCursor(mouseOnText ? MOUSE_CURSOR_IBEAM : MOUSE_CURSOR_DEFAULT);
 	
-			input.leftMouse = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
-			input.back      = IsKeyDown(KEY_BACKSPACE);
-			input.shift     = IsKeyDown(KEY_LEFT_SHIFT)   || IsKeyDown(KEY_RIGHT_SHIFT);
-			input.alt       = IsKeyDown(KEY_LEFT_ALT)     || IsKeyDown(KEY_RIGHT_ALT);
-			input.ctrl      = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+			input.scrollMouse = GetMouseWheelMove();
+			input.leftMouse   = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+			input.back        = IsKeyDown(KEY_BACKSPACE);
+			input.shift       = IsKeyDown(KEY_LEFT_SHIFT)   || IsKeyDown(KEY_RIGHT_SHIFT);
+			input.alt         = IsKeyDown(KEY_LEFT_ALT)     || IsKeyDown(KEY_RIGHT_ALT);
+			input.ctrl        = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
 
 			input.modifierCombination = (input.shift * KEY_SHIFT_OFFSET) |
 										(input.alt   * KEY_ALT_OFFSET)   |
@@ -207,7 +227,6 @@ int main(void)
 				else if (IsKeyPressedRepeat(KEY_LEFT)) key   = KEY_LEFT;
 				else if (IsKeyPressedRepeat(KEY_RIGHT)) key  = KEY_RIGHT;
 			}
-
 
 			while (key > 0)
 			{
@@ -232,7 +251,6 @@ int main(void)
 						break;
 
 					case KEY_RIGHT: 
-												LOG("%d\n", text.caretBufferIndex);
 						if (text.caretBufferIndex >= text.bufferCount - endCharLength)
 							break;
 
@@ -368,6 +386,8 @@ int main(void)
 					case KEY_SHIFT_OFFSET | ',':  InsertChar(pText, '<'); break;
 					case KEY_SHIFT_OFFSET | '.':  InsertChar(pText, '>'); break;
 					case KEY_SHIFT_OFFSET | '/':  InsertChar(pText, '?'); break;
+
+					default: break;
 				}
 				
 				key = GetKeyPressed();
@@ -452,6 +472,8 @@ int main(void)
 							c =  '_';
 							color = LIGHTGRAY;
 							break;
+
+						default: break;
 					}
 				
 					if (input.leftMouse && CheckCollisionPointRec(mousePosition, rect)){
@@ -466,11 +488,13 @@ int main(void)
 										
 					index++;
 				}
-				NextLine:
+
+
+				NextLine:;
 			}       
-			FinishDrawingText:
-	
 		}
+
+		FinishDrawingText:
 		EndDrawing();
 		
 	}
