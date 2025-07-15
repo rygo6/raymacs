@@ -17,7 +17,6 @@ typedef int8_t      i8;
 typedef int16_t     i16;
 typedef int32_t     i32;
 typedef int64_t     i64;
-typedef _Float16    f16;
 typedef float       f32;
 typedef double      f64;
 typedef const char* str;
@@ -25,6 +24,8 @@ typedef const char* str;
 #define MAX_INPUT_CHARS 2048
 
 #define LOG(...) printf(__VA_ARGS__);
+
+#define TO_LOWER_C(_c) 'a' + (_c - KEY_A)
 
 const int endCharLength = 1;
 float maxCharWidth = 128;
@@ -42,8 +43,8 @@ typedef struct TextBuffer {
 	int newLineCount;
 	int bufferCount;
 	char* buffer;
-	bool dirty;
 	char* path;
+	bool dirty;
 } TextBuffer;
 
 static int SearchLeft(const char* pBuffer, int index, char c) {
@@ -101,6 +102,9 @@ static void textMoveDownStartLine(TextBuffer* pText) {
 } 
 
 static void MoveLeftText(TextBuffer* pText, char c, bool caretToRight, bool skipImmediateMatch) {
+	// if (pText->caretBufferIndex <= 0) 
+		// return;
+
 	int newLineCount = 0;
 	int newIndex = pText->caretBufferIndex;
 	if (skipImmediateMatch) {
@@ -122,6 +126,9 @@ static void MoveLeftText(TextBuffer* pText, char c, bool caretToRight, bool skip
 }
 
 static void MoveRightText(TextBuffer* pText, char c, bool caretToRight, bool skipImmediateMatch) {
+	// if (pText->caretBufferIndex >= pText->bufferCount - endCharLength)
+		// return;
+
 	int newLineCount = 0;
 	int newIndex = pText->caretBufferIndex;
 	if (skipImmediateMatch){
@@ -149,9 +156,9 @@ static void InsertChar(TextBuffer* pText, char c) {
 
 static TextBuffer text;
 
-#define KEY_SHIFT_OFFSET   0b10000000000000000000000000000000
-#define KEY_ALT_OFFSET     0b01000000000000000000000000000000
-#define KEY_CONTROL_OFFSET 0b00100000000000000000000000000000
+#define KEY_SHIFT_OFFSET 0b10000000000000000000000000000000
+#define KEY_ALT_OFFSET   0b01000000000000000000000000000000
+#define KEY_CTRL_OFFSET  0b00100000000000000000000000000000
 
 int main(void)
 {
@@ -162,7 +169,7 @@ int main(void)
 	const int screenWidth = 1600;
 	const int screenHeight = 1200;
 
-	InitWindow(screenWidth, screenHeight, "raytex");
+	InitWindow(screenWidth, screenHeight, "rayDE");
 	   
 	//// Font
 	int codepointCount = 0;
@@ -194,8 +201,8 @@ int main(void)
 		text.bufferCount++;
 	}
 	
-	TextBuffer* pText = &text;
 	//// Loop
+	TextBuffer* pText = &text;
 	while (!WindowShouldClose())   
 	{
 		framesCounter++;
@@ -207,38 +214,41 @@ int main(void)
 		{
 			SetMouseCursor(mouseOnText ? MOUSE_CURSOR_IBEAM : MOUSE_CURSOR_DEFAULT);
 	
+			//// Refresh Input
 			input.scrollMouse = GetMouseWheelMove();
+
 			input.leftMouse   = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+
 			input.back        = IsKeyDown(KEY_BACKSPACE);
 			input.shift       = IsKeyDown(KEY_LEFT_SHIFT)   || IsKeyDown(KEY_RIGHT_SHIFT);
 			input.alt         = IsKeyDown(KEY_LEFT_ALT)     || IsKeyDown(KEY_RIGHT_ALT);
 			input.ctrl        = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
 
-			input.modifierCombination = (input.shift * KEY_SHIFT_OFFSET) |
-										(input.alt   * KEY_ALT_OFFSET)   |
-										(input.ctrl  * KEY_CONTROL_OFFSET);
+			input.modifierCombination = (input.shift ? KEY_SHIFT_OFFSET : 0) |
+										(input.alt   ? KEY_ALT_OFFSET   : 0) |
+										(input.ctrl  ? KEY_CTRL_OFFSET  : 0);
 						
 			int key = GetKeyPressed();
-			if (key == 0) {
-				if (IsKeyPressedRepeat(KEY_BACKSPACE)) key   = KEY_BACKSPACE;
-				else if (IsKeyPressedRepeat(KEY_DELETE)) key = KEY_DELETE;
-				else if (IsKeyPressedRepeat(KEY_DOWN)) key   = KEY_DOWN;
-				else if (IsKeyPressedRepeat(KEY_UP)) key     = KEY_UP;
-				else if (IsKeyPressedRepeat(KEY_LEFT)) key   = KEY_LEFT;
-				else if (IsKeyPressedRepeat(KEY_RIGHT)) key  = KEY_RIGHT;
-			}
 
+			if (key == 0)
+				if      (IsKeyPressedRepeat(KEY_BACKSPACE)) key = KEY_BACKSPACE;
+				else if (IsKeyPressedRepeat(KEY_DELETE)) key    = KEY_DELETE;
+				else if (IsKeyPressedRepeat(KEY_DOWN)) key      = KEY_DOWN;
+				else if (IsKeyPressedRepeat(KEY_UP)) key        = KEY_UP;
+				else if (IsKeyPressedRepeat(KEY_LEFT)) key      = KEY_LEFT;
+				else if (IsKeyPressedRepeat(KEY_RIGHT)) key     = KEY_RIGHT;
+
+			//// Input Switch
 			while (key > 0)
 			{
 				switch (key | input.modifierCombination) {
-
-					case KEY_CONTROL_OFFSET | KEY_LEFT:
+					/// Move Left
+					case KEY_ALT_OFFSET | KEY_LEFT:
 						MoveLeftText(pText, ' ', true, true);
 						break;
 
 					case KEY_LEFT: 
-						if (text.caretBufferIndex <= 0) 
-							break;
+						if (text.caretBufferIndex <= 0) break;
 
 						text.caretBufferIndex--;
 						text.caretCollumn = CurrentCollumnIndex(pText);
@@ -246,13 +256,9 @@ int main(void)
 						textMoveUpStartLine(pText);
 						break;
 
-					case KEY_CONTROL_OFFSET | KEY_RIGHT:
-						MoveRightText(pText, ' ', true, true);
-						break;
-
+					/// Move Right
 					case KEY_RIGHT: 
-						if (text.caretBufferIndex >= text.bufferCount - endCharLength)
-							break;
+						if (text.caretBufferIndex >= text.bufferCount - endCharLength) break;
 
 						if (pText->buffer[pText->caretBufferIndex] == '\n')
 							pText->caretRow++;
@@ -263,7 +269,64 @@ int main(void)
 						textMoveDownStartLine(pText);
 						break;
 
-					case KEY_CONTROL_OFFSET | KEY_UP:
+					case KEY_ALT_OFFSET | KEY_RIGHT:
+						MoveRightText(pText, ' ', true, true);
+						break;
+
+					case KEY_ALT_OFFSET | KEY_ENTER: {
+						char searchChar = pText->buffer[pText->caretBufferIndex];
+						MoveRightText(pText, searchChar, false, true);
+						break;
+					}
+
+					case  KEY_ALT_OFFSET | '`' : 
+					case  KEY_ALT_OFFSET | '-' : 
+					case  KEY_ALT_OFFSET | '=' : 
+					case  KEY_ALT_OFFSET | '[' : 
+					case  KEY_ALT_OFFSET | ']' : 
+					case  KEY_ALT_OFFSET | '\\':
+					case  KEY_ALT_OFFSET | ';' : 
+					case  KEY_ALT_OFFSET | '\'':
+					case  KEY_ALT_OFFSET | ',' : 
+					case  KEY_ALT_OFFSET | '.' : 
+					case  KEY_ALT_OFFSET | '/' : 
+					case (KEY_ALT_OFFSET | '0') ... (KEY_ALT_OFFSET | '9'): 
+						MoveRightText(pText, key, false, true);
+						break;
+
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | '1':  MoveRightText(pText, '!', false, true); break;
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | '2':  MoveRightText(pText, '@', false, true); break;
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | '3':  MoveRightText(pText, '#', false, true); break;
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | '4':  MoveRightText(pText, '$', false, true); break;
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | '5':  MoveRightText(pText, '%', false, true); break;
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | '6':  MoveRightText(pText, '^', false, true); break;
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | '7':  MoveRightText(pText, '&', false, true); break;
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | '8':  MoveRightText(pText, '*', false, true); break;
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | '9':  MoveRightText(pText, '(', false, true); break;
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | '0':  MoveRightText(pText, ')', false, true); break;
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | '`':  MoveRightText(pText, '~', false, true); break;
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | '-':  MoveRightText(pText, '_', false, true); break;
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | '=':  MoveRightText(pText, '+', false, true); break;
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | '[':  MoveRightText(pText, '{', false, true); break;
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | ']':  MoveRightText(pText, '}', false, true); break;
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | '\\': MoveRightText(pText, '|', false, true); break;
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | ';':  MoveRightText(pText, ':', false, true); break;
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | '\'': MoveRightText(pText, '"', false, true); break;
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | ',':  MoveRightText(pText, '<', false, true); break;
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | '.':  MoveRightText(pText, '>', false, true); break;
+					case KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | '/':  MoveRightText(pText, '?', false, true); break;
+
+					case (KEY_ALT_OFFSET | KEY_SHIFT_OFFSET |'A') ... (KEY_ALT_OFFSET | KEY_SHIFT_OFFSET | 'Z'): 
+						MoveRightText(pText, key, false, true);
+						break;
+
+					case (KEY_ALT_OFFSET | 'A') ... (KEY_ALT_OFFSET | 'Z'): 
+						MoveRightText(pText, TO_LOWER_C(key), false, true);
+						break;
+
+
+					/// Move Up
+					case KEY_ALT_OFFSET | KEY_UP:
 						MoveLeftText(pText, '{', false, true);
 						break;
 
@@ -281,7 +344,8 @@ int main(void)
 						break;
 					}
 
-					case KEY_CONTROL_OFFSET | KEY_DOWN:
+					/// Move Down
+					case KEY_ALT_OFFSET | KEY_DOWN:
 						MoveRightText(pText, '{', false, true);
 						break;
 
@@ -332,8 +396,8 @@ int main(void)
 						InsertChar(pText, ' '); 
 						break;
 
-					case KEY_CONTROL_OFFSET | KEY_S:
-						printf("Saving: %s", text.path);
+					case KEY_CTRL_OFFSET | KEY_S:
+						LOG("Saving: %s", text.path);
 						SaveFileText(text.path, text.buffer);
 						break;
 
