@@ -51,6 +51,13 @@ typedef struct TextBuffer {
 	bool dirty;
 } TextBuffer;
 
+#define SCAN_BUFFER_CAPACITY 32
+typedef struct ScanBuffer {
+	int foundIndex;
+	int bufferCt;
+	char buffer[SCAN_BUFFER_CAPACITY];
+} ScanBuffer;
+
 static int buffScanCharLeft(const char* pBuffer, int index, char c) {
 	while (pBuffer[index] != c && index >= 0) index--;    
 	return index;
@@ -247,12 +254,14 @@ int main(void)
 	}
 
 	/// Text State
-	int newScanIndex = 0;
-	char scanBuffer[128];
-	int scanBufferCt = 0;
-	memset(scanBuffer, 0, sizeof(scanBuffer));
+	ScanBuffer scan = {
+		.foundIndex = -1,
+		.bufferCt   = 0,
+		.buffer     = {},
+	};
 
 	int priorKey = 0;
+
 	TextBuffer* pText = &text;
 	
 	/// Loop
@@ -296,11 +305,11 @@ int main(void)
 			/// Finish Input Actions Release
 			if (currentKey == 0 && input.modifierCombination == 0) {
 
-				if (scanBufferCt != 0) {
-					LOG("Finish Scan: %s %d\n", scanBuffer, newScanIndex);
-					if (newScanIndex != -1) pText->caretBufferIndex += newScanIndex;
-					newScanIndex = 0;
-					scanBufferCt = 0;
+				if (scan.bufferCt != 0) {
+					LOG("Finish Scan: %s %d\n", scan.buffer, scan.foundIndex);
+					if (scan.foundIndex != -1) pText->caretBufferIndex += scan.foundIndex;
+					scan.foundIndex = -1;
+					scan.bufferCt = 0;
 				}
 
 			}
@@ -308,6 +317,7 @@ int main(void)
 			/// Input Switch
 			while (currentKey > 0)
 			{
+				int modifiedKey = currentKey;
 				switch (currentKey | input.modifierCombination) {
 
 					/// Move Left
@@ -353,51 +363,52 @@ int main(void)
 						textScanCharRight(pText, ' ', TEXT_CARET_RIGHT, TEXT_SCAN_MATCH_SKIP_IMMEDIATE);
 						break;
 
-					// case  KEY_RALT_OFFSET | '`' : 
-					// case  KEY_RALT_OFFSET | '-' : 
-					// case  KEY_RALT_OFFSET | '=' : 
-					// case  KEY_RALT_OFFSET | '[' : 
-					// case  KEY_RALT_OFFSET | ']' : 
-					// case  KEY_RALT_OFFSET | '\\':
-					// case  KEY_RALT_OFFSET | ';' : 
-					// case  KEY_RALT_OFFSET | '\'':
-					// case  KEY_RALT_OFFSET | ',' : 
-					// case  KEY_RALT_OFFSET | '.' : 
-					// case  KEY_RALT_OFFSET | '/' : 
-					// case (KEY_RALT_OFFSET | '0') ... (KEY_RALT_OFFSET | '9'): 
-					// 	textScanCharRight(pText, currentKey, TEXT_CARET_LEFT, TEXT_SCAN_MATCH_SKIP_IMMEDIATE);
-					// 	break;
+					case  KEY_RALT_OFFSET | '`' : 
+					case  KEY_RALT_OFFSET | '-' : 
+					case  KEY_RALT_OFFSET | '=' : 
+					case  KEY_RALT_OFFSET | '[' : 
+					case  KEY_RALT_OFFSET | ']' : 
+					case  KEY_RALT_OFFSET | '\\':
+					case  KEY_RALT_OFFSET | ';' : 
+					case  KEY_RALT_OFFSET | '\'':
+					case  KEY_RALT_OFFSET | ',' : 
+					case  KEY_RALT_OFFSET | '.' : 
+					case  KEY_RALT_OFFSET | '/' : 
+					case (KEY_RALT_OFFSET | '0') ... (KEY_RALT_OFFSET | '9'): 
+						textScanCharRight(pText, currentKey, TEXT_CARET_LEFT, TEXT_SCAN_MATCH_SKIP_IMMEDIATE);
+						break;
 
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '1':  textScanCharRight(pText, '!', false, true); break;
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '2':  textScanCharRight(pText, '@', false, true); break;
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '3':  textScanCharRight(pText, '#', false, true); break;
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '4':  textScanCharRight(pText, '$', false, true); break;
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '5':  textScanCharRight(pText, '%', false, true); break;
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '6':  textScanCharRight(pText, '^', false, true); break;
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '7':  textScanCharRight(pText, '&', false, true); break;
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '8':  textScanCharRight(pText, '*', false, true); break;
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '9':  textScanCharRight(pText, '(', false, true); break;
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '0':  textScanCharRight(pText, ')', false, true); break;
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '`':  textScanCharRight(pText, '~', false, true); break;
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '-':  textScanCharRight(pText, '_', false, true); break;
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '=':  textScanCharRight(pText, '+', false, true); break;
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '[':  textScanCharRight(pText, '{', false, true); break;
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | ']':  textScanCharRight(pText, '}', false, true); break;
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '\\': textScanCharRight(pText, '|', false, true); break;
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | ';':  textScanCharRight(pText, ':', false, true); break;
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '\'': textScanCharRight(pText, '"', false, true); break;
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | ',':  textScanCharRight(pText, '<', false, true); break;
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '.':  textScanCharRight(pText, '>', false, true); break;
-					// case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '/':  textScanCharRight(pText, '?', false, true); break;
-
-					// case (KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | 'A') ... (KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | 'Z'): 
-					// 	textScanCharRight(pText, currentKey, TEXT_CARET_LEFT, TEXT_SCAN_MATCH_SKIP_IMMEDIATE);
-					// 	break;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '1':  modifiedKey = '!'; goto UpdateScanBuffer;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '2':  modifiedKey = '@'; goto UpdateScanBuffer;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '3':  modifiedKey = '#'; goto UpdateScanBuffer;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '4':  modifiedKey = '$'; goto UpdateScanBuffer;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '5':  modifiedKey = '%'; goto UpdateScanBuffer;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '6':  modifiedKey = '^'; goto UpdateScanBuffer;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '7':  modifiedKey = '&'; goto UpdateScanBuffer;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '8':  modifiedKey = '*'; goto UpdateScanBuffer;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '9':  modifiedKey = '('; goto UpdateScanBuffer;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '0':  modifiedKey = ')'; goto UpdateScanBuffer;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '`':  modifiedKey = '~'; goto UpdateScanBuffer;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '-':  modifiedKey = '_'; goto UpdateScanBuffer;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '=':  modifiedKey = '+'; goto UpdateScanBuffer;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '[':  modifiedKey = '{'; goto UpdateScanBuffer;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | ']':  modifiedKey = '}'; goto UpdateScanBuffer;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '\\': modifiedKey = '|'; goto UpdateScanBuffer;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | ';':  modifiedKey = ':'; goto UpdateScanBuffer;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '\'': modifiedKey = '"'; goto UpdateScanBuffer;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | ',':  modifiedKey = '<'; goto UpdateScanBuffer;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '.':  modifiedKey = '>'; goto UpdateScanBuffer;
+					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '/':  modifiedKey = '?'; goto UpdateScanBuffer;
 
 					case (KEY_RALT_OFFSET | 'A') ... (KEY_RALT_OFFSET | 'Z'): 
-						scanBuffer[scanBufferCt++] = TO_LOWER_C(currentKey);
-						scanBuffer[scanBufferCt] = '\0';
-						newScanIndex = TextFindIndex(pText->buffer + pText->caretBufferIndex, scanBuffer);
+						modifiedKey = TO_LOWER_C(currentKey);
+						goto UpdateScanBuffer;
+
+					case (KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | 'A') ... (KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | 'Z'): 
+					UpdateScanBuffer:
+						scan.buffer[scan.bufferCt++] = modifiedKey;
+						scan.buffer[scan.bufferCt] = '\0';
+						scan.foundIndex = TextFindIndex(pText->buffer + pText->caretBufferIndex, scan.buffer);
 						break;
 
 
@@ -594,14 +605,14 @@ int main(void)
 							(Vector2){position.x, position.y + fontYSpacing}, 
 							4, ORANGE);
 
-					if (scanBufferCt != 0 && newScanIndex != -1 && index == text.caretBufferIndex + newScanIndex) {
+					if (scan.bufferCt != 0 && scan.foundIndex != -1 && index == text.caretBufferIndex + scan.foundIndex) {
 						DrawLineEx(
 							(Vector2){position.x, position.y}, 
 							(Vector2){position.x, position.y + fontYSpacing}, 
 							2, GREEN);
 						DrawLineEx(
 							(Vector2){position.x, position.y + fontYSpacing}, 
-							(Vector2){position.x + fontXSpacing * scanBufferCt, position.y + fontYSpacing},
+							(Vector2){position.x + fontXSpacing * scan.bufferCt, position.y + fontYSpacing},
 							2, GREEN);
 					}
 
