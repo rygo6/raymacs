@@ -12,8 +12,10 @@
 // bcioolharnline
 // 012345678901234
 
-#define FIND_CARET_COLOR     (Color){ 0, 255, 0, 255 }
-#define FIND_HIGHLIGHT_COLOR (Color){ 0, 255, 0, 64 }
+#define FIND_CARET_COLOR     (Color){   0, 255,   0, 255 }
+#define FIND_HIGHLIGHT_COLOR (Color){   0, 255,   0, 64  }
+#define COLOR_COMMAND_BOX    (Color){  20,  20,   2, 200 }
+#define COLOR_TEXT_BOX       (Color){ 230, 230, 230, 255 }   
 
 typedef uint8_t     u8;
 typedef uint16_t    u16;
@@ -27,16 +29,18 @@ typedef float       f32;
 typedef double      f64;
 typedef const char* str;
 
-#define MAX_INPUT_CHARS 2048
+#define MAX_INPUT_CHARS      2048
 #define TEXT_BUFFER_CAPACITY 32000
 
 #define LOG(...) printf(__VA_ARGS__);
 #define CASE_EITHER(_key, _a, _b) case _key | _a | _b: case _key | _a: case _key | _b
 #define TO_LOWER_C(_c) 'a' + (_c - KEY_A)
 
-const int endCharLength = 1;
 float maxCharWidth = 128;
 float maxCharHeight = 128;
+
+const int endCharLength = 1;
+const int tabWidth = 4;
 const float fontXSpacing = 10;
 const float fontYSpacing = 20;
 const float fontSize = 24;
@@ -77,6 +81,7 @@ typedef struct CommandBuffer {
 
 	Direction scanDirection; 
 	int       scanFoundIndex;
+	bool      firstKeyPressed;
 
 } CommandBuffer;
 
@@ -186,6 +191,10 @@ static void textScanCharLeft(TextBuffer* pText, char scanChar, TextCaret caretJu
 	pText->caretRow -= newLineCount;
 	pText->caretCollumn = textCollumnIndex(pText);
 	textUpdateStartLineLeft(pText);
+}
+
+static void ^Test() {
+
 }
 
 static void textScanCharRight(TextBuffer* pText, char scanChar, TextCaret caretJustify, TextScanMatch scanMatch) {
@@ -357,6 +366,7 @@ int main(void)
 				if (command.enabled){
 					LOG("Command Finish\n");
 					command.enabled = false;
+					command.firstKeyPressed = false;
 
 					if (command.scanFoundIndex > 0) {
 						pText->caretBufferIndex += command.scanFoundIndex;
@@ -419,6 +429,8 @@ int main(void)
 						if (!command.enabled) {
 							LOG("Command Enabled\n");
 							command.enabled = true;
+							if (command.bufferCount > 0) 
+								command.scanFoundIndex = TextFindIndex(pText->buffer + pText->caretBufferIndex + 1, command.buffer) + 1;
 						}
 						break;
 
@@ -429,43 +441,43 @@ int main(void)
 						}
 						break;
 
-					case KEY_LALT_MOD | '`' : 
-					case KEY_LALT_MOD | '-' : 
-					case KEY_LALT_MOD | '=' : 
-					case KEY_LALT_MOD | '[' : 
-					case KEY_LALT_MOD | ']' : 
-					case KEY_LALT_MOD | '\\':
-					case KEY_LALT_MOD | ';' : 
-					case KEY_LALT_MOD | '\'':
-					case KEY_LALT_MOD | ',' : 
-					case KEY_LALT_MOD | '.' : 
-					case KEY_LALT_MOD | '/' : 
+					case '`'  | KEY_LALT_MOD: 
+					case '-'  | KEY_LALT_MOD: 
+					case '='  | KEY_LALT_MOD: 
+					case '['  | KEY_LALT_MOD: 
+					case ']'  | KEY_LALT_MOD: 
+					case '\\' | KEY_LALT_MOD:
+					case ';'  | KEY_LALT_MOD: 
+					case '\'' | KEY_LALT_MOD:
+					case ','  | KEY_LALT_MOD: 
+					case '.'  | KEY_LALT_MOD: 
+					case '/'  | KEY_LALT_MOD: 
 
 					case (KEY_LALT_MOD | '0') ... (KEY_LALT_MOD | '9'): 
 						textScanCharRight(pText, currentKey, TEXT_CARET_LEFT, TEXT_SCAN_MATCH_SKIP_IMMEDIATE);
 						break;
 
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '1':  modifiedKey = '!'; goto UpdateCommandBuffer;
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '2':  modifiedKey = '@'; goto UpdateCommandBuffer;
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '3':  modifiedKey = '#'; goto UpdateCommandBuffer;
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '4':  modifiedKey = '$'; goto UpdateCommandBuffer;
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '5':  modifiedKey = '%'; goto UpdateCommandBuffer;
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '6':  modifiedKey = '^'; goto UpdateCommandBuffer;
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '7':  modifiedKey = '&'; goto UpdateCommandBuffer;
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '8':  modifiedKey = '*'; goto UpdateCommandBuffer;
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '9':  modifiedKey = '('; goto UpdateCommandBuffer;
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '0':  modifiedKey = ')'; goto UpdateCommandBuffer;
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '`':  modifiedKey = '~'; goto UpdateCommandBuffer;
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '-':  modifiedKey = '_'; goto UpdateCommandBuffer;
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '=':  modifiedKey = '+'; goto UpdateCommandBuffer;
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '[':  modifiedKey = '{'; goto UpdateCommandBuffer;
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | ']':  modifiedKey = '}'; goto UpdateCommandBuffer;
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '\\': modifiedKey = '|'; goto UpdateCommandBuffer;
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | ';':  modifiedKey = ':'; goto UpdateCommandBuffer;
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '\'': modifiedKey = '"'; goto UpdateCommandBuffer;
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | ',':  modifiedKey = '<'; goto UpdateCommandBuffer;
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '.':  modifiedKey = '>'; goto UpdateCommandBuffer;
-					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '/':  modifiedKey = '?'; goto UpdateCommandBuffer;
+					case '1'  | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = '!'; goto UpdateCommandBuffer;
+					case '2'  | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = '@'; goto UpdateCommandBuffer;
+					case '3'  | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = '#'; goto UpdateCommandBuffer;
+					case '4'  | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = '$'; goto UpdateCommandBuffer;
+					case '5'  | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = '%'; goto UpdateCommandBuffer;
+					case '6'  | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = '^'; goto UpdateCommandBuffer;
+					case '7'  | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = '&'; goto UpdateCommandBuffer;
+					case '8'  | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = '*'; goto UpdateCommandBuffer;
+					case '9'  | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = '('; goto UpdateCommandBuffer;
+					case '0'  | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = ')'; goto UpdateCommandBuffer;
+					case '`'  | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = '~'; goto UpdateCommandBuffer;
+					case '-'  | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = '_'; goto UpdateCommandBuffer;
+					case '='  | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = '+'; goto UpdateCommandBuffer;
+					case '['  | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = '{'; goto UpdateCommandBuffer;
+					case ']'  | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = '}'; goto UpdateCommandBuffer;
+					case '\\' | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = '|'; goto UpdateCommandBuffer;
+					case ';'  | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = ':'; goto UpdateCommandBuffer;
+					case '\'' | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = '"'; goto UpdateCommandBuffer;
+					case ','  | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = '<'; goto UpdateCommandBuffer;
+					case '.'  | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = '>'; goto UpdateCommandBuffer;
+					case '/'  | KEY_LALT_MOD | KEY_LSHIFT_MOD: modifiedKey = '?'; goto UpdateCommandBuffer;
 
 					case (KEY_LALT_MOD | 'A') ... (KEY_LALT_MOD | 'Z'): 
 						modifiedKey = TO_LOWER_C(currentKey);
@@ -474,6 +486,10 @@ int main(void)
 					case (KEY_LALT_MOD | KEY_LSHIFT_MOD | 'A') ... (KEY_LALT_MOD | KEY_LSHIFT_MOD | 'Z'): 
 						goto UpdateCommandBuffer;
 
+					case KEY_LALT_MOD | KEY_BACKSPACE:
+					case KEY_LALT_MOD | KEY_DELETE:
+						command.bufferCount = 0;
+						break;
 
 
 					/// Move Up
@@ -617,9 +633,14 @@ int main(void)
 					case KEY_LSHIFT_MOD | '/':  textInsertChar(pText, '?'); break;
 
 					UpdateCommandBuffer:
+						if (!command.firstKeyPressed) {
+							command.firstKeyPressed = true;
+							command.bufferCount = 0;
+							command.scanFoundIndex = -1;
+						}
 						command.buffer[command.bufferCount++] = modifiedKey;
 						command.buffer[command.bufferCount] = '\0';
-						command.scanFoundIndex = TextFindIndex(pText->buffer + pText->caretBufferIndex, command.buffer);
+						command.scanFoundIndex = TextFindIndex(pText->buffer + pText->caretBufferIndex + 1, command.buffer) + 1;
 						break;
 
 					default: break;
@@ -643,22 +664,16 @@ int main(void)
 			DrawText(TextFormat("frameTime: %f/", frameTime), 512, 0, 20, GRAY);
 			DrawText(TextFormat("INPUT CHARS: %i %i", text.bufferCount, text.caretBufferIndex), 0, 0, 20, DARKGRAY);
 
-			DrawRectangleRec(textBox, RAYWHITE);
+			DrawRectangleRec(textBox, COLOR_TEXT_BOX);
 			DrawRectangleLines((int)textBox.x, (int)textBox.y, (int)textBox.width, (int)textBox.height, DARKGRAY);
 			
 			// bool blink = ((framesCounter/20) % 2) == 0;
 			
 			Vector2 mousePosition = GetMousePosition();
 
+			Vector2 caretPosition;
+			Rectangle caretRect;
 			int index = pText->startLineIndex;
-			// int startLineCount = 0;
-			// while (startLineCount < text.startLine) {
-			// 	if (text.buffer[index] == '\n' || text.buffer[index] == '\0')
-			// 		startLineCount++;
-			// 	index++;
-			// }
-
-			const int tabWidth = 4;
 
 			for (int y = 0; y < maxCharHeight; ++y) {
 				int tabCount = 0;
@@ -668,16 +683,15 @@ int main(void)
 						textBox.x + (fontXSpacing * x) + (tabCount * fontXSpacing * 4), 
 						textBox.y + (fontYSpacing * y)
 					};										
+					Rectangle rect = {position.x, position.y, fontXSpacing, fontYSpacing};
 
-					if (index == text.caretBufferIndex)
-						DrawLineEx(
-							(Vector2){position.x, position.y}, 
-							(Vector2){position.x, position.y + fontYSpacing}, 
-							4, ORANGE);
+					if (index == text.caretBufferIndex) {
+						caretPosition = position;
+						caretRect = rect;
+					}
 
 					if (command.bufferCount != 0 && command.scanFoundIndex != -1 && index == text.caretBufferIndex + command.scanFoundIndex) {
-						DrawRectangleRec(
-							(Rectangle) {
+						DrawRectangleRec((Rectangle) {
 								.x = position.x, .y = position.y, 
 								.width = fontXSpacing * command.bufferCount, 
 								.height = fontYSpacing}, 
@@ -687,8 +701,6 @@ int main(void)
 							(Vector2){position.x, position.y + fontYSpacing}, 
 							4, FIND_CARET_COLOR);
 					}
-
-					Rectangle rect = {position.x, position.y, fontXSpacing, fontYSpacing};
 
 					char c = text.buffer[index];
 					Color color = DARKGRAY;
@@ -747,20 +759,33 @@ int main(void)
 				NextLine:;
 			}       
 
+			/// DrawCaret
+			DrawLineEx(
+				(Vector2){caretPosition.x, caretPosition.y}, 
+				(Vector2){caretPosition.x, caretPosition.y + fontYSpacing}, 
+				4, ORANGE);
 
+			/// DrawCommandBox
+			if (command.enabled) {
+				const int commandBoxExpand = 4;
+				Rectangle commandBoxRect = {
+					.x = caretPosition.x - commandBoxExpand,
+					.y = caretPosition.y - commandBoxExpand,
+					.width = fontXSpacing * command.bufferCount + commandBoxExpand * 2, 
+					.height = fontYSpacing + commandBoxExpand * 2,
+				};
 
-			// if (command.enabled != 0 && command.scanFoundIndex != -1 && index == text.caretBufferIndex + command.scanFoundIndex) {
-			// 	DrawRectangleRec(
-			// 		(Rectangle) {
-			// 			.x = position.x, .y = position.y, 
-			// 			.width = fontXSpacing * command.bufferCount, 
-			// 			.height = fontYSpacing}, 
-			// 		FIND_HIGHLIGHT_COLOR);
-			// 	DrawLineEx(
-			// 		(Vector2){position.x, position.y}, 
-			// 		(Vector2){position.x, position.y + fontYSpacing}, 
-			// 		4, FIND_CARET_COLOR);
-			// }
+				DrawRectangleRec(commandBoxRect, COLOR_COMMAND_BOX);
+				DrawRectangleLinesEx(commandBoxRect, 2, WHITE);
+
+				for (int index = 0; index < command.bufferCount; ++index) {
+					char c = command.buffer[index];
+					int codePointSize;
+					int codePoint = GetCodepoint(&c, &codePointSize);
+					Vector2 position = { caretPosition.x + (fontXSpacing * index), caretPosition.y };								
+					DrawTextCodepoint(font, codePoint, position, fontSize, WHITE);
+				}
+			}
 		}
 
 		FinishDrawingText:
