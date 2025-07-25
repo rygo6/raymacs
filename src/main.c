@@ -12,6 +12,9 @@
 // bcioolharnline
 // 012345678901234
 
+#define FIND_CARET_COLOR     (Color){ 0, 255, 0, 255 }
+#define FIND_HIGHLIGHT_COLOR (Color){ 0, 255, 0, 64 }
+
 typedef uint8_t     u8;
 typedef uint16_t    u16;
 typedef uint32_t    u32;
@@ -34,12 +37,13 @@ typedef const char* str;
 const int endCharLength = 1;
 float maxCharWidth = 128;
 float maxCharHeight = 128;
-float fontXSpacing = 10;
-float fontYSpacing = 20;
+const float fontXSpacing = 10;
+const float fontYSpacing = 20;
 const float fontSize = 24;
 const char availableChars[] = "·¬ abcdefghijklmnopqrstuvwxyzABDCEFGHIJKLMNOPQRSTUVWXYZ1234567890-=!@#$%^&*()_+[];',./{}:\"<>?|`~\n\t\\";
 
 typedef struct TextBuffer {
+	int startLineIndex;
 	int startLine;
 	int caretBufferIndex;
 	int caretRow;
@@ -51,12 +55,30 @@ typedef struct TextBuffer {
 	bool dirty;
 } TextBuffer;
 
-#define SCAN_BUFFER_CAPACITY 32
-typedef struct ScanBuffer {
-	int foundIndex;
-	int bufferCt;
-	char buffer[SCAN_BUFFER_CAPACITY];
-} ScanBuffer;
+typedef enum Direction {
+	DIRECTION_NONE,
+	DIRECTION_FORWARD,
+	DIRECTION_BACKWARD,
+	DIRECTION_COUNT,
+} Direction;
+const char* string_Direction[] = {
+	[DIRECTION_NONE]     = "DIRECTION_NONE",
+	[DIRECTION_FORWARD]  = "DIRECTION_FORWARD",
+	[DIRECTION_BACKWARD] = "DIRECTION_BACKWARD",
+};
+
+#define COMMAND_BUFFER_CAPACITY 32
+typedef struct CommandBuffer {
+	bool enabled;
+	bool repeat;
+
+	int  bufferCount;
+	char buffer[COMMAND_BUFFER_CAPACITY];
+
+	Direction scanDirection; 
+	int       scanFoundIndex;
+
+} CommandBuffer;
 
 static int buffScanCharLeft(const char* pBuffer, int index, char c) {
 	while (pBuffer[index] != c && index >= 0) index--;    
@@ -67,6 +89,10 @@ static int buffScanCharRight(const char* pBuffer, int index, char c) {
 	while (pBuffer[index] != c && pBuffer[index] != '\0') index++;    
 	return index;
 }
+
+// static int textLineStart(const char* pText) {
+// 	return buffScanCharLeft(pText->buffer, pText->caretBufferIndex, '\n') + 1;
+// }
 
 static inline int textCollumnIndex(const TextBuffer* pText) {
 	return pText->caretBufferIndex - (buffScanCharLeft(pText->buffer, pText->caretBufferIndex, '\n') + endCharLength);  
@@ -94,6 +120,18 @@ static bool buffSearchCountCharRight(const char* pBuffer, char searchChar, char 
 	return true;
 }
 
+static void textUpdateStartLineIndex(TextBuffer* pText) {
+	int index = 0;
+	int startLine = pText->startLine;
+	int startLineCount = 0;
+	while (startLineCount < startLine) {
+		if (pText->buffer[index] == '\n' || pText->buffer[index] == '\0')
+			startLineCount++;
+		index++;
+	}
+	pText->startLineIndex = index;
+}
+
 static void textUpdateStartLineLeft(TextBuffer* pText) {
 	if (pText->caretRow < 0) {
 		pText->startLine += pText->caretRow;
@@ -101,14 +139,19 @@ static void textUpdateStartLineLeft(TextBuffer* pText) {
 
 		if (pText->startLine < 0)
 			pText->startLine = 0;
+
+		textUpdateStartLineIndex(pText);
 	}
 }
 
 static void textUpdateStartLineRight(TextBuffer* pText) {
 	int iMaxCharHeight = maxCharHeight - 1;
+
 	if (pText->caretRow > iMaxCharHeight) {
 		pText->startLine += pText->caretRow - iMaxCharHeight;
 		pText->caretRow = iMaxCharHeight;
+
+		textUpdateStartLineIndex(pText);
 	}
 } 
 
@@ -185,22 +228,23 @@ static void textInsertChar(TextBuffer* pText, char c) {
 
 static TextBuffer text;
 
-#define KEY_LSHIFT_OFFSET 0b10000000000000000000000000000000
-#define KEY_RSHIFT_OFFSET 0b01000000000000000000000000000000
-#define KEY_LALT_OFFSET   0b00100000000000000000000000000000
-#define KEY_RALT_OFFSET   0b00010000000000000000000000000000
-#define KEY_LCTRL_OFFSET  0b00001000000000000000000000000000
-#define KEY_RCTRL_OFFSET  0b00000100000000000000000000000000
+#define MASK_ASCII        0b00000000000000000000000111111111 
+#define KEY_LSHIFT_MOD 0b10000000000000000000000000000000
+#define KEY_RSHIFT_MOD 0b01000000000000000000000000000000
+#define KEY_LALT_MOD   0b00100000000000000000000000000000
+#define KEY_RALT_MOD   0b00010000000000000000000000000000
+#define KEY_LCTRL_MOD  0b00001000000000000000000000000000
+#define KEY_RCTRL_MOD  0b00000100000000000000000000000000
 
-#define KEY_RCTRL_A KEY_A | KEY_RCTRL_OFFSET
-#define KEY_RCTRL_D KEY_D | KEY_RCTRL_OFFSET
-#define KEY_RCTRL_W KEY_W | KEY_RCTRL_OFFSET
-#define KEY_RCTRL_S KEY_S | KEY_RCTRL_OFFSET
+#define KEY_RCTRL_A KEY_A | KEY_RCTRL_MOD
+#define KEY_RCTRL_D KEY_D | KEY_RCTRL_MOD
+#define KEY_RCTRL_W KEY_W | KEY_RCTRL_MOD
+#define KEY_RCTRL_S KEY_S | KEY_RCTRL_MOD
 
-#define KEY_LCTRL_J KEY_J | KEY_LCTRL_OFFSET
-#define KEY_LCTRL_L KEY_L | KEY_LCTRL_OFFSET
-#define KEY_LCTRL_I KEY_I | KEY_LCTRL_OFFSET
-#define KEY_LCTRL_K KEY_K | KEY_LCTRL_OFFSET
+#define KEY_LCTRL_J KEY_J | KEY_LCTRL_MOD
+#define KEY_LCTRL_L KEY_L | KEY_LCTRL_MOD
+#define KEY_LCTRL_I KEY_I | KEY_LCTRL_MOD
+#define KEY_LCTRL_K KEY_K | KEY_LCTRL_MOD
 
 int main(void)
 {
@@ -254,10 +298,15 @@ int main(void)
 	}
 
 	/// Text State
-	ScanBuffer scan = {
-		.foundIndex = -1,
-		.bufferCt   = 0,
-		.buffer     = {},
+	CommandBuffer command = {
+		.enabled = false,
+		.repeat  = false,
+
+		.bufferCount = 0,
+		.buffer      = {},
+
+		.scanDirection = DIRECTION_FORWARD,
+		.scanFoundIndex = -1,
 	};
 
 	int priorKey = 0;
@@ -290,13 +339,13 @@ int main(void)
 			input.rCtrl  = IsKeyDown(KEY_RIGHT_CONTROL) | IsKeyDown(KEY_RIGHT_SUPER);
 
 			input.modifierCombination = 
-				(input.lShift ? KEY_LSHIFT_OFFSET : 0) |
-				(input.lAlt   ? KEY_LALT_OFFSET   : 0) |
-				(input.lCtrl  ? KEY_LCTRL_OFFSET  : 0) |
+				(input.lShift ? KEY_LSHIFT_MOD : 0) |
+				(input.lAlt   ? KEY_LALT_MOD   : 0) |
+				(input.lCtrl  ? KEY_LCTRL_MOD  : 0) |
 
-				(input.rShift ? KEY_RSHIFT_OFFSET : 0) |
-				(input.rAlt   ? KEY_RALT_OFFSET   : 0) |
-				(input.rCtrl  ? KEY_RCTRL_OFFSET  : 0) ;
+				(input.rShift ? KEY_RSHIFT_MOD : 0) |
+				(input.rAlt   ? KEY_RALT_MOD   : 0) |
+				(input.rCtrl  ? KEY_RCTRL_MOD  : 0) ;
 						
 			int currentKey = GetKeyPressed();
 			if (currentKey == 0 && IsKeyPressedRepeat(priorKey))
@@ -305,11 +354,14 @@ int main(void)
 			/// Finish Input Actions Release
 			if (currentKey == 0 && input.modifierCombination == 0) {
 
-				if (scan.bufferCt != 0) {
-					LOG("Finish Scan: %s %d\n", scan.buffer, scan.foundIndex);
-					if (scan.foundIndex != -1) pText->caretBufferIndex += scan.foundIndex;
-					scan.foundIndex = -1;
-					scan.bufferCt = 0;
+				if (command.enabled){
+					LOG("Command Finish\n");
+					command.enabled = false;
+
+					if (command.scanFoundIndex > 0) {
+						pText->caretBufferIndex += command.scanFoundIndex;
+						command.scanFoundIndex = -1;
+					}
 				}
 
 			}
@@ -336,9 +388,9 @@ int main(void)
 						textUpdateStartLineLeft(pText);
 						break;
 
-					CASE_EITHER(KEY_LEFT,    KEY_LSHIFT_OFFSET, KEY_RSHIFT_OFFSET):
-					CASE_EITHER(KEY_RCTRL_A, KEY_LSHIFT_OFFSET, KEY_RSHIFT_OFFSET):
-					CASE_EITHER(KEY_LCTRL_J, KEY_LSHIFT_OFFSET, KEY_RSHIFT_OFFSET):
+					CASE_EITHER(KEY_LEFT,    KEY_LSHIFT_MOD, KEY_RSHIFT_MOD):
+					CASE_EITHER(KEY_RCTRL_A, KEY_LSHIFT_MOD, KEY_RSHIFT_MOD):
+					CASE_EITHER(KEY_LCTRL_J, KEY_LSHIFT_MOD, KEY_RSHIFT_MOD):
 						textScanCharLeft(pText, ' ', TEXT_CARET_RIGHT, TEXT_SCAN_MATCH_SKIP_IMMEDIATE);
 						break;
 
@@ -357,59 +409,71 @@ int main(void)
 						textUpdateStartLineRight(pText);
 						break;
 
-					CASE_EITHER(KEY_RIGHT,   KEY_LSHIFT_OFFSET, KEY_RSHIFT_OFFSET):
-					CASE_EITHER(KEY_RCTRL_D, KEY_LSHIFT_OFFSET, KEY_RSHIFT_OFFSET):
-					CASE_EITHER(KEY_LCTRL_L, KEY_LSHIFT_OFFSET, KEY_RSHIFT_OFFSET):
+					CASE_EITHER(KEY_RIGHT,   KEY_LSHIFT_MOD, KEY_RSHIFT_MOD):
+					CASE_EITHER(KEY_RCTRL_D, KEY_LSHIFT_MOD, KEY_RSHIFT_MOD):
+					CASE_EITHER(KEY_LCTRL_L, KEY_LSHIFT_MOD, KEY_RSHIFT_MOD):
 						textScanCharRight(pText, ' ', TEXT_CARET_RIGHT, TEXT_SCAN_MATCH_SKIP_IMMEDIATE);
 						break;
 
-					case  KEY_RALT_OFFSET | '`' : 
-					case  KEY_RALT_OFFSET | '-' : 
-					case  KEY_RALT_OFFSET | '=' : 
-					case  KEY_RALT_OFFSET | '[' : 
-					case  KEY_RALT_OFFSET | ']' : 
-					case  KEY_RALT_OFFSET | '\\':
-					case  KEY_RALT_OFFSET | ';' : 
-					case  KEY_RALT_OFFSET | '\'':
-					case  KEY_RALT_OFFSET | ',' : 
-					case  KEY_RALT_OFFSET | '.' : 
-					case  KEY_RALT_OFFSET | '/' : 
-					case (KEY_RALT_OFFSET | '0') ... (KEY_RALT_OFFSET | '9'): 
+					case KEY_LALT_MOD | KEY_LEFT_ALT: 
+						if (!command.enabled) {
+							LOG("Command Enabled\n");
+							command.enabled = true;
+						}
+						break;
+
+					case KEY_LALT_MOD | KEY_LCTRL_MOD | KEY_LEFT_CONTROL: 
+						if (command.enabled) {
+							command.scanDirection = command.scanDirection == DIRECTION_FORWARD ? DIRECTION_BACKWARD : DIRECTION_FORWARD;
+							LOG("Command Scan %s\n", string_Direction[command.scanDirection]);
+						}
+						break;
+
+					case KEY_LALT_MOD | '`' : 
+					case KEY_LALT_MOD | '-' : 
+					case KEY_LALT_MOD | '=' : 
+					case KEY_LALT_MOD | '[' : 
+					case KEY_LALT_MOD | ']' : 
+					case KEY_LALT_MOD | '\\':
+					case KEY_LALT_MOD | ';' : 
+					case KEY_LALT_MOD | '\'':
+					case KEY_LALT_MOD | ',' : 
+					case KEY_LALT_MOD | '.' : 
+					case KEY_LALT_MOD | '/' : 
+
+					case (KEY_LALT_MOD | '0') ... (KEY_LALT_MOD | '9'): 
 						textScanCharRight(pText, currentKey, TEXT_CARET_LEFT, TEXT_SCAN_MATCH_SKIP_IMMEDIATE);
 						break;
 
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '1':  modifiedKey = '!'; goto UpdateScanBuffer;
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '2':  modifiedKey = '@'; goto UpdateScanBuffer;
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '3':  modifiedKey = '#'; goto UpdateScanBuffer;
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '4':  modifiedKey = '$'; goto UpdateScanBuffer;
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '5':  modifiedKey = '%'; goto UpdateScanBuffer;
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '6':  modifiedKey = '^'; goto UpdateScanBuffer;
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '7':  modifiedKey = '&'; goto UpdateScanBuffer;
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '8':  modifiedKey = '*'; goto UpdateScanBuffer;
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '9':  modifiedKey = '('; goto UpdateScanBuffer;
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '0':  modifiedKey = ')'; goto UpdateScanBuffer;
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '`':  modifiedKey = '~'; goto UpdateScanBuffer;
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '-':  modifiedKey = '_'; goto UpdateScanBuffer;
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '=':  modifiedKey = '+'; goto UpdateScanBuffer;
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '[':  modifiedKey = '{'; goto UpdateScanBuffer;
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | ']':  modifiedKey = '}'; goto UpdateScanBuffer;
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '\\': modifiedKey = '|'; goto UpdateScanBuffer;
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | ';':  modifiedKey = ':'; goto UpdateScanBuffer;
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '\'': modifiedKey = '"'; goto UpdateScanBuffer;
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | ',':  modifiedKey = '<'; goto UpdateScanBuffer;
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '.':  modifiedKey = '>'; goto UpdateScanBuffer;
-					case KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | '/':  modifiedKey = '?'; goto UpdateScanBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '1':  modifiedKey = '!'; goto UpdateCommandBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '2':  modifiedKey = '@'; goto UpdateCommandBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '3':  modifiedKey = '#'; goto UpdateCommandBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '4':  modifiedKey = '$'; goto UpdateCommandBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '5':  modifiedKey = '%'; goto UpdateCommandBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '6':  modifiedKey = '^'; goto UpdateCommandBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '7':  modifiedKey = '&'; goto UpdateCommandBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '8':  modifiedKey = '*'; goto UpdateCommandBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '9':  modifiedKey = '('; goto UpdateCommandBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '0':  modifiedKey = ')'; goto UpdateCommandBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '`':  modifiedKey = '~'; goto UpdateCommandBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '-':  modifiedKey = '_'; goto UpdateCommandBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '=':  modifiedKey = '+'; goto UpdateCommandBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '[':  modifiedKey = '{'; goto UpdateCommandBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | ']':  modifiedKey = '}'; goto UpdateCommandBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '\\': modifiedKey = '|'; goto UpdateCommandBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | ';':  modifiedKey = ':'; goto UpdateCommandBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '\'': modifiedKey = '"'; goto UpdateCommandBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | ',':  modifiedKey = '<'; goto UpdateCommandBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '.':  modifiedKey = '>'; goto UpdateCommandBuffer;
+					case KEY_LALT_MOD | KEY_LSHIFT_MOD | '/':  modifiedKey = '?'; goto UpdateCommandBuffer;
 
-					case (KEY_RALT_OFFSET | 'A') ... (KEY_RALT_OFFSET | 'Z'): 
+					case (KEY_LALT_MOD | 'A') ... (KEY_LALT_MOD | 'Z'): 
 						modifiedKey = TO_LOWER_C(currentKey);
-						goto UpdateScanBuffer;
+						goto UpdateCommandBuffer;
 
-					case (KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | 'A') ... (KEY_RALT_OFFSET | KEY_LSHIFT_OFFSET | 'Z'): 
-					UpdateScanBuffer:
-						scan.buffer[scan.bufferCt++] = modifiedKey;
-						scan.buffer[scan.bufferCt] = '\0';
-						scan.foundIndex = TextFindIndex(pText->buffer + pText->caretBufferIndex, scan.buffer);
-						break;
+					case (KEY_LALT_MOD | KEY_LSHIFT_MOD | 'A') ... (KEY_LALT_MOD | KEY_LSHIFT_MOD | 'Z'): 
+						goto UpdateCommandBuffer;
+
 
 
 					/// Move Up
@@ -430,9 +494,9 @@ int main(void)
 						break;
 					}
 
-					CASE_EITHER(KEY_UP,      KEY_LSHIFT_OFFSET, KEY_RSHIFT_OFFSET):
-					CASE_EITHER(KEY_RCTRL_W, KEY_LSHIFT_OFFSET, KEY_RSHIFT_OFFSET):
-					CASE_EITHER(KEY_LCTRL_I, KEY_LSHIFT_OFFSET, KEY_RSHIFT_OFFSET):
+					CASE_EITHER(KEY_UP,      KEY_LSHIFT_MOD, KEY_RSHIFT_MOD):
+					CASE_EITHER(KEY_RCTRL_W, KEY_LSHIFT_MOD, KEY_RSHIFT_MOD):
+					CASE_EITHER(KEY_LCTRL_I, KEY_LSHIFT_MOD, KEY_RSHIFT_MOD):
 						textScanCharLeft(pText, '{', TEXT_CARET_LEFT, TEXT_SCAN_MATCH_SKIP_IMMEDIATE);
 						break;
 
@@ -456,14 +520,14 @@ int main(void)
 						break;
 					}
 
-					CASE_EITHER(KEY_DOWN,    KEY_LSHIFT_OFFSET, KEY_RSHIFT_OFFSET):
-					CASE_EITHER(KEY_RCTRL_S, KEY_LSHIFT_OFFSET, KEY_RSHIFT_OFFSET):
-					CASE_EITHER(KEY_LCTRL_K, KEY_LSHIFT_OFFSET, KEY_RSHIFT_OFFSET):
+					CASE_EITHER(KEY_DOWN,    KEY_LSHIFT_MOD, KEY_RSHIFT_MOD):
+					CASE_EITHER(KEY_RCTRL_S, KEY_LSHIFT_MOD, KEY_RSHIFT_MOD):
+					CASE_EITHER(KEY_LCTRL_K, KEY_LSHIFT_MOD, KEY_RSHIFT_MOD):
 						textScanCharRight(pText, '{', TEXT_CARET_LEFT, TEXT_SCAN_MATCH_SKIP_IMMEDIATE);
 						break;
 
 					/// Utility Keys
-					case KEY_LCTRL_OFFSET | KEY_S:
+					case KEY_LCTRL_MOD | KEY_S:
 						LOG("Saving: %s", text.path);
 						SaveFileText(text.path, text.buffer);
 						break;
@@ -502,7 +566,7 @@ int main(void)
 						textInsertChar(pText, '\t'); 
 						break;
 
-					case (KEY_LSHIFT_OFFSET | 'A') ... (KEY_LSHIFT_OFFSET | 'Z'): 
+					case (KEY_LSHIFT_MOD | 'A') ... (KEY_LSHIFT_MOD | 'Z'): 
 						textInsertChar(pText, currentKey); 
 						break;
 
@@ -530,27 +594,33 @@ int main(void)
 					case '.':  textInsertChar(pText, currentKey); break;
 					case '/':  textInsertChar(pText, currentKey); break;
 
-					case KEY_LSHIFT_OFFSET | '1':  textInsertChar(pText, '!'); break;
-					case KEY_LSHIFT_OFFSET | '2':  textInsertChar(pText, '@'); break;
-					case KEY_LSHIFT_OFFSET | '3':  textInsertChar(pText, '#'); break;
-					case KEY_LSHIFT_OFFSET | '4':  textInsertChar(pText, '$'); break;
-					case KEY_LSHIFT_OFFSET | '5':  textInsertChar(pText, '%'); break;
-					case KEY_LSHIFT_OFFSET | '6':  textInsertChar(pText, '^'); break;
-					case KEY_LSHIFT_OFFSET | '7':  textInsertChar(pText, '&'); break;
-					case KEY_LSHIFT_OFFSET | '8':  textInsertChar(pText, '*'); break;
-					case KEY_LSHIFT_OFFSET | '9':  textInsertChar(pText, '('); break;
-					case KEY_LSHIFT_OFFSET | '0':  textInsertChar(pText, ')'); break;
-					case KEY_LSHIFT_OFFSET | '`':  textInsertChar(pText, '~'); break;
-					case KEY_LSHIFT_OFFSET | '-':  textInsertChar(pText, '_'); break;
-					case KEY_LSHIFT_OFFSET | '=':  textInsertChar(pText, '+'); break;
-					case KEY_LSHIFT_OFFSET | '[':  textInsertChar(pText, '{'); break;
-					case KEY_LSHIFT_OFFSET | ']':  textInsertChar(pText, '}'); break;
-					case KEY_LSHIFT_OFFSET | '\\': textInsertChar(pText, '|'); break;
-					case KEY_LSHIFT_OFFSET | ';':  textInsertChar(pText, ':'); break;
-					case KEY_LSHIFT_OFFSET | '\'': textInsertChar(pText, '"'); break;
-					case KEY_LSHIFT_OFFSET | ',':  textInsertChar(pText, '<'); break;
-					case KEY_LSHIFT_OFFSET | '.':  textInsertChar(pText, '>'); break;
-					case KEY_LSHIFT_OFFSET | '/':  textInsertChar(pText, '?'); break;
+					case KEY_LSHIFT_MOD | '1':  textInsertChar(pText, '!'); break;
+					case KEY_LSHIFT_MOD | '2':  textInsertChar(pText, '@'); break;
+					case KEY_LSHIFT_MOD | '3':  textInsertChar(pText, '#'); break;
+					case KEY_LSHIFT_MOD | '4':  textInsertChar(pText, '$'); break;
+					case KEY_LSHIFT_MOD | '5':  textInsertChar(pText, '%'); break;
+					case KEY_LSHIFT_MOD | '6':  textInsertChar(pText, '^'); break;
+					case KEY_LSHIFT_MOD | '7':  textInsertChar(pText, '&'); break;
+					case KEY_LSHIFT_MOD | '8':  textInsertChar(pText, '*'); break;
+					case KEY_LSHIFT_MOD | '9':  textInsertChar(pText, '('); break;
+					case KEY_LSHIFT_MOD | '0':  textInsertChar(pText, ')'); break;
+					case KEY_LSHIFT_MOD | '`':  textInsertChar(pText, '~'); break;
+					case KEY_LSHIFT_MOD | '-':  textInsertChar(pText, '_'); break;
+					case KEY_LSHIFT_MOD | '=':  textInsertChar(pText, '+'); break;
+					case KEY_LSHIFT_MOD | '[':  textInsertChar(pText, '{'); break;
+					case KEY_LSHIFT_MOD | ']':  textInsertChar(pText, '}'); break;
+					case KEY_LSHIFT_MOD | '\\': textInsertChar(pText, '|'); break;
+					case KEY_LSHIFT_MOD | ';':  textInsertChar(pText, ':'); break;
+					case KEY_LSHIFT_MOD | '\'': textInsertChar(pText, '"'); break;
+					case KEY_LSHIFT_MOD | ',':  textInsertChar(pText, '<'); break;
+					case KEY_LSHIFT_MOD | '.':  textInsertChar(pText, '>'); break;
+					case KEY_LSHIFT_MOD | '/':  textInsertChar(pText, '?'); break;
+
+					UpdateCommandBuffer:
+						command.buffer[command.bufferCount++] = modifiedKey;
+						command.buffer[command.bufferCount] = '\0';
+						command.scanFoundIndex = TextFindIndex(pText->buffer + pText->caretBufferIndex, command.buffer);
+						break;
 
 					default: break;
 
@@ -580,13 +650,13 @@ int main(void)
 			
 			Vector2 mousePosition = GetMousePosition();
 
-			int index = 0;
-			int startLineCount = 0;
-			while (startLineCount < text.startLine) {
-				if (text.buffer[index] == '\n' || text.buffer[index] == '\0')
-					startLineCount++;
-				index++;
-			}
+			int index = pText->startLineIndex;
+			// int startLineCount = 0;
+			// while (startLineCount < text.startLine) {
+			// 	if (text.buffer[index] == '\n' || text.buffer[index] == '\0')
+			// 		startLineCount++;
+			// 	index++;
+			// }
 
 			const int tabWidth = 4;
 
@@ -605,15 +675,17 @@ int main(void)
 							(Vector2){position.x, position.y + fontYSpacing}, 
 							4, ORANGE);
 
-					if (scan.bufferCt != 0 && scan.foundIndex != -1 && index == text.caretBufferIndex + scan.foundIndex) {
+					if (command.bufferCount != 0 && command.scanFoundIndex != -1 && index == text.caretBufferIndex + command.scanFoundIndex) {
+						DrawRectangleRec(
+							(Rectangle) {
+								.x = position.x, .y = position.y, 
+								.width = fontXSpacing * command.bufferCount, 
+								.height = fontYSpacing}, 
+							FIND_HIGHLIGHT_COLOR);
 						DrawLineEx(
 							(Vector2){position.x, position.y}, 
 							(Vector2){position.x, position.y + fontYSpacing}, 
-							2, GREEN);
-						DrawLineEx(
-							(Vector2){position.x, position.y + fontYSpacing}, 
-							(Vector2){position.x + fontXSpacing * scan.bufferCt, position.y + fontYSpacing},
-							2, GREEN);
+							4, FIND_CARET_COLOR);
 					}
 
 					Rectangle rect = {position.x, position.y, fontXSpacing, fontYSpacing};
@@ -674,6 +746,21 @@ int main(void)
 
 				NextLine:;
 			}       
+
+
+
+			// if (command.enabled != 0 && command.scanFoundIndex != -1 && index == text.caretBufferIndex + command.scanFoundIndex) {
+			// 	DrawRectangleRec(
+			// 		(Rectangle) {
+			// 			.x = position.x, .y = position.y, 
+			// 			.width = fontXSpacing * command.bufferCount, 
+			// 			.height = fontYSpacing}, 
+			// 		FIND_HIGHLIGHT_COLOR);
+			// 	DrawLineEx(
+			// 		(Vector2){position.x, position.y}, 
+			// 		(Vector2){position.x, position.y + fontYSpacing}, 
+			// 		4, FIND_CARET_COLOR);
+			// }
 		}
 
 		FinishDrawingText:

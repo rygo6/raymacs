@@ -7,6 +7,6 @@ SET RAYLIB_PATH=../raylib/
 
 if exist bin\rayDE.exe del bin\rayDE.exe
 
-gcc -o bin/rayDE.exe src/main.c -I"%RAYLIB_PATH%/src" -L"%RAYLIB_PATH%/src" -lraylib -lopengl32 -lgdi32 -lwinmm
+gcc -o bin/rayDE.exe src/main.c -I"%RAYLIB_PATH%/src" -L"%RAYLIB_PATH%/src" -lraylib -lopengl32 -lgdi32 -lwinmm -std=c99
 
 bin\rayDE.exe
