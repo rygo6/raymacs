@@ -320,16 +320,14 @@ static void textInsertChar(CodeBox* pCode, char c) {
 }
 
 static void CommandScanFinish(CodeBox* pCode, Command* pCommand) {
-
-	pCode->caretLine   += TextCountCharForward(pCode->buffer, pCode->caretIndex, '\n', pCommand->scanFoundIndex);
-	pCode->caretIndex  += pCommand->scanFoundIndex;
-	pCode->caretLineIndex = CodeBoxCaretLineIndex(pCode);
+	CodeBoxUpdateCaret(pCode, pCode->caretIndex + pCommand->scanFoundIndex);
 	CodeBoxFocusLine(pCode, pCode->caretLine);
 
-	pCommand->scanFoundIndex  = -1;
+	pCommand->scanFoundIndex  = 0;
 	pCommand->enabled         = false;
 	pCommand->firstKeyPressed = false;
 	pCommand->bufferCount     = 0;
+	pCommand->toggled         = false;
 }
 
 static CodeBox text;
@@ -902,12 +900,13 @@ int main(void)
 						goto DrawChar;
 
 					default:
-					DrawChar:
+					DrawChar: {
 						int codePointSize;
 						int codePoint = GetCodepoint(&c, &codePointSize);
 						DrawTextCodepoint(font, codePoint, position, fontSize, color);
 						index++;
 						break;
+					}
 				}								
 			}
 		}      
