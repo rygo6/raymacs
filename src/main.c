@@ -320,7 +320,7 @@ static void textInsertChar(CodeBox* pCode, char c) {
 }
 
 static void CommandScanFinish(CodeBox* pCode, Command* pCommand) {
-	CodeBoxUpdateCaret(pCode, pCode->caretIndex + pCommand->scanFoundIndex);
+	CodeBoxUpdateCaret(pCode, pCommand->scanFoundIndex);
 	CodeBoxFocusLine(pCode, pCode->caretLine);
 
 	pCommand->scanFoundIndex  = 0;
@@ -603,10 +603,6 @@ int main(void)
 				if (!command.enabled) {
 					LOG("Command Begin\n");
 					command.enabled = true;
-
-					if (command.bufferCount > 0) 
-						command.scanFoundIndex = TextFindIndex(pCode->buffer + pCode->caretIndex + 1, command.buffer) + 1;
-
 					break;
 				} 
 
@@ -636,6 +632,10 @@ int main(void)
 
 				break;
 
+			case KEY_ALT_MOD | KEY_SHIFT_MOD | KEY_TAB: 
+
+				break;
+
 			case KEY_ALT_MOD | KEY_TAB: 
 				if (!command.enabled)
 					break;
@@ -643,7 +643,7 @@ int main(void)
 				LOG("%d %d\n", pCode->caretIndex, command.scanFoundIndex);
 
 				if (command.bufferCount > 0) {
-					command.scanFoundIndex = TextFindIndex(pCode->buffer + pCode->caretIndex + command.scanFoundIndex + 1, command.buffer) + command.scanFoundIndex + 1;
+					command.scanFoundIndex = TextFindTextForward(pCode->buffer, pCode->caretIndex + 1, command.buffer);
 				}
 
 				if (command.scanFoundIndex > 0) {
@@ -724,7 +724,8 @@ int main(void)
 
 			UpdateCommandScan:
 				command.buffer[command.bufferCount] = '\0';
-				command.scanFoundIndex = TextFindIndex(pCode->buffer + pCode->caretIndex + 1, command.buffer) + 1;
+				// command.scanFoundIndex = TextFindIndex(pCode->buffer + pCode->caretIndex + 1, command.buffer) + 1;
+				command.scanFoundIndex = TextFindTextForward(pCode->buffer, command.scanFoundIndex + 1, command.buffer);
 				break;
 
 			/* Utility Keys */
@@ -858,7 +859,7 @@ int main(void)
 				if (index == text.caretIndex)
 					caretPosition = position;
 
-				if (index == text.caretIndex + command.scanFoundIndex)
+				if (index == command.scanFoundIndex)
 					scanFoundPosition = position;
 				
 				if (input.lMouse && CheckCollisionPointRec(mousePosition, rect)) {
