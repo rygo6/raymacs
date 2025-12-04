@@ -1,3 +1,11 @@
+static int Test(int input) {
+	int output = input;
+	// comment
+	int vala = 10 + 2;
+	int valb = 10 / 2;
+	return output;
+}
+
 /*
 	rayDE - Raylib Development Enviornment
 
@@ -36,10 +44,14 @@
 | Ctrl+Home                 | Go to beginning of document                    |
 | Ctrl+End                  | Go to end of document                          |
 | Ctrl+Left/Right           | Word jump                                      |
+| Alt+Left/Right            | Word jump                                      |
 | Ctrl+Up/Down              | Block jump                                     |
+| Alt+Up/Down               | Block jump                                     |
+| Up Down Left Right        | Move                                           |
+| Ctrl+I J K L              | Move Alt                                       |
 | Ctrl+G                    | Go to line number                              |
 | Ctrl+M                    | Go to matching bracket                         |
-| Alt+I/J/K/L               | Arrow alternatives (Up/Left/Down/Right)        |
+| Alt+Alphanumeric Char     | Jump To Char. Jump To Next Ocurrance.          |
 +---------------------------+------------------------------------------------+
 | SELECTION                                                                  |
 +---------------------------+------------------------------------------------+
@@ -57,7 +69,7 @@
 +---------------------------+------------------------------------------------+
 | Ctrl+Shift+N              | Select next occurrence (multi-cursor)          |
 | Ctrl+Shift+B              | Select previous occurrence                     |
-// I thik this should be command?
+// I think this should be command?
 // I need command drawer you can click on
 | Ctrl+F                    | Find                                           |
 | Ctrl+H                    | Find and replace                               |
@@ -78,9 +90,9 @@
 +---------------------------+------------------------------------------------+
 | TEXT WRAPPING                                                              |
 +---------------------------+------------------------------------------------+
-| Ctrl+Shift+{              | Wrap with braces                               |
-| Ctrl+[                    | Wrap with brackets                             |
-| Ctrl+Shift+(              | Wrap with parentheses                          |
+| Ctrl+Shift+{ }            | Wrap with braces                               |
+| Ctrl+[ ]                  | Wrap with brackets                             |
+| Ctrl+Shift+( )            | Wrap with parentheses                          |
 | Ctrl+'                    | Wrap with single quotes                        |
 | Ctrl+Shift+"              | Wrap with double quotes                        |
 | Ctrl+`                    | Wrap with backticks                            |
@@ -90,6 +102,13 @@
 | Ctrl+Backspace            | Delete word backwards                          |
 | Ctrl+Delete               | Delete word forwards                           |
 +---------------------------+------------------------------------------------+
+
+GOOD IDEA 
+Alt + { - Jump to Nearest, then next
+Alt + } - ...
+Alt + [ - ...
+Alt + ] - ...
+Alt + " - ...
 
 */
 
@@ -103,116 +122,6 @@
 #include "raylib.h"
 #include "raymath.h"
 
-#define PANIC(_message) assert(false && _message);
-
-#define STATIC_ASSERT(...) _Static_assert(__VA_ARGS__)
-#define XMALLOC_ALIGNED(_align, _size) ({ \
-	void* p = _aligned_malloc(_size, _align); \
-	if (p == NULL) PANIC("XMALLOC_ALIGNED Failed!"); \
-	p; \
-})
-
-
-#define FIND_CARET_COLOR     (Color){   0, 255,   0, 255 }
-#define FIND_HIGHLIGHT_COLOR (Color){   0, 255,   0, 64  }
-#define COLOR_COMMAND_BOX    (Color){  20,  20,   2, 200 }
-#define COLOR_TEXT_BOX       (Color){  37,  37,  38, 255 }
-
-#define COLOR_PREPROCESSOR (Color){ 198, 149, 198, 255 }
-#define COLOR_NUMBER       (Color){ 249, 174,  87, 255 }
-#define COLOR_STRING       (Color){ 153, 199, 148, 255 } 
-#define COLOR_COMMENT      (Color){ 166, 172, 185, 255 }  
-#define COLOR_MACRO_NAME   (Color){ 249, 174,  87, 255 }
-#define COLOR_BACKGROUND   (Color){  48,  56,  65, 255 } 
-#define COLOR_OPERATOR     (Color){ 249, 123,  87, 255 }
-#define COLOR_TEXT         (Color){ 216, 222, 233, 255 }
-#define COLOR_TEXT_HIDDEN  (Color){  53,  61,  70, 255 } 
-#define COLOR_QUOTE        (Color){  96, 180, 180, 255 } 
-#define COLOR_SCOPE        (Color){ 255, 255, 255, 255 } 
-#define COLOR_KEYWORD      (Color){ 236,  96, 102, 255 }
-#define COLOR_TYPE         (Color){ 198, 149, 198, 255 }
-
-static const char* TOKEN_DELIMITERS = " \t\n\r\v\f!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~";
-static const char* TOKEN_OPERATORS = "!%&*+-/:<=>?^|~";
-static const char* TOKEN_QUOTES = "\"'`";
-static const char* TOKEN_SCOPES = "(){}[]";
-
-#define TOKEN_TYPES_COLOR (Color){ 156, 220, 254, 255 }
-static const char* TOKEN_TYPES[] = {
-    "unsigned",  
-    "uint64_t",  
-    "ptrdiff_t", 
-    "uint32_t",  
-    "uint16_t",  
-    "wchar_t",   
-    "struct",    
-    "signed",    
-    "size_t",    
-    "int64_t",   
-    "int32_t",   
-    "int16_t",   
-    "double",    
-    "uint8_t",   
-    "float",     
-    "short",     
-    "int8_t",    
-    "_Bool",     
-    "union",     
-    "void",      
-    "long",      
-    "char",      
-    "enum",      
-    "int",       
-    NULL  
-};
-
-static const char* TOKEN_KEYWORDS[] = {
-    "_Static_assert",
-    "_Noreturn",
-    "_Generic",
-    "continue",
-    "volatile",
-    "register",
-    "restrict",
-    "_Alignof",
-    "_Alignas",
-    "typedef",
-    "default",
-    "_Atomic",
-    "typeof",
-    "switch",
-    "static",
-    "sizeof",
-    "return",
-    "inline",
-    "extern",
-    "while",
-    "const",
-    "break",
-    "goto",
-    "else",
-    "case",
-    "auto",
-    "for",
-    "if",
-    "do",
-    NULL
-};
-
-#if defined(__AVX512F__)
-    #define VECTOR_SIZE 64
-#elif defined(__AVX2__) || defined(__AVX__)
-    #define VECTOR_SIZE 32  
-#elif defined(__SSE2__) || defined(__ARM_NEON)
-    #define VECTOR_SIZE 16
-#else
-    #define VECTOR_SIZE 8
-#endif
-
-typedef char vstr __attribute__ ((vector_size (VECTOR_SIZE)));
-STATIC_ASSERT(VECTOR_SIZE == 32);
-STATIC_ASSERT(sizeof(vstr) == 32);
-
 typedef uint8_t     u8;
 typedef uint16_t    u16;
 typedef uint32_t    u32;
@@ -223,14 +132,399 @@ typedef int32_t     i32;
 typedef int64_t     i64;
 typedef float       f32;
 typedef double      f64;
-typedef const char* str;
+typedef unsigned char utf8;
 
-#define ASSERT(_condition, ...) assert((_condition) && __VA_ARGS__)
-#define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
+#define ANSI_RESET   "\033[0m"
+#define ANSI_BLACK   "\033[30m"
+#define ANSI_RED     "\033[31m"
+#define ANSI_GREEN   "\033[32m"
+#define ANSI_YELLOW  "\033[33m"
+#define ANSI_BLUE    "\033[34m"
+#define ANSI_MAGENTA "\033[35m"
+#define ANSI_CYAN    "\033[36m"
+#define ANSI_WHITE   "\033[37m"
+
+#define ANSI_BRIGHT_BLACK   "\033[90m" 
+#define ANSI_BRIGHT_RED     "\033[91m"
+#define ANSI_BRIGHT_GREEN   "\033[92m"
+#define ANSI_BRIGHT_YELLOW  "\033[93m"
+#define ANSI_BRIGHT_BLUE    "\033[94m"
+#define ANSI_BRIGHT_MAGENTA "\033[95m"
+#define ANSI_BRIGHT_CYAN    "\033[96m"
+#define ANSI_BRIGHT_WHITE   "\033[97m"
+
+#define ANSI_BG_BLACK   "\033[40m"
+#define ANSI_BG_RED     "\033[41m"
+#define ANSI_BG_GREEN   "\033[42m"
+#define ANSI_BG_YELLOW  "\033[43m"
+#define ANSI_BG_BLUE    "\033[44m"
+#define ANSI_BG_MAGENTA "\033[45m"
+#define ANSI_BG_CYAN    "\033[46m"
+#define ANSI_BG_WHITE   "\033[47m"
+
+#define ANSI_BG_BRIGHT_BLACK   "\033[100m"
+#define ANSI_BG_BRIGHT_RED     "\033[101m"
+#define ANSI_BG_BRIGHT_GREEN   "\033[102m"
+#define ANSI_BG_BRIGHT_YELLOW  "\033[103m"
+#define ANSI_BG_BRIGHT_BLUE    "\033[104m"
+#define ANSI_BG_BRIGHT_MAGENTA "\033[105m"
+#define ANSI_BG_BRIGHT_CYAN    "\033[106m"
+#define ANSI_BG_BRIGHT_WHITE   "\033[107m"
+
+#define ANSI_BOLD      "\033[1m"
+#define ANSI_DIM       "\033[2m"
+#define ANSI_ITALIC    "\033[3m"
+#define ANSI_UNDERLINE "\033[4m"
+#define ANSI_REVERSE   "\033[7m"
+#define ANSI_HIDDEN    "\033[8m"
+#define ANSI_STRIKE    "\033[9m"
+
+#define CACHE_LINE 64
+
+#define COUNT(_array)     (sizeof(_array) / sizeof(_array[0]))
+
+#define UNUSED            __attribute__((unused))
+#define FALLTHROUGH       __attribute__((fallthrough))
+#define CACHE_ALIGN       __attribute__((aligned(CACHE_LINE)))
+#define FORCE_INLINE      __attribute__((always_inline)) static inline
+#define PACKED            __attribute__((packed))
+#define ALIGN(_size)      __attribute__((aligned(_size)))
+#define NO_RETURN         __attribute__((noreturn))
+
+#define LIKELY(x)         __builtin_expect(!!(x), 1)
+#define UNLIKELY(x)       __builtin_expect(!!(x), 0)
+
+#define LOG(_format, ...)      fprintf(stderr, ANSI_DIM ANSI_CYAN __FILE__ ANSI_WHITE ":" ANSI_GREEN "%-5d" ANSI_WHITE  "INFO: " ANSI_RESET _format, __LINE__, ##__VA_ARGS__)
+#define LOG_WARN(_format, ...) fprintf(stderr, ANSI_DIM ANSI_BLUE __FILE__ ANSI_WHITE ":" ANSI_GREEN "%-5d" ANSI_YELLOW "WARN: " ANSI_RESET _format, __LINE__, ##__VA_ARGS__)
+#define LOG_ERR(_format, ...)  fprintf(stderr, ANSI_DIM ANSI_BLUE __FILE__ ANSI_WHITE ":" ANSI_GREEN "%-5d" ANSI_RED    "ERR:  " ANSI_RESET _format, __LINE__, ##__VA_ARGS__)
+
+/* Log One-Time. Only use in debug it is heavy. */
+static char _logOnceBuffer[128];
+static char _logOnceNewBuffer[128];
+#define DEBUG_LOG_ONCE(_format, ...) ({ \
+	sprintf(_logOnceNewBuffer, _format, ##__VA_ARGS__); \
+	if (strcmp(_logOnceBuffer, _logOnceNewBuffer) != 0) { \
+		strcpy(_logOnceBuffer, _logOnceNewBuffer); \
+		LOG(_format, __VA_ARGS__); \
+	} \
+})
+
+#define STATIC_ASSERT(...) _Static_assert(__VA_ARGS__)
+#define ASSERT(_condition, ...) assert((_condition) && #_condition " " __VA_ARGS__)
+
+#define PANIC(_format, ...) \
+({ \
+	fprintf(stderr, ANSI_RED __FILE__ ":%d PANIC! " _format ANSI_RESET, __LINE__, ##__VA_ARGS__); \
+	__builtin_trap(); \
+})
+
+// TODO
+#define CHECK(_command)
+#define TRY(_command)
+
+#define REQUIRE(_command) \
+({ \
+	RESULT _r = _command; \
+	if (UNLIKELY(_r != RESULT_SUCCESS)) PANIC(#_command " == %s\n", string_RESULT(_r)); \
+})
+
+
+#define XMALLOC_ALIGNED(_align, _size) \
+({ \
+	void* p = _aligned_malloc(_size, _align); \
+	if (p == NULL) PANIC("XMALLOC_ALIGNED FAIL!"); \
+	p; \
+})
+
+#define ZERO_P(_p) memset((void*)(_p), 0, sizeof(*_p))
+
+static const char* TOKEN_DELIMITERS = " \t\n\r\v\f!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~";
+static const char* TOKEN_OPERATORS = "!%&*+-/:<=>?^|~";
+static const char* TOKEN_QUOTES = "\"'`";
+static const char* TOKEN_SCOPES = "(){}[]";
+
+#define TOKEN_TYPES_COLOR (Color){ 156, 220, 254, 255 }
+static const char* TOKEN_TYPES[] = {
+	"unsigned",  
+	"uint64_t",  
+	"ptrdiff_t", 
+	"uint32_t",  
+	"uint16_t",  
+	"wchar_t",   
+	"struct",    
+	"signed",    
+	"size_t",    
+	"int64_t",   
+	"int32_t",   
+	"int16_t",   
+	"double",    
+	"uint8_t",   
+	"float",     
+	"short",     
+	"int8_t",    
+	"_Bool",     
+	"union",     
+	"void",      
+	"long",      
+	"char",      
+	"enum",      
+	"int",       
+	NULL  
+};
+
+static const char* TOKEN_KEYWORDS[] = {
+	"_Static_assert",
+	"_Noreturn",
+	"_Generic",
+	"continue",
+	"volatile",
+	"register",
+	"restrict",
+	"_Alignof",
+	"_Alignas",
+	"typedef",
+	"default",
+	"_Atomic",
+	"typeof",
+	"switch",
+	"static",
+	"sizeof",
+	"return",
+	"inline",
+	"extern",
+	"while",
+	"const",
+	"break",
+	"goto",
+	"else",
+	"case",
+	"auto",
+	"for",
+	"if",
+	"do",
+	NULL
+};
+
+// typedef enum TextMetaType { 
+// 	#define GENERATE_ENUM(_type) TEXT_META_TYPE_##_type ,
+// 	META_TYPES(GENERATE_ENUM)
+// 	#undef GENERATE_ENUM
+// 	TEXT_META_TYPE_COUNT,
+// } TextMetaType;
+
+// typedef enum TextMetaMask { 
+// 	#define GENERATE_ENUM(_type) TEXT_META_MASK_##_type = 0xFULL << TEXT_META_TYPE_##_type ,
+// 	META_TYPES(GENERATE_ENUM)
+// 	#undef GENERATE_ENUM
+// } TextMetaMask;
+
+// typedef enum TextMetaBitMask { 
+// 	#define GENERATE_ENUM(_type) TEXT_META_BIT_MASK_##_type = 0b1 << TEXT_META_TYPE_##_type ,
+// 	META_TYPES(GENERATE_ENUM)
+// 	#undef GENERATE_ENUM
+// } TextMetaBitMask;
+
+// #define GENERATE_ALL_TYPE_BIT_MASK(_type) TEXT_META_BIT_MASK_##_type |
+
+// // typedef struct TextMeta {
+// // 	#define GENERATE_STRUCT(_type) u8 _type : 4;
+// // 	META_TYPES(GENERATE_STRUCT)
+// // 	#undef GENERATE_STRUCT
+// // } TextMeta;
+
+#define DEF_ARRAY_ITEM(_item, ...)  _item,
+#define DEF_ENUM_ITEM(_item, ...)   _item __VA_OPT__(=) __VA_ARGS__,
+#define DEF_STRING_ITEM(_item, ...) case _item: return #_item;
+#define DEF_ENUM(_enum) \
+	typedef enum PACKED _enum { \
+		DEF_##_enum(DEF_ENUM_ITEM) \
+	} _enum; \
+	static const char* string_##_enum(_enum _item) { \
+		switch(_item) { \
+			DEF_##_enum(DEF_STRING_ITEM) \
+			default: return #_enum " N/A"; \
+		} \
+	}
+
+#define DEF_RESULT(DEF) \
+	DEF(RESULT_ERROR,      -1) \
+	DEF(RESULT_SUCCESS,     0) \
+	DEF(RESULT_COLLISION,   1) \
+	DEF(RESULT_PARSE_ERROR, 2)
+DEF_ENUM(RESULT);
+
+#define DEF_SCOPE_CATEGORY(DEF) \
+	DEF(SCOPE_CATEGORY_TAB) \
+	DEF(SCOPE_CATEGORY_DEFINE) \
+	DEF(SCOPE_CATEGORY_CURLY) \
+	DEF(SCOPE_CATEGORY_PARENTHESIS) \
+	DEF(SCOPE_CATEGORY_BRACKET) \
+	DEF(SCOPE_CATEGORY_QUOTE) \
+	DEF(SCOPE_CATEGORY_BLOCK_COMMENT) \
+	DEF(SCOPE_CATEGORY_LINE_COMMENT) \
+	DEF(SCOPE_CATEGORY_COUNT)
+DEF_ENUM(SCOPE_CATEGORY);
+
+#define DEF_TOKEN_CATEGORY(DEF) \
+	DEF(TOKEN_CATEGORY_NONE) \
+	DEF(TOKEN_CATEGORY_TYPE) \
+	DEF(TOKEN_CATEGORY_KEYWORD) \
+	DEF(TOKEN_CATEGORY_WHITESPACE) \
+	DEF(TOKEN_CATEGORY_OPERATOR) \
+	DEF(TOKEN_CATEGORY_PREPROCESS) \
+	DEF(TOKEN_CATEGORY_SCOPE) \
+	DEF(TOKEN_CATEGORY_QUOTE) \
+	DEF(TOKEN_CATEGORY_COMMENT) \
+	DEF(TOKEN_CATEGORY_COUNT)
+DEF_ENUM(TOKEN_CATEGORY);
+
+#define FIND_CARET_COLOR     (Color){   0, 255,   0, 255 }
+#define FIND_HIGHLIGHT_COLOR (Color){   0, 255,   0, 64  }
+#define COLOR_COMMAND_BOX    (Color){  20,  20,   2, 200 }
+#define COLOR_TEXT_BOX       (Color){  37,  37,  38, 255 }
+
+#define COLOR_PREPROCESSOR (Color){ 198, 149, 198, 255 }
+#define COLOR_NUMBER       (Color){ 249, 174,  87, 255 }
+#define COLOR_STRING       (Color){ 153, 199, 148, 255 } 
+// #define COLOR_COMMENT      (Color){ 166, 172, 185, 255 }  
+#define COLOR_COMMENT      (Color){ 166, 172, 255, 255 }  
+#define COLOR_MACRO_NAME   (Color){ 249, 174,  87, 255 }
+#define COLOR_BACKGROUND   (Color){  48,  56,  65, 255 } 
+#define COLOR_OPERATOR     (Color){ 249, 123,  87, 255 }
+#define COLOR_TEXT         (Color){ 216, 222, 233, 255 }
+#define COLOR_TEXT_HIDDEN  (Color){  53,  61,  70, 255 } 
+#define COLOR_QUOTE        (Color){  96, 180, 180, 255 } 
+#define COLOR_SCOPE        (Color){ 255, 255, 255, 255 } 
+#define COLOR_KEYWORD      (Color){ 236,  96, 102, 255 }
+#define COLOR_TYPE         (Color){ 198, 149, 198, 255 }
+
+static Color TOKEN_CATEGORY_COLOR[] = {
+	   [TOKEN_CATEGORY_NONE]       = COLOR_TEXT,
+	   [TOKEN_CATEGORY_TYPE]       = COLOR_TYPE,
+	   [TOKEN_CATEGORY_KEYWORD]    = COLOR_KEYWORD,
+	   [TOKEN_CATEGORY_WHITESPACE] = COLOR_TEXT_HIDDEN,
+	   [TOKEN_CATEGORY_OPERATOR]   = COLOR_OPERATOR,
+	   [TOKEN_CATEGORY_PREPROCESS] = COLOR_PREPROCESSOR,
+	   [TOKEN_CATEGORY_SCOPE]      = COLOR_SCOPE,
+	   [TOKEN_CATEGORY_QUOTE]      = COLOR_QUOTE,
+	   [TOKEN_CATEGORY_COMMENT]    = COLOR_COMMENT,
+};
+
+#define DEF_PREPROCESS_TOKENS(DEF) \
+	DEF("define") \
+	DEF("include")
+
+#define DEF_KEYWORD_TOKENS(DEF) \
+	DEF("_Static_assert") \
+	DEF("_Noreturn") \
+	DEF("_Generic") \
+	DEF("continue") \
+	DEF("volatile") \
+	DEF("register") \
+	DEF("restrict") \
+	DEF("_Alignof") \
+	DEF("_Alignas") \
+	DEF("typedef") \
+	DEF("default") \
+	DEF("_Atomic") \
+	DEF("typeof") \
+	DEF("switch") \
+	DEF("static") \
+	DEF("sizeof") \
+	DEF("return") \
+	DEF("inline") \
+	DEF("extern") \
+	DEF("while") \
+	DEF("const") \
+	DEF("break") \
+	DEF("goto") \
+	DEF("else") \
+	DEF("case") \
+	DEF("auto") \
+	DEF("for") \
+	DEF("if") \
+	DEF("do")
+
+#define DEF_TYPE_TOKENS(DEF) \
+	DEF("unsigned") \
+	DEF("uint64_t") \
+	DEF("ptrdiff_t") \
+	DEF("uint32_t") \
+	DEF("uint16_t") \
+	DEF("wchar_t") \
+	DEF("struct") \
+	DEF("signed") \
+	DEF("size_t") \
+	DEF("int64_t") \
+	DEF("int32_t") \
+	DEF("int16_t") \
+	DEF("double") \
+	DEF("uint8_t") \
+	DEF("float") \
+	DEF("short") \
+	DEF("int8_t") \
+	DEF("_Bool") \
+	DEF("union") \
+	DEF("void") \
+	DEF("long") \
+	DEF("char") \
+	DEF("enum") \
+	DEF("int")
+
+static const char* PREPROCESS_TOKENS[] = {
+	DEF_PREPROCESS_TOKENS(DEF_ARRAY_ITEM)
+};
+
+static const char* KEYWORD_TOKENS[] = {
+	DEF_KEYWORD_TOKENS(DEF_ARRAY_ITEM)
+};
+
+static const char* TYPE_TOKENS[] = {
+	DEF_TYPE_TOKENS(DEF_ARRAY_ITEM)
+};
+
+typedef u16 tok_k;
+#define MAP_CAPACITY 4096
+#define TOKEN_MASK 0x0FFF // 12 bit mask
+
+static TOKEN_CATEGORY TOKEN_CATEGORY_MAP[MAP_CAPACITY];
+
+#define TOKEN_HASH(_h, _c) (_h + (_h << 5) + (_c))  
+
+static tok_k TokenKeyRange(const char *str, int iStart, int iEnd)
+{
+	tok_k hash = 0;
+	for (int i = iStart; i <= iEnd; ++i) hash = TOKEN_HASH(hash, str[i]);
+	return hash & TOKEN_MASK;
+}
+
+static tok_k TokenKey(const char *str)
+{
+	tok_k hash = 0; utf8 c;
+	while ((c = *str++)) hash = TOKEN_HASH(hash, c);
+	return hash & TOKEN_MASK;
+}
+
+static RESULT ContructTokenMap(TOKEN_CATEGORY category, int tokenCount, const char** tokens)
+{
+	for (int iTkn = 0; iTkn < tokenCount; iTkn++) {
+		tok_k k = TokenKey(tokens[iTkn]);
+		if (TOKEN_CATEGORY_MAP[k] != TOKEN_CATEGORY_NONE) {
+			LOG("Type Hash Collision! %s %d %s\n", tokens[iTkn], k, string_TOKEN_CATEGORY(category));
+			return RESULT_COLLISION;
+		}
+		TOKEN_CATEGORY_MAP[k] = category;
+		LOG("%s %d %s\n", tokens[iTkn], k, string_TOKEN_CATEGORY(category));
+	}
+	return RESULT_SUCCESS;
+}
+
+/*
+ * CodeBox
+ */
 #define MAX_INPUT_CHARS      2048
 #define TEXT_BUFFER_CAPACITY 64000
 
-#define LOG(...) printf(__VA_ARGS__);
 #define CASE_EITHER(_key, _a, _b) case _key | _a | _b: case _key | _a: case _key | _b
 #define TO_LOWER_C(_c) 'a' + (_c - 'A')
 
@@ -244,12 +538,13 @@ const float fontYSpacing = 20;
 const float fontSize = 24;
 const char availableChars[] = "·¬ abcdefghijklmnopqrstuvwxyzABDCEFGHIJKLMNOPQRSTUVWXYZ1234567890-=!@#$%^&*()_+[];',./{}:\"<>?|`~\n\t\\";
 
-typedef enum Direction : u8 {
+typedef enum Direction {
 	DIRECTION_NONE,
 	DIRECTION_FORWARD,
 	DIRECTION_BACKWARD,
 	DIRECTION_COUNT,
 } Direction;
+
 static const char* string_Direction[] = {
 	[DIRECTION_NONE]     = "DIRECTION_NONE",
 	[DIRECTION_FORWARD]  = "DIRECTION_FORWARD",
@@ -258,6 +553,30 @@ static const char* string_Direction[] = {
 
 #define CARET_COUNT 128
 #define CARET_INVALID INT_MIN
+
+#define META_CATEGORY_MAX_INCREMENT 15
+typedef struct TextMeta {
+	TOKEN_CATEGORY token : 5;
+
+	u8 BLOCK_COMMENT : 1;
+	u8 LINE_COMMENT  : 1;
+	u8 DEFINE        : 1;
+
+	u8 iTokenChar : 4; // Index of char in token TODO probably want start and end
+
+	u8 iTokenStartOffset : 4; // Index of char in token TODO probably want start and end
+	u8 iTokenEndOfset    : 4; // Index of char in token TODO probably want start and end
+
+	u8 SCOPE_CATEGORY_TAB           : 4;
+	u8 SCOPE_CATEGORY_CURLY         : 4;
+	u8 SCOPE_CATEGORY_PARENTHESIS   : 4;
+	u8 SCOPE_CATEGORY_BRACKET       : 4;
+	u8 SCOPE_CATEGORY_QUOTE         : 4;
+
+	u16 iScopeStartOffset : 16; // Could someone really have a scope bigger than 65k?
+	u16 iScopeEndOffset   : 16;
+
+} TextMeta;
 
 typedef struct Caret {
 	int index;
@@ -287,7 +606,10 @@ typedef struct CodeBox {
 	int newLineCount;
 	int bufferCount;
 
-	char* buffer;
+	char*           pBuffer;
+	TOKEN_CATEGORY* pToken;
+	TextMeta*       pTextMeta;
+
 	char* path;
 	bool dirty;
 } CodeBox;
@@ -304,6 +626,284 @@ typedef struct Command {
 	int  bufferCount;
 	char buffer[32];
 } Command;
+
+/*
+ * CodeBox Meta
+ */
+typedef struct MetaToken {
+	u8 c     : 7;
+	u8 delim : 1;
+} MetaToken;
+STATIC_ASSERT(sizeof(MetaToken) == 1);
+
+static inline bool Delimiter(char c) 
+{
+	switch (c) 
+	{
+		case '\0':
+
+		/* Whitespace */
+		case ' ':
+		case '\t':
+		case '\n':
+		case '\r': // Carriage return
+		case '\v': // Vertical tab
+		case '\f': // Form feed
+
+		/* Operators */
+		case '!':
+		case '%':
+		case '&':
+		case '*':
+		case '+':
+		case '-':
+		case '/':
+		case ':':
+		case '<':
+		case '=':
+		case '>':
+		case '?':
+		case '^':
+		case '|':
+		case '~':
+
+		/* Quotes */
+		case '"':
+		case '\'':
+		case '`':
+
+		/* Scopes */
+		case '(':
+		case ')':
+		case '{':
+		case '}':
+		case '[':
+		case ']':
+
+		case '#':
+		case ',':
+		case '.':
+		case ';':
+		case '@':
+		case '\\':
+			return true;
+
+		default:
+			return false;
+	}
+}
+
+static RESULT ProcessMeta(CodeBox* pCode) {
+	const int   count = pCode->bufferCount;
+	const char* pBuf  = pCode->pBuffer; 
+	TextMeta*   pMeta = pCode->pTextMeta;
+
+	int  iC    = 0;
+	int  iStrt = 0;
+
+	// Prev Char, Current Char, Next Char
+	char pc = '\0';
+	char c  = '\0';
+	char nc = pBuf[0];
+
+	// Prev Delim, Current Delim, Next Delim
+	bool pd = true;
+	bool d  = true;
+	bool nd = Delimiter(nc);
+
+	TextMeta meta; ZERO_P(&meta);
+
+processChar:
+	pc = c;
+	c  = nc;
+	nc = pBuf[iC + 1];
+
+	pd = d;
+	d  = nd;
+	nd = Delimiter(nc);
+
+	if (UNLIKELY(c == '\0')) goto error;
+
+	bool parseComment = meta.BLOCK_COMMENT || meta.LINE_COMMENT;
+	bool parseQuote =  meta.SCOPE_CATEGORY_QUOTE > 0;
+	switch (parseComment | parseQuote << 1) 
+	{
+		/* Parse Comment */
+		case (true | false << 1): {
+			switch (c) 
+			{
+				/* Comment Raw Parsing */
+				case (33)...(46):
+				// Skip '/' 47 to catch comment block end
+				case (48)...(127):
+					goto setMetaNext;
+
+				case '/':
+					switch (pc) 
+					{
+						case '*':
+							pMeta[iC] = meta;
+							meta = (TextMeta){.token = TOKEN_CATEGORY_NONE, .BLOCK_COMMENT = 0}; 
+							goto next;
+						default:
+							goto setMetaNext;
+					}
+
+				case '\n': 
+					// Set to whitespace but keep recycled meta as comment
+					pMeta[iC] = (TextMeta){.token = TOKEN_CATEGORY_WHITESPACE, .LINE_COMMENT = meta.LINE_COMMENT, .BLOCK_COMMENT = meta.BLOCK_COMMENT};
+					meta = (TextMeta){.token = TOKEN_CATEGORY_COMMENT, .LINE_COMMENT = 0, .BLOCK_COMMENT = meta.BLOCK_COMMENT};
+					goto next;
+
+				case ' ': 
+				case '\t': 
+					// Set to whitespace but keep recycled meta as comment
+					pMeta[iC] = (TextMeta){.token = TOKEN_CATEGORY_WHITESPACE, .LINE_COMMENT = meta.LINE_COMMENT, .BLOCK_COMMENT = meta.BLOCK_COMMENT};
+					goto next;
+			}
+		}
+
+		/* Parse Quote */
+		case (false | true << 1): {
+			goto setMetaNext;
+		}
+
+		default: {
+			// TODO can this be melded into the switch below?
+			u8 delimitTransition = pd | d << 1 | nd << 2;
+			switch (delimitTransition) 
+			{
+				case true  | false << 1 | false << 2:
+					iStrt = iC;
+					break;
+
+				case true  | false << 1 | true << 2:
+					iStrt = iC;
+					FALLTHROUGH;
+
+				case false | false << 1 | true << 2:
+					int iEnd = iC;
+					int len  = iEnd + 1 - iStrt;
+					tok_k t  = TokenKeyRange(pBuf, iStrt, iEnd);
+					TOKEN_CATEGORY category = TOKEN_CATEGORY_MAP[t];
+					meta.token = category;
+					meta.iTokenChar = iEnd;
+					for (int i = iStrt; i < iEnd; ++i) {
+						pMeta[i].token = category;
+						pMeta[i].iTokenChar = i;
+					}
+					break;
+			}
+
+			switch (c) 
+			{
+			#define INCREMENT_CASE(_add, _sub, _scope, _token) \
+				case _add: \
+					meta._scope += (meta._scope < META_CATEGORY_MAX_INCREMENT); \
+					meta.token = _token; \
+					goto setMetaNext; \
+				case _sub: \
+					meta.token = _token; \
+					pMeta[iC] = meta; \
+					meta._scope -= (meta._scope > 0);  \
+					goto next;
+
+				/* Scopes */
+				INCREMENT_CASE('[', ']', SCOPE_CATEGORY_BRACKET,     TOKEN_CATEGORY_SCOPE)
+				INCREMENT_CASE('{', '}', SCOPE_CATEGORY_CURLY,       TOKEN_CATEGORY_SCOPE)
+				INCREMENT_CASE('(', ')', SCOPE_CATEGORY_PARENTHESIS, TOKEN_CATEGORY_SCOPE)
+
+			#undef INCREMENT_CASE
+
+				case '_':
+				case 'a'...'z':
+				case 'A'...'Z':
+				case '0'...'9':
+					goto setMetaNext;
+
+				/* Whitespace */
+				case  ' ':
+				case '\0':
+				case '\t':
+				case '\n':
+				case '\r': // Carriage return
+				case '\v': // Vertical tab
+				case '\f': // Form feed
+					meta.token = TOKEN_CATEGORY_WHITESPACE;
+					goto setMetaNext;
+
+				/* Comment or Operator */
+				case '/':
+					switch (nc) 
+					{
+						case '/':
+							meta = (TextMeta){.token = TOKEN_CATEGORY_COMMENT, .LINE_COMMENT = 1, .BLOCK_COMMENT = meta.BLOCK_COMMENT};
+							pMeta[iC] = meta;
+							goto setMetaNext;
+						case '*':
+							meta = (TextMeta){.token = TOKEN_CATEGORY_COMMENT, .BLOCK_COMMENT = 1}; 
+							pMeta[iC] = meta; 
+							goto setMetaNext;
+						default:
+							meta.token = TOKEN_CATEGORY_OPERATOR;
+							pMeta[iC] = meta;
+							goto setMetaNext;
+					}
+	 
+				/* Operators */
+				case '!':
+				case '%':
+				case '&':
+				case '+':
+				case '-':
+				case '*':
+				case ':':
+				case '<':
+				case '=':
+				case '>':
+				case '?':
+				case '^':
+				case '|':
+				case '~':
+					meta.token = TOKEN_CATEGORY_OPERATOR;
+					goto setMetaNext;
+
+				/* Quotes */
+				case '"':
+				case '\'':
+				case '`':
+					meta.token = TOKEN_CATEGORY_QUOTE;
+					goto setMetaNext;
+
+				/* Preprocess */
+				case '#':
+					meta.token = TOKEN_CATEGORY_PREPROCESS;
+					goto setMetaNext;
+
+				case ',':
+				case '.':
+				case ';':
+				case '@':
+				case '\\':
+					meta.token = TOKEN_CATEGORY_NONE;
+					goto setMetaNext;
+			}
+		}
+	} // switch (parseComment | parseQuote << 1) 
+
+setMetaNext:
+	pMeta[iC] = meta;
+next:
+	if (UNLIKELY(++iC == count)) return RESULT_SUCCESS; 
+	goto processChar;
+error:
+	LOG_ERR("Unexpected Parse Char! %c%c%c\n", pc, c, nc);
+	return RESULT_PARSE_ERROR;
+}
+
+/*
+ * Codebox Text Search
+ */
 
 // Find specified char. 
 static int TextFindCharBackward(const char* text, int index, char c) {
@@ -435,7 +1035,7 @@ static bool TextFindCountCharBackward(const char* pBuffer, char searchChar, char
 
 // The index of char on current line
 static inline int CodeBoxIndexCollumn(const CodeBox* pCode, int index) {
-	int lineStartIndex = TextFindCharBackward(pCode->buffer, index - 1, '\n') + endCharLength;
+	int lineStartIndex = TextFindCharBackward(pCode->pBuffer, index - 1, '\n') + endCharLength;
 	LOG("%d %d\n", lineStartIndex, index);
 	return index - lineStartIndex;
 }
@@ -447,7 +1047,7 @@ static inline int CodeBoxCaretCollumn(const CodeBox* pCode) {
 
 // Line given index is on
 static inline int CodeBoxIndexRow(const CodeBox* pCode, int index) {
-	return TextCountCharForward(pCode->buffer, 0, index, '\n');
+	return TextCountCharForward(pCode->pBuffer, 0, index, '\n');
 }
 
 // Line the caret is on.
@@ -462,19 +1062,19 @@ static void CodeBoxFocusRow(CodeBox* pCode, int toRow) {
 	int yMin = pCode->focusStartRow;
 	if (toRow < yMin) {
 		pCode->focusStartRow = toRow;
-		pCode->focusStartRowIndex = TextFindCharSkipForward(pCode->buffer, '\n', pCode->focusStartRow);
+		pCode->focusStartRowIndex = TextFindCharSkipForward(pCode->pBuffer, '\n', pCode->focusStartRow);
 	}
 
 	int yMax = yMin + charCapacity;
 	if (toRow > yMax) {
 		pCode->focusStartRow = toRow - charCapacity;
-		pCode->focusStartRowIndex = TextFindCharSkipForward(pCode->buffer, '\n', pCode->focusStartRow);
+		pCode->focusStartRowIndex = TextFindCharSkipForward(pCode->pBuffer, '\n', pCode->focusStartRow);
 	}
 } 
 
 static void CodeBoxIncrementFocusRow(CodeBox* pCode, int increment) {
 	pCode->focusStartRow -= increment;
-	pCode->focusStartRowIndex = TextFindCharSkipForward(pCode->buffer, '\n', pCode->focusStartRow);
+	pCode->focusStartRowIndex = TextFindCharSkipForward(pCode->pBuffer, '\n', pCode->focusStartRow);
 }
 
 // Focus on a given character index.
@@ -511,32 +1111,34 @@ static void CodeBoxUpdateCaretIndexLine(CodeBox* pCode, int newCaretIndex, int n
 	assert(pCode->caretCollumn >= 0);
 }
 
-
-typedef enum TextScanMatch{
-	TEXT_SCAN_MATCH_IMMEDIATE,
-	TEXT_SCAN_MATCH_SKIP_IMMEDIATE,
-	TEXT_SCAN_COUNT,
-} TextScanMatch;
-
-typedef enum TextCaret {
-	TEXT_CARET_LEFT,
-	TEXT_CARET_RIGHT,
-	TEXT_CARET_COUNT,
-} TextCaret;
-
-static void textInsertChar(CodeBox* pCode, char c) {
-	memmove(pCode->buffer + pCode->caretIndex + 1, pCode->buffer + pCode->caretIndex, pCode->bufferCount - pCode->caretIndex - 1);
-	pCode->buffer[pCode->caretIndex] = c;
+static void CodeBoxInsertCharAtIndex(CodeBox* pCode, int index, char c) {
+	memmove(pCode->pBuffer + index + 1, pCode->pBuffer + index, pCode->bufferCount - index - 1);
+	pCode->dirty = true;
+	pCode->pBuffer[index] = c;
 	pCode->bufferCount++;
 	pCode->caretIndex++;
 	pCode->caretCollumn++;
-	pCode->dirty = true;
+	pCode->newLineCount += c == '\n';
+}
+
+static inline void CodeBoxInsertChar(CodeBox* pCode, char c) {
+	CodeBoxInsertCharAtIndex(pCode, pCode->caretIndex, c);
+}
+
+static void CodeBoxDeleteCharAtIndex(CodeBox* pCode, int index) {
+	if (pCode->bufferCount == 0) return;
+	memmove(pCode->pBuffer + index - 1, pCode->pBuffer + index, pCode->bufferCount - index);
+	pCode->newLineCount -= pCode->pBuffer[index - 1] == '\n';
+	pCode->bufferCount--;
+}
+
+static inline void CodeBoxDeleteChar(CodeBox* pCode) {
+	CodeBoxDeleteCharAtIndex(pCode, pCode->caretIndex);
 }
 
 static void CommandFinish(CodeBox* pCode, Command* pCommand) {
 	CodeBoxUpdateCaretIndex(pCode, pCommand->scanFoundIndex);
 	CodeBoxFocusRow(pCode, pCode->caretRow);
-
 	pCommand->scanFoundIndex  = 0;
 	pCommand->bufferCount     = 0;
 	pCommand->enabled         = false;
@@ -544,15 +1146,28 @@ static void CommandFinish(CodeBox* pCode, Command* pCommand) {
 	pCommand->firstKeyPressed = false;
 }
 
+
+void PrintU16Binary(u16 value) {
+	for (int i = 15; i >= 0; i--) {
+		putchar((value & (1 << i)) ? '1' : '0');
+		if (i % 4 == 0) putchar(' ');
+	}
+	putchar('\n');
+}
+
 static CodeBox text;
 
-#define MASK_ASCII    0b00000000000000000000000111111111 
+#define MASK_ASCII    0b00000000000000000000000011111111 
 #define KEY_SHIFT_MOD 0b10000000000000000000000000000000
 #define KEY_ALT_MOD   0b01000000000000000000000000000000
 #define KEY_CTRL_MOD  0b00100000000000000000000000000000
 
 int main(void)
 {
+	REQUIRE(ContructTokenMap(TOKEN_CATEGORY_PREPROCESS, COUNT(PREPROCESS_TOKENS), PREPROCESS_TOKENS));
+	REQUIRE(ContructTokenMap(TOKEN_CATEGORY_TYPE,       COUNT(TYPE_TOKENS),       TYPE_TOKENS));
+	REQUIRE(ContructTokenMap(TOKEN_CATEGORY_KEYWORD,    COUNT(KEYWORD_TOKENS),    KEYWORD_TOKENS));
+
 	/* Config */
 	SetTraceLogLevel(LOG_ALL);
 	SetConfigFlags(FLAG_VSYNC_HINT);
@@ -581,10 +1196,18 @@ int main(void)
 		LOG("Loaded Buffer Size %d\n", text.bufferCount);
 		assert(text.bufferCount < TEXT_BUFFER_CAPACITY && "Loaded buffer size too big!");
 
-		text.buffer = XMALLOC_ALIGNED(VECTOR_SIZE, TEXT_BUFFER_CAPACITY * sizeof(char));
-		memset(text.buffer, 0, TEXT_BUFFER_CAPACITY * sizeof(char));
-		memcpy(text.buffer, loadedFile, text.bufferCount + 1);
+		text.pBuffer   = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(char));
+		text.pToken    = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(TOKEN_CATEGORY));
+		text.pTextMeta = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(TextMeta));
+
+		memset(text.pBuffer,   0, TEXT_BUFFER_CAPACITY * sizeof(char));
+		memset(text.pToken,    0, TEXT_BUFFER_CAPACITY * sizeof(TOKEN_CATEGORY));
+		memset(text.pTextMeta, 0, TEXT_BUFFER_CAPACITY * sizeof(TextMeta));
+
+		memcpy(text.pBuffer, loadedFile, text.bufferCount + 1);
 		free(loadedFile);
+
+		ProcessMeta(&text);
 	}
 
 	/* State */
@@ -694,7 +1317,7 @@ int main(void)
 	 */
 
 	// TODO pull this into struct function to be used solely for text input
-	const char* pBuf = pCode->buffer;
+	const char* pBuf = pCode->pBuffer;
 	const int iCrt   = pCode->caretIndex;
 	while (currentKey > 0)
 	{
@@ -708,7 +1331,7 @@ int main(void)
 
 				pCode->caretIndex--;
 				pCode->caretCollumn = CodeBoxCaretCollumn(pCode);
-				if (pCode->buffer[pCode->caretIndex] == '\n') {
+				if (pCode->pBuffer[pCode->caretIndex] == '\n') {
 					pCode->caretRow--;
 					CodeBoxFocusCaret(pCode);
 				}
@@ -742,7 +1365,7 @@ int main(void)
 
 				pCode->caretIndex++;		
 				pCode->caretCollumn = CodeBoxCaretCollumn(pCode);
-				if (pCode->buffer[pCode->caretIndex] == '\n') {
+				if (pCode->pBuffer[pCode->caretIndex] == '\n') {
 					pCode->caretRow++;
 					CodeBoxFocusCaret(pCode);
 				}
@@ -771,8 +1394,8 @@ int main(void)
 			/* Move Up Keys */
 			case KEY_UP: 
 			case KEY_W | KEY_ALT_MOD:{
-				int upLineEnd     = TextFindCharBackward(pCode->buffer, pCode->caretIndex - 1, '\n');     	   
-				int upLineStart   = TextFindCharBackward(pCode->buffer, upLineEnd - 1, '\n') + endCharLength;
+				int upLineEnd     = TextFindCharBackward(pCode->pBuffer, pCode->caretIndex - 1, '\n');     	   
+				int upLineStart   = TextFindCharBackward(pCode->pBuffer, upLineEnd - 1, '\n') + endCharLength;
 				int upLineLength  = upLineEnd - upLineStart;
 				LOG("%d %d\n", upLineEnd, upLineStart);
 				if (upLineStart < 0) break;
@@ -784,9 +1407,9 @@ int main(void)
 
 			case KEY_UP | KEY_CTRL_MOD:
 			case KEY_W  | KEY_CTRL_MOD | KEY_ALT_MOD: {
-				int startIndex      = pCode->buffer[pCode->caretIndex] == '\n' ? pCode->caretIndex - endCharLength : pCode->caretIndex;
-				int blockStartIndex = TextFindTextBackward(pCode->buffer, startIndex, "\n\n");
-				int blockEndIndex   = TextNegateFindCharBackward(pCode->buffer, blockStartIndex, '\n');  
+				int startIndex      = pCode->pBuffer[pCode->caretIndex] == '\n' ? pCode->caretIndex - endCharLength : pCode->caretIndex;
+				int blockStartIndex = TextFindTextBackward(pCode->pBuffer, startIndex, "\n\n");
+				int blockEndIndex   = TextNegateFindCharBackward(pCode->pBuffer, blockStartIndex, '\n');  
 				int newCaretIndex   = blockEndIndex + 1;
 				CodeBoxUpdateCaretIndex(pCode, newCaretIndex);
 				CodeBoxFocusCaret(pCode);
@@ -796,9 +1419,9 @@ int main(void)
 			/* Move Down Keys */
 			case KEY_DOWN: 
 			case KEY_S | KEY_ALT_MOD: {
-				int currentLineEnd = TextFindCharForward(pCode->buffer, pCode->caretIndex, '\n');
+				int currentLineEnd = TextFindCharForward(pCode->pBuffer, pCode->caretIndex, '\n');
 				int downLineStart  = currentLineEnd + endCharLength;
-				int downLineEnd    = TextFindCharForward(pCode->buffer, downLineStart, '\n');
+				int downLineEnd    = TextFindCharForward(pCode->pBuffer, downLineStart, '\n');
 				if (downLineStart >= pCode->bufferCount - endCharLength) break;
 				int downLineDiff  = downLineEnd - downLineStart;
 				pCode->caretIndex = downLineStart + (pCode->caretCollumn < downLineDiff ? pCode->caretCollumn : downLineDiff);
@@ -810,10 +1433,10 @@ int main(void)
 			case KEY_DOWN | KEY_CTRL_MOD:
 			case KEY_S    | KEY_CTRL_MOD | KEY_ALT_MOD: {
 				// Search"\n\n" to find where there is a new line gap
-				int blockEndIndex   = TextFindTextForward(pCode->buffer, pCode->caretIndex, "\n\n");
-				int blockStartIndex = TextNegateFindCharForward(pCode->buffer, blockEndIndex, '\n');
-				blockStartIndex = TextNegateFindCharForward(pCode->buffer, blockStartIndex, ' ');
-				blockStartIndex = TextNegateFindCharForward(pCode->buffer, blockStartIndex, '\t');
+				int blockEndIndex   = TextFindTextForward(pCode->pBuffer, pCode->caretIndex, "\n\n");
+				int blockStartIndex = TextNegateFindCharForward(pCode->pBuffer, blockEndIndex, '\n');
+				blockStartIndex = TextNegateFindCharForward(pCode->pBuffer, blockStartIndex, ' ');
+				blockStartIndex = TextNegateFindCharForward(pCode->pBuffer, blockStartIndex, '\t');
 				int newCaretIndex   = blockStartIndex;
 				CodeBoxUpdateCaretIndex(pCode, newCaretIndex);
 				CodeBoxFocusCaret(pCode);
@@ -862,9 +1485,9 @@ int main(void)
 
 			// 	LOG("%d %d\n", pCode->caretIndex, command.scanFoundIndex);
 
-			// 	command.scanFoundIndex = TextFindTextForward(pCode->buffer, command.scanFoundIndex + 1, command.buffer);
+			// 	command.scanFoundIndex = TextFindTextForward(pCode->pBuffer, command.scanFoundIndex + 1, command.pBuffer);
 			// 	if (command.scanFoundIndex > 0) {
-			// 		int scanFoundLine = TextCountCharForward(pCode->buffer, pCode->caretIndex, command.scanFoundIndex, '\n') + pCode->caretRow;
+			// 		int scanFoundLine = TextCountCharForward(pCode->pBuffer, pCode->caretIndex, command.scanFoundIndex, '\n') + pCode->caretRow;
 			// 		CodeBoxFocusRow(pCode, scanFoundLine);
 			// 		LOG("%d \n", scanFoundLine);
 			// 	}
@@ -937,98 +1560,63 @@ int main(void)
 
 			UpdateCommandScan:
 				LOG("%d\n", command.scanFoundIndex);
-				command.scanFoundIndex = TextFindTextForward(pCode->buffer, pCode->caretIndex, command.buffer);
+				command.scanFoundIndex = TextFindTextForward(pCode->pBuffer, pCode->caretIndex, command.buffer);
 				break;
 
 			/* Utility Keys */
 			case KEY_CTRL_MOD | KEY_S:
 				LOG("Saving: %s", text.path);
-				SaveFileText(text.path, text.buffer);
+				SaveFileText(text.path, text.pBuffer);
 				break;
 
 			/* Character Delete Keys */
-			case KEY_BACKSPACE: if (text.bufferCount > 0) {
-					if (text.buffer[text.caretIndex - 1] == '\n') 
-						text.newLineCount--;
-					
-					memmove(text.buffer + text.caretIndex - 1, text.buffer + text.caretIndex, text.bufferCount - text.caretIndex);
-					text.bufferCount--;
-					text.caretIndex--;
-				}
-				break;
-
-			case KEY_DELETE: if (text.bufferCount > 0 && text.caretIndex < text.bufferCount - 1) {
-					if (text.buffer[text.caretIndex] == '\n') 
-						text.newLineCount--;
-					
-					text.bufferCount--;
-					memmove(text.buffer + text.caretIndex, text.buffer + text.caretIndex + 1, text.bufferCount - text.caretIndex - 1);
-				}
-				break;
+			case KEY_BACKSPACE: CodeBoxDeleteChar(pCode); pCode->caretIndex--; break;
+			case KEY_DELETE:    CodeBoxDeleteChar(pCode); break;
 
 			/* Character Insert Keys */
-			case KEY_ENTER: 
-				textInsertChar(pCode, '\n'); 
-				text.newLineCount++; 
-				break;
+			case KEY_ENTER: CodeBoxInsertChar(pCode, '\n'); break;
+			case KEY_SPACE: CodeBoxInsertChar(pCode, ' '); break;
+			case KEY_TAB:   CodeBoxInsertChar(pCode, '\t'); break;
 
-			case KEY_SPACE:
-				textInsertChar(pCode, ' '); 
-				break;
+			case 'A' ... 'Z': CodeBoxInsertChar(pCode, 'a' + (currentKey - KEY_A)); break;
+			case '0' ... '9': CodeBoxInsertChar(pCode, currentKey); break;
 
-			case KEY_TAB: 
-				textInsertChar(pCode, '\t'); 
-				break;
+			case (KEY_SHIFT_MOD | 'A') ... (KEY_SHIFT_MOD | 'Z'): CodeBoxInsertChar(pCode, currentKey); break;
+			case KEY_KP_0 ... KEY_KP_9: CodeBoxInsertChar(pCode, '0' + (currentKey - KEY_KP_0)); break;
 
-			case (KEY_SHIFT_MOD | 'A') ... (KEY_SHIFT_MOD | 'Z'): 
-				textInsertChar(pCode, currentKey); 
-				break;
+			case '`':  CodeBoxInsertChar(pCode, currentKey); break;
+			case '-':  CodeBoxInsertChar(pCode, currentKey); break;
+			case '=':  CodeBoxInsertChar(pCode, currentKey); break;
+			case '[':  CodeBoxInsertChar(pCode, currentKey); break;
+			case ']':  CodeBoxInsertChar(pCode, currentKey); break;
+			case '\\': CodeBoxInsertChar(pCode, currentKey); break;
+			case ';':  CodeBoxInsertChar(pCode, currentKey); break;
+			case '\'': CodeBoxInsertChar(pCode, currentKey); break;
+			case ',':  CodeBoxInsertChar(pCode, currentKey); break;
+			case '.':  CodeBoxInsertChar(pCode, currentKey); break;
+			case '/':  CodeBoxInsertChar(pCode, currentKey); break;
 
-			case 'A' ... 'Z': 
-				textInsertChar(pCode, 'a' + (currentKey- KEY_A)); 
-				break;
-
-			case KEY_KP_0 ... KEY_KP_9: 
-				textInsertChar(pCode, '0' + (currentKey- KEY_KP_0)); 
-				break;
-
-			case '0' ... '9': 
-				textInsertChar(pCode, currentKey); 
-				break;
-
-			case '`':  textInsertChar(pCode, currentKey); break;
-			case '-':  textInsertChar(pCode, currentKey); break;
-			case '=':  textInsertChar(pCode, currentKey); break;
-			case '[':  textInsertChar(pCode, currentKey); break;
-			case ']':  textInsertChar(pCode, currentKey); break;
-			case '\\': textInsertChar(pCode, currentKey); break;
-			case ';':  textInsertChar(pCode, currentKey); break;
-			case '\'': textInsertChar(pCode, currentKey); break;
-			case ',':  textInsertChar(pCode, currentKey); break;
-			case '.':  textInsertChar(pCode, currentKey); break;
-			case '/':  textInsertChar(pCode, currentKey); break;
-
-			case KEY_SHIFT_MOD | '1':  textInsertChar(pCode, '!'); break;
-			case KEY_SHIFT_MOD | '2':  textInsertChar(pCode, '@'); break;
-			case KEY_SHIFT_MOD | '3':  textInsertChar(pCode, '#'); break;
-			case KEY_SHIFT_MOD | '4':  textInsertChar(pCode, '$'); break;
-			case KEY_SHIFT_MOD | '5':  textInsertChar(pCode, '%'); break;
-			case KEY_SHIFT_MOD | '6':  textInsertChar(pCode, '^'); break;
-			case KEY_SHIFT_MOD | '7':  textInsertChar(pCode, '&'); break;
-			case KEY_SHIFT_MOD | '8':  textInsertChar(pCode, '*'); break;
-			case KEY_SHIFT_MOD | '9':  textInsertChar(pCode, '('); break;
-			case KEY_SHIFT_MOD | '0':  textInsertChar(pCode, ')'); break;
-			case KEY_SHIFT_MOD | '`':  textInsertChar(pCode, '~'); break;
-			case KEY_SHIFT_MOD | '-':  textInsertChar(pCode, '_'); break;
-			case KEY_SHIFT_MOD | '=':  textInsertChar(pCode, '+'); break;
-			case KEY_SHIFT_MOD | '[':  textInsertChar(pCode, '{'); break;
-			case KEY_SHIFT_MOD | ']':  textInsertChar(pCode, '}'); break;
-			case KEY_SHIFT_MOD | '\\': textInsertChar(pCode, '|'); break;
-			case KEY_SHIFT_MOD | ';':  textInsertChar(pCode, ':'); break;
-			case KEY_SHIFT_MOD | '\'': textInsertChar(pCode, '"'); break;
-			case KEY_SHIFT_MOD | ',':  textInsertChar(pCode, '<'); break;
-			case KEY_SHIFT_MOD | '.':  textInsertChar(pCode, '>'); break;
-			case KEY_SHIFT_MOD | '/':  textInsertChar(pCode, '?'); break;
+			case KEY_SHIFT_MOD | '1':  CodeBoxInsertChar(pCode, '!'); break;
+			case KEY_SHIFT_MOD | '2':  CodeBoxInsertChar(pCode, '@'); break;
+			case KEY_SHIFT_MOD | '3':  CodeBoxInsertChar(pCode, '#'); break;
+			case KEY_SHIFT_MOD | '4':  CodeBoxInsertChar(pCode, '$'); break;
+			case KEY_SHIFT_MOD | '5':  CodeBoxInsertChar(pCode, '%'); break;
+			case KEY_SHIFT_MOD | '6':  CodeBoxInsertChar(pCode, '^'); break;
+			case KEY_SHIFT_MOD | '7':  CodeBoxInsertChar(pCode, '&'); break;
+			case KEY_SHIFT_MOD | '8':  CodeBoxInsertChar(pCode, '*'); break;
+			case KEY_SHIFT_MOD | '9':  CodeBoxInsertChar(pCode, '('); break;
+			case KEY_SHIFT_MOD | '0':  CodeBoxInsertChar(pCode, ')'); break;
+			case KEY_SHIFT_MOD | '`':  CodeBoxInsertChar(pCode, '~'); break;
+			case KEY_SHIFT_MOD | '-':  CodeBoxInsertChar(pCode, '_'); break;
+			case KEY_SHIFT_MOD | '=':  CodeBoxInsertChar(pCode, '+'); break;
+			case KEY_SHIFT_MOD | '[':  CodeBoxInsertChar(pCode, '{'); break;
+			case KEY_SHIFT_MOD | ']':  CodeBoxInsertChar(pCode, '}'); break;
+			case KEY_SHIFT_MOD | '\\': CodeBoxInsertChar(pCode, '|'); break;
+			case KEY_SHIFT_MOD | ';':  CodeBoxInsertChar(pCode, ':'); break;
+			case KEY_SHIFT_MOD | '\'': CodeBoxInsertChar(pCode, '"'); break;
+			case KEY_SHIFT_MOD | ',':  CodeBoxInsertChar(pCode, '<'); break;
+			case KEY_SHIFT_MOD | '.':  CodeBoxInsertChar(pCode, '>'); break;
+			case KEY_SHIFT_MOD | '/':  CodeBoxInsertChar(pCode, '?'); break;
 
 			default: break;
 		}
@@ -1050,7 +1638,7 @@ int main(void)
 		float frameTime = GetFrameTime();
 		int iChar = pCode->focusStartRowIndex;
 		int scanAheadCount = 0;
-		bool delimiter = false;
+		// bool delimiter = false;
 
 		ClearBackground(RAYWHITE);
 
@@ -1073,9 +1661,13 @@ int main(void)
 				};										
 				Rectangle rect = {position.x, position.y, fontXSpacing, fontYSpacing};
 
+				char c = text.pBuffer[iChar];
+				TextMeta m = text.pTextMeta[iChar];
+
 				if (iChar == text.caretIndex) {
 					caretColor = ORANGE;
 					caretPosition = position;
+					DEBUG_LOG_ONCE("%s\n", string_TOKEN_CATEGORY(m.token));
 				}
 
 				if (iChar == command.scanFoundIndex) 
@@ -1087,18 +1679,28 @@ int main(void)
 					text.caretCollumn = CodeBoxCaretCollumn(&text);
 				}
 
-				char c = text.buffer[iChar];
-				switch (text.buffer[iChar]) {
+				// #define GENERATE_BITMASK(_type) ((m._type > 0) << TEXT_META_TYPE_##_type ) | 
+				// u16 mask = (u16)META_TYPES(GENERATE_BITMASK) 0;
+				// #undef GENERATE_BITMASK
 
+				// #define COLOR_A(_color, _a) (Color){_color.r, _color.g, _color.b, _a}
+
+				// if (m.SCOPE_CATEGORY_PARENTHESIS > 0) {
+				// 	DrawRectangleRec(rect, COLOR_A(WHITE, m.SCOPE_CATEGORY_PARENTHESIS * 10));
+				// }
+
+				// if (m.BLOCK_COMMENT) {
+				// 	DrawRectangleRec(rect, COLOR_A(BLUE, 10));
+				// }
+
+				switch (c) 
+				{
 					case '\0':
-						delimiter = true;
 						goto FinishDrawingText;
 
 					/* Whitespace */
 					case ' ':
 						c =  '_';
-						textColor = COLOR_TEXT_HIDDEN;
-				    	delimiter = true;
 						goto DrawChar;
 
 					case '\t':
@@ -1106,10 +1708,11 @@ int main(void)
 						rect.width += (tabCount * fontXSpacing * tabWidth);
 						tabCount++;
 						c = '-';
-						textColor = COLOR_TEXT_HIDDEN;
-				    	delimiter = true;
 						goto DrawChar;
 
+					case '\r':
+					case '\v':
+					case '\f':
 					case '\n':
 						// Check click on entire line
 						rect.width = textBox.width - rect.width;
@@ -1119,104 +1722,19 @@ int main(void)
 						}
 
 						x = xCharCapacity;
-						c =  '|';
-						textColor = COLOR_TEXT_HIDDEN;
-				    	delimiter = true;
-						goto DrawChar;
-
-					// Need to deal with these?
-				    case '\r':
-				    case '\v':
-				    case '\f':
-						c =  '?';
-						textColor = COLOR_TEXT_HIDDEN;
-				    	delimiter = true;
-						goto DrawChar;
-
-					/* Operators */
-					case '!':
-					case '%':
-					case '&':
-					case '*':
-					case '+':
-					case '-':
-					case '/':
-					case ':':
-					case '<':
-					case '=':
-					case '>':
-					case '?':
-					case '^':
-					case '|':
-					case '~':
-						textColor = COLOR_OPERATOR;
-				    	delimiter = true;
-						goto DrawChar;
-
-					/* Quotes */
-					case '"':
-					case '\'':
-					case '`':
-						textColor = COLOR_QUOTE;
-						delimiter = true;
-						goto DrawChar;
-
-					/* Scopes */
-					case '(':
-					case ')':
-					case '{':
-					case '}':
-					case '[':
-					case ']':
-						textColor = COLOR_SCOPE;
-						delimiter = true;
-						goto DrawChar;
-
-					case '#':
-					case ',':
-					case '.':
-					case ';':
-					case '@':
-					case '\\':
-						textColor = COLOR_COMMENT;
-						delimiter = true;
+						c =  '\\';
 						goto DrawChar;
 
 					default:
-						if (scanAheadCount > 0) goto DrawChar;
-
-						textColor = COLOR_TEXT;
-
-						if (delimiter == false) goto DrawChar;
-						delimiter = false;
-
-						// Check Keyword Tokens
-						for (int t = 0; TOKEN_KEYWORDS[t] != NULL; ++t) {
-							scanAheadCount = TextEqualsText(text.buffer + iChar, TOKEN_KEYWORDS[t]);
-							if (scanAheadCount > 0) {
-								textColor = COLOR_KEYWORD;
-								goto DrawChar;
-							}
-						}
-
-						// Check Type Tokens
-						for (int t = 0; TOKEN_TYPES[t] != NULL; ++t) {
-							scanAheadCount = TextEqualsText(text.buffer + iChar, TOKEN_TYPES[t]);
-							if (scanAheadCount > 0) {
-								textColor = COLOR_TYPE;
-								goto DrawChar;
-							}
-						}
-
 					DrawChar: {
 						int codePointSize;
 						int codePoint = GetCodepoint(&c, &codePointSize);
-						DrawTextCodepoint(font, codePoint, position, fontSize, textColor);
+						Color color = TOKEN_CATEGORY_COLOR[m.token];
+						DrawTextCodepoint(font, codePoint, position, fontSize, color);
 						iChar++;
-						scanAheadCount--;
 						break;
 					}
-				}								
+				}									
 			}
 		}      
 		FinishDrawingText:
