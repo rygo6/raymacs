@@ -353,30 +353,30 @@ static const char* TOKEN_KEYWORDS[] = {
 	DEF(RESULT_PARSE_ERROR, 2)
 DEF_ENUM(RESULT);
 
-#define DEF_SCOPE_CATEGORY(DEF) \
-	DEF(SCOPE_CATEGORY_TAB) \
-	DEF(SCOPE_CATEGORY_DEFINE) \
-	DEF(SCOPE_CATEGORY_CURLY) \
-	DEF(SCOPE_CATEGORY_PARENTHESIS) \
-	DEF(SCOPE_CATEGORY_BRACKET) \
-	DEF(SCOPE_CATEGORY_QUOTE) \
-	DEF(SCOPE_CATEGORY_BLOCK_COMMENT) \
-	DEF(SCOPE_CATEGORY_LINE_COMMENT) \
-	DEF(SCOPE_CATEGORY_COUNT)
-DEF_ENUM(SCOPE_CATEGORY);
+#define DEF_SCOPE(DEF) \
+	DEF(SCOPE_TAB) \
+	DEF(SCOPE_DEFINE) \
+	DEF(SCOPE_CURLY) \
+	DEF(SCOPE_PAREN) \
+	DEF(SCOPE_BRACKET) \
+	DEF(SCOPE_QUOTE) \
+	DEF(SCOPE_BLOCK_COMMENT) \
+	DEF(SCOPE_LINE_COMMENT) \
+	DEF(SCOPE_COUNT)
+DEF_ENUM(SCOPE);
 
-#define DEF_TOKEN_CATEGORY(DEF) \
-	DEF(TOKEN_CATEGORY_NONE) \
-	DEF(TOKEN_CATEGORY_TYPE) \
-	DEF(TOKEN_CATEGORY_KEYWORD) \
-	DEF(TOKEN_CATEGORY_WHITESPACE) \
-	DEF(TOKEN_CATEGORY_OPERATOR) \
-	DEF(TOKEN_CATEGORY_PREPROCESS) \
-	DEF(TOKEN_CATEGORY_SCOPE) \
-	DEF(TOKEN_CATEGORY_QUOTE) \
-	DEF(TOKEN_CATEGORY_COMMENT) \
-	DEF(TOKEN_CATEGORY_COUNT)
-DEF_ENUM(TOKEN_CATEGORY);
+#define DEF_TOKEN(DEF) \
+	DEF(TOKEN_NONE) \
+	DEF(TOKEN_TYPE) \
+	DEF(TOKEN_KEYWORD) \
+	DEF(TOKEN_WHITESPACE) \
+	DEF(TOKEN_OPERATOR) \
+	DEF(TOKEN_PREPROCESS) \
+	DEF(TOKEN_SCOPE) \
+	DEF(TOKEN_QUOTE) \
+	DEF(TOKEN_COMMENT) \
+	DEF(TOKEN_COUNT)
+DEF_ENUM(TOKEN);
 
 #define FIND_CARET_COLOR     (Color){   0, 255,   0, 255 }
 #define FIND_HIGHLIGHT_COLOR (Color){   0, 255,   0, 64  }
@@ -398,16 +398,16 @@ DEF_ENUM(TOKEN_CATEGORY);
 #define COLOR_KEYWORD      (Color){ 236,  96, 102, 255 }
 #define COLOR_TYPE         (Color){ 198, 149, 198, 255 }
 
-static Color TOKEN_CATEGORY_COLOR[] = {
-	   [TOKEN_CATEGORY_NONE]       = COLOR_TEXT,
-	   [TOKEN_CATEGORY_TYPE]       = COLOR_TYPE,
-	   [TOKEN_CATEGORY_KEYWORD]    = COLOR_KEYWORD,
-	   [TOKEN_CATEGORY_WHITESPACE] = COLOR_TEXT_HIDDEN,
-	   [TOKEN_CATEGORY_OPERATOR]   = COLOR_OPERATOR,
-	   [TOKEN_CATEGORY_PREPROCESS] = COLOR_PREPROCESSOR,
-	   [TOKEN_CATEGORY_SCOPE]      = COLOR_SCOPE,
-	   [TOKEN_CATEGORY_QUOTE]      = COLOR_QUOTE,
-	   [TOKEN_CATEGORY_COMMENT]    = COLOR_COMMENT,
+static Color TOKEN_COLOR[] = {
+	   [TOKEN_NONE]       = COLOR_TEXT,
+	   [TOKEN_TYPE]       = COLOR_TYPE,
+	   [TOKEN_KEYWORD]    = COLOR_KEYWORD,
+	   [TOKEN_WHITESPACE] = COLOR_TEXT_HIDDEN,
+	   [TOKEN_OPERATOR]   = COLOR_OPERATOR,
+	   [TOKEN_PREPROCESS] = COLOR_PREPROCESSOR,
+	   [TOKEN_SCOPE]      = COLOR_SCOPE,
+	   [TOKEN_QUOTE]      = COLOR_QUOTE,
+	   [TOKEN_COMMENT]    = COLOR_COMMENT,
 };
 
 #define DEF_PREPROCESS_TOKENS(DEF) \
@@ -487,7 +487,7 @@ typedef u16 tok_k;
 #define MAP_CAPACITY 4096
 #define TOKEN_MASK 0x0FFF // 12 bit mask
 
-static TOKEN_CATEGORY TOKEN_CATEGORY_MAP[MAP_CAPACITY];
+static TOKEN TOKEN_MAP[MAP_CAPACITY];
 
 #define TOKEN_HASH(_h, _c) (_h + (_h << 5) + (_c))  
 
@@ -505,16 +505,16 @@ static tok_k TokenKey(const char *str)
 	return hash & TOKEN_MASK;
 }
 
-static RESULT ContructTokenMap(TOKEN_CATEGORY category, int tokenCount, const char** tokens)
+static RESULT ContructTokenMap(TOKEN category, int tokenCount, const char** tokens)
 {
 	for (int iTkn = 0; iTkn < tokenCount; iTkn++) {
 		tok_k k = TokenKey(tokens[iTkn]);
-		if (TOKEN_CATEGORY_MAP[k] != TOKEN_CATEGORY_NONE) {
-			LOG("Type Hash Collision! %s %d %s\n", tokens[iTkn], k, string_TOKEN_CATEGORY(category));
+		if (TOKEN_MAP[k] != TOKEN_NONE) {
+			LOG("Type Hash Collision! %s %d %s\n", tokens[iTkn], k, string_TOKEN(category));
 			return RESULT_COLLISION;
 		}
-		TOKEN_CATEGORY_MAP[k] = category;
-		LOG("%s %d %s\n", tokens[iTkn], k, string_TOKEN_CATEGORY(category));
+		TOKEN_MAP[k] = category;
+		LOG("%s %d %s\n", tokens[iTkn], k, string_TOKEN(category));
 	}
 	return RESULT_SUCCESS;
 }
@@ -556,7 +556,7 @@ static const char* string_Direction[] = {
 
 #define META_CATEGORY_MAX_INCREMENT 15
 typedef struct TextMeta {
-	TOKEN_CATEGORY token : 5;
+	TOKEN token : 5;
 
 	u8 BLOCK_COMMENT : 1;
 	u8 LINE_COMMENT  : 1;
@@ -567,11 +567,11 @@ typedef struct TextMeta {
 	u8 iTokenStartOffset : 4; // Index of char in token TODO probably want start and end
 	u8 iTokenEndOfset    : 4; // Index of char in token TODO probably want start and end
 
-	u8 SCOPE_CATEGORY_TAB           : 4;
-	u8 SCOPE_CATEGORY_CURLY         : 4;
-	u8 SCOPE_CATEGORY_PARENTHESIS   : 4;
-	u8 SCOPE_CATEGORY_BRACKET       : 4;
-	u8 SCOPE_CATEGORY_QUOTE         : 4;
+	u8 SCOPE_TAB     : 4;
+	u8 SCOPE_CURLY   : 4;
+	u8 SCOPE_PAREN   : 4;
+	u8 SCOPE_BRACKET : 4;
+	u8 SCOPE_QUOTE   : 4;
 
 	u16 iScopeStartOffset : 16; // Could someone really have a scope bigger than 65k?
 	u16 iScopeEndOffset   : 16;
@@ -606,8 +606,8 @@ typedef struct CodeBox {
 	int newLineCount;
 	int bufferCount;
 
-	char*           pBuffer;
-	TOKEN_CATEGORY* pToken;
+	char*           pText;
+	TOKEN* pToken;
 	TextMeta*       pTextMeta;
 
 	char* path;
@@ -628,14 +628,8 @@ typedef struct Command {
 } Command;
 
 /*
- * CodeBox Meta
+ * CodeBox Parse
  */
-typedef struct MetaToken {
-	u8 c     : 7;
-	u8 delim : 1;
-} MetaToken;
-STATIC_ASSERT(sizeof(MetaToken) == 1);
-
 static inline bool Delimiter(char c) 
 {
 	switch (c) 
@@ -643,9 +637,7 @@ static inline bool Delimiter(char c)
 		case '\0':
 
 		/* Whitespace */
-		case ' ':
-		case '\t':
-		case '\n':
+		case ' ': case '\t': case '\n':
 		case '\r': // Carriage return
 		case '\v': // Vertical tab
 		case '\f': // Form feed
@@ -668,24 +660,12 @@ static inline bool Delimiter(char c)
 		case '~':
 
 		/* Quotes */
-		case '"':
-		case '\'':
-		case '`':
+		case '"': case '\'': case '`':
 
 		/* Scopes */
-		case '(':
-		case ')':
-		case '{':
-		case '}':
-		case '[':
-		case ']':
+		case '(': case ')': case '{': case '}':	case '[': case ']':
 
-		case '#':
-		case ',':
-		case '.':
-		case ';':
-		case '@':
-		case '\\':
+		case '#': case ',':	case '.': case ';':	case '@': case '\\':
 			return true;
 
 		default:
@@ -695,11 +675,11 @@ static inline bool Delimiter(char c)
 
 static RESULT ProcessMeta(CodeBox* pCode) {
 	const int   count = pCode->bufferCount;
-	const char* pBuf  = pCode->pBuffer; 
+	const char* pBuf  = pCode->pText; 
 	TextMeta*   pMeta = pCode->pTextMeta;
 
-	int  iC    = 0;
-	int  iStrt = 0;
+	int iC    = 0;
+	int iStrt = 0;
 
 	// Prev Char, Current Char, Next Char
 	char pc = '\0';
@@ -725,7 +705,7 @@ processChar:
 	if (UNLIKELY(c == '\0')) goto error;
 
 	bool parseComment = meta.BLOCK_COMMENT || meta.LINE_COMMENT;
-	bool parseQuote =  meta.SCOPE_CATEGORY_QUOTE > 0;
+	bool parseQuote =  meta.SCOPE_QUOTE > 0;
 	switch (parseComment | parseQuote << 1) 
 	{
 		/* Parse Comment */
@@ -743,7 +723,7 @@ processChar:
 					{
 						case '*':
 							pMeta[iC] = meta;
-							meta = (TextMeta){.token = TOKEN_CATEGORY_NONE, .BLOCK_COMMENT = 0}; 
+							meta = (TextMeta){.token = TOKEN_NONE, .BLOCK_COMMENT = 0}; 
 							goto next;
 						default:
 							goto setMetaNext;
@@ -751,14 +731,14 @@ processChar:
 
 				case '\n': 
 					// Set to whitespace but keep recycled meta as comment
-					pMeta[iC] = (TextMeta){.token = TOKEN_CATEGORY_WHITESPACE, .LINE_COMMENT = meta.LINE_COMMENT, .BLOCK_COMMENT = meta.BLOCK_COMMENT};
-					meta = (TextMeta){.token = TOKEN_CATEGORY_COMMENT, .LINE_COMMENT = 0, .BLOCK_COMMENT = meta.BLOCK_COMMENT};
+					pMeta[iC] = (TextMeta){.token = TOKEN_WHITESPACE, .LINE_COMMENT = meta.LINE_COMMENT, .BLOCK_COMMENT = meta.BLOCK_COMMENT};
+					meta = (TextMeta){.token = TOKEN_COMMENT, .LINE_COMMENT = 0, .BLOCK_COMMENT = meta.BLOCK_COMMENT};
 					goto next;
 
 				case ' ': 
 				case '\t': 
 					// Set to whitespace but keep recycled meta as comment
-					pMeta[iC] = (TextMeta){.token = TOKEN_CATEGORY_WHITESPACE, .LINE_COMMENT = meta.LINE_COMMENT, .BLOCK_COMMENT = meta.BLOCK_COMMENT};
+					pMeta[iC] = (TextMeta){.token = TOKEN_WHITESPACE, .LINE_COMMENT = meta.LINE_COMMENT, .BLOCK_COMMENT = meta.BLOCK_COMMENT};
 					goto next;
 			}
 		}
@@ -785,7 +765,7 @@ processChar:
 					int iEnd = iC;
 					int len  = iEnd + 1 - iStrt;
 					tok_k t  = TokenKeyRange(pBuf, iStrt, iEnd);
-					TOKEN_CATEGORY category = TOKEN_CATEGORY_MAP[t];
+					TOKEN category = TOKEN_MAP[t];
 					meta.token = category;
 					meta.iTokenChar = iEnd;
 					for (int i = iStrt; i < iEnd; ++i) {
@@ -809,9 +789,9 @@ processChar:
 					goto next;
 
 				/* Scopes */
-				INCREMENT_CASE('[', ']', SCOPE_CATEGORY_BRACKET,     TOKEN_CATEGORY_SCOPE)
-				INCREMENT_CASE('{', '}', SCOPE_CATEGORY_CURLY,       TOKEN_CATEGORY_SCOPE)
-				INCREMENT_CASE('(', ')', SCOPE_CATEGORY_PARENTHESIS, TOKEN_CATEGORY_SCOPE)
+				INCREMENT_CASE('[', ']', SCOPE_BRACKET,     TOKEN_SCOPE)
+				INCREMENT_CASE('{', '}', SCOPE_CURLY,       TOKEN_SCOPE)
+				INCREMENT_CASE('(', ')', SCOPE_PAREN, TOKEN_SCOPE)
 
 			#undef INCREMENT_CASE
 
@@ -829,7 +809,7 @@ processChar:
 				case '\r': // Carriage return
 				case '\v': // Vertical tab
 				case '\f': // Form feed
-					meta.token = TOKEN_CATEGORY_WHITESPACE;
+					meta.token = TOKEN_WHITESPACE;
 					goto setMetaNext;
 
 				/* Comment or Operator */
@@ -837,15 +817,15 @@ processChar:
 					switch (nc) 
 					{
 						case '/':
-							meta = (TextMeta){.token = TOKEN_CATEGORY_COMMENT, .LINE_COMMENT = 1, .BLOCK_COMMENT = meta.BLOCK_COMMENT};
+							meta = (TextMeta){.token = TOKEN_COMMENT, .LINE_COMMENT = 1, .BLOCK_COMMENT = meta.BLOCK_COMMENT};
 							pMeta[iC] = meta;
 							goto setMetaNext;
 						case '*':
-							meta = (TextMeta){.token = TOKEN_CATEGORY_COMMENT, .BLOCK_COMMENT = 1}; 
+							meta = (TextMeta){.token = TOKEN_COMMENT, .BLOCK_COMMENT = 1}; 
 							pMeta[iC] = meta; 
 							goto setMetaNext;
 						default:
-							meta.token = TOKEN_CATEGORY_OPERATOR;
+							meta.token = TOKEN_OPERATOR;
 							pMeta[iC] = meta;
 							goto setMetaNext;
 					}
@@ -865,19 +845,19 @@ processChar:
 				case '^':
 				case '|':
 				case '~':
-					meta.token = TOKEN_CATEGORY_OPERATOR;
+					meta.token = TOKEN_OPERATOR;
 					goto setMetaNext;
 
 				/* Quotes */
 				case '"':
 				case '\'':
 				case '`':
-					meta.token = TOKEN_CATEGORY_QUOTE;
+					meta.token = TOKEN_QUOTE;
 					goto setMetaNext;
 
 				/* Preprocess */
 				case '#':
-					meta.token = TOKEN_CATEGORY_PREPROCESS;
+					meta.token = TOKEN_PREPROCESS;
 					goto setMetaNext;
 
 				case ',':
@@ -885,7 +865,7 @@ processChar:
 				case ';':
 				case '@':
 				case '\\':
-					meta.token = TOKEN_CATEGORY_NONE;
+					meta.token = TOKEN_NONE;
 					goto setMetaNext;
 			}
 		}
@@ -912,8 +892,8 @@ static int TextFindCharBackward(const char* text, int index, char c) {
 }
 
 // Find specified char. 
-static int TextFindCharForward(const char* pBuffer, int index, char c) {
-	while (pBuffer[index] != c && pBuffer[index] != '\0') index++;    
+static int TextFindCharForward(const char* pText, int index, char c) {
+	while (pText[index] != c && pText[index] != '\0') index++;    
 	return index;
 }
 
@@ -991,10 +971,10 @@ static int TextFindCharsBackward(const char* text, int index, const char* find) 
 }
 
 // Find char skipping a specified number of matches. 
-static int TextFindCharSkipForward(const char* pBuffer, char find, int skipCount) {
+static int TextFindCharSkipForward(const char* pText, char find, int skipCount) {
 	int index = 0;
-	while (pBuffer[index] != '\0' && skipCount > 0) {
-		if (pBuffer[index] == find) skipCount--;   
+	while (pText[index] != '\0' && skipCount > 0) {
+		if (pText[index] == find) skipCount--;   
 		index++;
 	}
 	return index;
@@ -1011,10 +991,10 @@ static int TextCountCharForward(const char* text, int index, int range, char fin
 }
 
 // Find char index and also count occurense of another char during scan.
-static bool TextFindCountCharForward(const char* pBuffer, char searchChar, char countChar, int* pFoundIndex, int *pCount) {
+static bool TextFindCountCharForward(const char* pText, char searchChar, char countChar, int* pFoundIndex, int *pCount) {
 	int index = *pFoundIndex, count = *pCount; 
 	char c;	do {
-		c = pBuffer[index++];
+		c = pText[index++];
 		count += c == countChar;
 	} while (c && c != searchChar);
 	*pFoundIndex = index - 1; *pCount = count;
@@ -1022,10 +1002,10 @@ static bool TextFindCountCharForward(const char* pBuffer, char searchChar, char 
 }
 
 // Find char index and also count occurense of another char during scan.
-static bool TextFindCountCharBackward(const char* pBuffer, char searchChar, char countChar, int* pFoundIndex, int *pCount) {
+static bool TextFindCountCharBackward(const char* pText, char searchChar, char countChar, int* pFoundIndex, int *pCount) {
 	int index = *pFoundIndex;
-	while (pBuffer[index] != searchChar) {
-		if (pBuffer[index] == countChar) *pCount = *pCount + 1;
+	while (pText[index] != searchChar) {
+		if (pText[index] == countChar) *pCount = *pCount + 1;
 		if (index <= 0) return false;
 		index--;
 	}
@@ -1035,7 +1015,7 @@ static bool TextFindCountCharBackward(const char* pBuffer, char searchChar, char
 
 // The index of char on current line
 static inline int CodeBoxIndexCollumn(const CodeBox* pCode, int index) {
-	int lineStartIndex = TextFindCharBackward(pCode->pBuffer, index - 1, '\n') + endCharLength;
+	int lineStartIndex = TextFindCharBackward(pCode->pText, index - 1, '\n') + endCharLength;
 	LOG("%d %d\n", lineStartIndex, index);
 	return index - lineStartIndex;
 }
@@ -1047,7 +1027,7 @@ static inline int CodeBoxCaretCollumn(const CodeBox* pCode) {
 
 // Line given index is on
 static inline int CodeBoxIndexRow(const CodeBox* pCode, int index) {
-	return TextCountCharForward(pCode->pBuffer, 0, index, '\n');
+	return TextCountCharForward(pCode->pText, 0, index, '\n');
 }
 
 // Line the caret is on.
@@ -1062,19 +1042,19 @@ static void CodeBoxFocusRow(CodeBox* pCode, int toRow) {
 	int yMin = pCode->focusStartRow;
 	if (toRow < yMin) {
 		pCode->focusStartRow = toRow;
-		pCode->focusStartRowIndex = TextFindCharSkipForward(pCode->pBuffer, '\n', pCode->focusStartRow);
+		pCode->focusStartRowIndex = TextFindCharSkipForward(pCode->pText, '\n', pCode->focusStartRow);
 	}
 
 	int yMax = yMin + charCapacity;
 	if (toRow > yMax) {
 		pCode->focusStartRow = toRow - charCapacity;
-		pCode->focusStartRowIndex = TextFindCharSkipForward(pCode->pBuffer, '\n', pCode->focusStartRow);
+		pCode->focusStartRowIndex = TextFindCharSkipForward(pCode->pText, '\n', pCode->focusStartRow);
 	}
 } 
 
 static void CodeBoxIncrementFocusRow(CodeBox* pCode, int increment) {
 	pCode->focusStartRow -= increment;
-	pCode->focusStartRowIndex = TextFindCharSkipForward(pCode->pBuffer, '\n', pCode->focusStartRow);
+	pCode->focusStartRowIndex = TextFindCharSkipForward(pCode->pText, '\n', pCode->focusStartRow);
 }
 
 // Focus on a given character index.
@@ -1112,9 +1092,9 @@ static void CodeBoxUpdateCaretIndexLine(CodeBox* pCode, int newCaretIndex, int n
 }
 
 static void CodeBoxInsertCharAtIndex(CodeBox* pCode, int index, char c) {
-	memmove(pCode->pBuffer + index + 1, pCode->pBuffer + index, pCode->bufferCount - index - 1);
+	memmove(pCode->pText + index + 1, pCode->pText + index, pCode->bufferCount - index - 1);
 	pCode->dirty = true;
-	pCode->pBuffer[index] = c;
+	pCode->pText[index] = c;
 	pCode->bufferCount++;
 	pCode->caretIndex++;
 	pCode->caretCollumn++;
@@ -1127,8 +1107,8 @@ static inline void CodeBoxInsertChar(CodeBox* pCode, char c) {
 
 static void CodeBoxDeleteCharAtIndex(CodeBox* pCode, int index) {
 	if (pCode->bufferCount == 0) return;
-	memmove(pCode->pBuffer + index - 1, pCode->pBuffer + index, pCode->bufferCount - index);
-	pCode->newLineCount -= pCode->pBuffer[index - 1] == '\n';
+	memmove(pCode->pText + index - 1, pCode->pText + index, pCode->bufferCount - index);
+	pCode->newLineCount -= pCode->pText[index - 1] == '\n';
 	pCode->bufferCount--;
 }
 
@@ -1164,9 +1144,9 @@ static CodeBox text;
 
 int main(void)
 {
-	REQUIRE(ContructTokenMap(TOKEN_CATEGORY_PREPROCESS, COUNT(PREPROCESS_TOKENS), PREPROCESS_TOKENS));
-	REQUIRE(ContructTokenMap(TOKEN_CATEGORY_TYPE,       COUNT(TYPE_TOKENS),       TYPE_TOKENS));
-	REQUIRE(ContructTokenMap(TOKEN_CATEGORY_KEYWORD,    COUNT(KEYWORD_TOKENS),    KEYWORD_TOKENS));
+	REQUIRE(ContructTokenMap(TOKEN_PREPROCESS, COUNT(PREPROCESS_TOKENS), PREPROCESS_TOKENS));
+	REQUIRE(ContructTokenMap(TOKEN_TYPE,       COUNT(TYPE_TOKENS),       TYPE_TOKENS));
+	REQUIRE(ContructTokenMap(TOKEN_KEYWORD,    COUNT(KEYWORD_TOKENS),    KEYWORD_TOKENS));
 
 	/* Config */
 	SetTraceLogLevel(LOG_ALL);
@@ -1196,15 +1176,15 @@ int main(void)
 		LOG("Loaded Buffer Size %d\n", text.bufferCount);
 		assert(text.bufferCount < TEXT_BUFFER_CAPACITY && "Loaded buffer size too big!");
 
-		text.pBuffer   = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(char));
-		text.pToken    = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(TOKEN_CATEGORY));
+		text.pText   = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(char));
+		text.pToken    = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(TOKEN));
 		text.pTextMeta = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(TextMeta));
 
-		memset(text.pBuffer,   0, TEXT_BUFFER_CAPACITY * sizeof(char));
-		memset(text.pToken,    0, TEXT_BUFFER_CAPACITY * sizeof(TOKEN_CATEGORY));
+		memset(text.pText,   0, TEXT_BUFFER_CAPACITY * sizeof(char));
+		memset(text.pToken,    0, TEXT_BUFFER_CAPACITY * sizeof(TOKEN));
 		memset(text.pTextMeta, 0, TEXT_BUFFER_CAPACITY * sizeof(TextMeta));
 
-		memcpy(text.pBuffer, loadedFile, text.bufferCount + 1);
+		memcpy(text.pText, loadedFile, text.bufferCount + 1);
 		free(loadedFile);
 
 		ProcessMeta(&text);
@@ -1317,7 +1297,7 @@ int main(void)
 	 */
 
 	// TODO pull this into struct function to be used solely for text input
-	const char* pBuf = pCode->pBuffer;
+	const char* pBuf = pCode->pText;
 	const int iCrt   = pCode->caretIndex;
 	while (currentKey > 0)
 	{
@@ -1331,7 +1311,7 @@ int main(void)
 
 				pCode->caretIndex--;
 				pCode->caretCollumn = CodeBoxCaretCollumn(pCode);
-				if (pCode->pBuffer[pCode->caretIndex] == '\n') {
+				if (pCode->pText[pCode->caretIndex] == '\n') {
 					pCode->caretRow--;
 					CodeBoxFocusCaret(pCode);
 				}
@@ -1365,7 +1345,7 @@ int main(void)
 
 				pCode->caretIndex++;		
 				pCode->caretCollumn = CodeBoxCaretCollumn(pCode);
-				if (pCode->pBuffer[pCode->caretIndex] == '\n') {
+				if (pCode->pText[pCode->caretIndex] == '\n') {
 					pCode->caretRow++;
 					CodeBoxFocusCaret(pCode);
 				}
@@ -1394,8 +1374,8 @@ int main(void)
 			/* Move Up Keys */
 			case KEY_UP: 
 			case KEY_W | KEY_ALT_MOD:{
-				int upLineEnd     = TextFindCharBackward(pCode->pBuffer, pCode->caretIndex - 1, '\n');     	   
-				int upLineStart   = TextFindCharBackward(pCode->pBuffer, upLineEnd - 1, '\n') + endCharLength;
+				int upLineEnd     = TextFindCharBackward(pCode->pText, pCode->caretIndex - 1, '\n');     	   
+				int upLineStart   = TextFindCharBackward(pCode->pText, upLineEnd - 1, '\n') + endCharLength;
 				int upLineLength  = upLineEnd - upLineStart;
 				LOG("%d %d\n", upLineEnd, upLineStart);
 				if (upLineStart < 0) break;
@@ -1407,9 +1387,9 @@ int main(void)
 
 			case KEY_UP | KEY_CTRL_MOD:
 			case KEY_W  | KEY_CTRL_MOD | KEY_ALT_MOD: {
-				int startIndex      = pCode->pBuffer[pCode->caretIndex] == '\n' ? pCode->caretIndex - endCharLength : pCode->caretIndex;
-				int blockStartIndex = TextFindTextBackward(pCode->pBuffer, startIndex, "\n\n");
-				int blockEndIndex   = TextNegateFindCharBackward(pCode->pBuffer, blockStartIndex, '\n');  
+				int startIndex      = pCode->pText[pCode->caretIndex] == '\n' ? pCode->caretIndex - endCharLength : pCode->caretIndex;
+				int blockStartIndex = TextFindTextBackward(pCode->pText, startIndex, "\n\n");
+				int blockEndIndex   = TextNegateFindCharBackward(pCode->pText, blockStartIndex, '\n');  
 				int newCaretIndex   = blockEndIndex + 1;
 				CodeBoxUpdateCaretIndex(pCode, newCaretIndex);
 				CodeBoxFocusCaret(pCode);
@@ -1419,9 +1399,9 @@ int main(void)
 			/* Move Down Keys */
 			case KEY_DOWN: 
 			case KEY_S | KEY_ALT_MOD: {
-				int currentLineEnd = TextFindCharForward(pCode->pBuffer, pCode->caretIndex, '\n');
+				int currentLineEnd = TextFindCharForward(pCode->pText, pCode->caretIndex, '\n');
 				int downLineStart  = currentLineEnd + endCharLength;
-				int downLineEnd    = TextFindCharForward(pCode->pBuffer, downLineStart, '\n');
+				int downLineEnd    = TextFindCharForward(pCode->pText, downLineStart, '\n');
 				if (downLineStart >= pCode->bufferCount - endCharLength) break;
 				int downLineDiff  = downLineEnd - downLineStart;
 				pCode->caretIndex = downLineStart + (pCode->caretCollumn < downLineDiff ? pCode->caretCollumn : downLineDiff);
@@ -1433,10 +1413,10 @@ int main(void)
 			case KEY_DOWN | KEY_CTRL_MOD:
 			case KEY_S    | KEY_CTRL_MOD | KEY_ALT_MOD: {
 				// Search"\n\n" to find where there is a new line gap
-				int blockEndIndex   = TextFindTextForward(pCode->pBuffer, pCode->caretIndex, "\n\n");
-				int blockStartIndex = TextNegateFindCharForward(pCode->pBuffer, blockEndIndex, '\n');
-				blockStartIndex = TextNegateFindCharForward(pCode->pBuffer, blockStartIndex, ' ');
-				blockStartIndex = TextNegateFindCharForward(pCode->pBuffer, blockStartIndex, '\t');
+				int blockEndIndex   = TextFindTextForward(pCode->pText, pCode->caretIndex, "\n\n");
+				int blockStartIndex = TextNegateFindCharForward(pCode->pText, blockEndIndex, '\n');
+				blockStartIndex = TextNegateFindCharForward(pCode->pText, blockStartIndex, ' ');
+				blockStartIndex = TextNegateFindCharForward(pCode->pText, blockStartIndex, '\t');
 				int newCaretIndex   = blockStartIndex;
 				CodeBoxUpdateCaretIndex(pCode, newCaretIndex);
 				CodeBoxFocusCaret(pCode);
@@ -1485,9 +1465,9 @@ int main(void)
 
 			// 	LOG("%d %d\n", pCode->caretIndex, command.scanFoundIndex);
 
-			// 	command.scanFoundIndex = TextFindTextForward(pCode->pBuffer, command.scanFoundIndex + 1, command.pBuffer);
+			// 	command.scanFoundIndex = TextFindTextForward(pCode->pText, command.scanFoundIndex + 1, command.pText);
 			// 	if (command.scanFoundIndex > 0) {
-			// 		int scanFoundLine = TextCountCharForward(pCode->pBuffer, pCode->caretIndex, command.scanFoundIndex, '\n') + pCode->caretRow;
+			// 		int scanFoundLine = TextCountCharForward(pCode->pText, pCode->caretIndex, command.scanFoundIndex, '\n') + pCode->caretRow;
 			// 		CodeBoxFocusRow(pCode, scanFoundLine);
 			// 		LOG("%d \n", scanFoundLine);
 			// 	}
@@ -1560,13 +1540,13 @@ int main(void)
 
 			UpdateCommandScan:
 				LOG("%d\n", command.scanFoundIndex);
-				command.scanFoundIndex = TextFindTextForward(pCode->pBuffer, pCode->caretIndex, command.buffer);
+				command.scanFoundIndex = TextFindTextForward(pCode->pText, pCode->caretIndex, command.buffer);
 				break;
 
 			/* Utility Keys */
 			case KEY_CTRL_MOD | KEY_S:
 				LOG("Saving: %s", text.path);
-				SaveFileText(text.path, text.pBuffer);
+				SaveFileText(text.path, text.pText);
 				break;
 
 			/* Character Delete Keys */
@@ -1661,13 +1641,13 @@ int main(void)
 				};										
 				Rectangle rect = {position.x, position.y, fontXSpacing, fontYSpacing};
 
-				char c = text.pBuffer[iChar];
+				char c = text.pText[iChar];
 				TextMeta m = text.pTextMeta[iChar];
 
 				if (iChar == text.caretIndex) {
 					caretColor = ORANGE;
 					caretPosition = position;
-					DEBUG_LOG_ONCE("%s\n", string_TOKEN_CATEGORY(m.token));
+					DEBUG_LOG_ONCE("%s\n", string_TOKEN(m.token));
 				}
 
 				if (iChar == command.scanFoundIndex) 
@@ -1685,8 +1665,8 @@ int main(void)
 
 				// #define COLOR_A(_color, _a) (Color){_color.r, _color.g, _color.b, _a}
 
-				// if (m.SCOPE_CATEGORY_PARENTHESIS > 0) {
-				// 	DrawRectangleRec(rect, COLOR_A(WHITE, m.SCOPE_CATEGORY_PARENTHESIS * 10));
+				// if (m.SCOPE_PAREN > 0) {
+				// 	DrawRectangleRec(rect, COLOR_A(WHITE, m.SCOPE_PAREN * 10));
 				// }
 
 				// if (m.BLOCK_COMMENT) {
@@ -1729,7 +1709,7 @@ int main(void)
 					DrawChar: {
 						int codePointSize;
 						int codePoint = GetCodepoint(&c, &codePointSize);
-						Color color = TOKEN_CATEGORY_COLOR[m.token];
+						Color color = TOKEN_COLOR[m.token];
 						DrawTextCodepoint(font, codePoint, position, fontSize, color);
 						iChar++;
 						break;
