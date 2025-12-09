@@ -1,9 +1,15 @@
 static int Test(int input) {
 	int output = input;
 	// comment
+	const char* str = "Hello\n";
 	int vala = 10 + 2;
 	int valb = 10 / 2;
 	return output;
+}
+
+#define HELLO { \
+	int i = 0; /* Test */ \
+	int o = 1; \
 }
 
 /*
@@ -122,18 +128,9 @@ Alt + " - ...
 #include "raylib.h"
 #include "raymath.h"
 
-typedef uint8_t     u8;
-typedef uint16_t    u16;
-typedef uint32_t    u32;
-typedef uint64_t    u64;
-typedef int8_t      i8;
-typedef int16_t     i16;
-typedef int32_t     i32;
-typedef int64_t     i64;
-typedef float       f32;
-typedef double      f64;
-typedef unsigned char utf8;
-
+/*
+ * Logging
+ */
 #define ANSI_RESET   "\033[0m"
 #define ANSI_BLACK   "\033[30m"
 #define ANSI_RED     "\033[31m"
@@ -179,21 +176,6 @@ typedef unsigned char utf8;
 #define ANSI_HIDDEN    "\033[8m"
 #define ANSI_STRIKE    "\033[9m"
 
-#define CACHE_LINE 64
-
-#define COUNT(_array)     (sizeof(_array) / sizeof(_array[0]))
-
-#define UNUSED            __attribute__((unused))
-#define FALLTHROUGH       __attribute__((fallthrough))
-#define CACHE_ALIGN       __attribute__((aligned(CACHE_LINE)))
-#define FORCE_INLINE      __attribute__((always_inline)) static inline
-#define PACKED            __attribute__((packed))
-#define ALIGN(_size)      __attribute__((aligned(_size)))
-#define NO_RETURN         __attribute__((noreturn))
-
-#define LIKELY(x)         __builtin_expect(!!(x), 1)
-#define UNLIKELY(x)       __builtin_expect(!!(x), 0)
-
 #define LOG(_format, ...)      fprintf(stderr, ANSI_DIM ANSI_CYAN __FILE__ ANSI_WHITE ":" ANSI_GREEN "%-5d" ANSI_WHITE  "INFO: " ANSI_RESET _format, __LINE__, ##__VA_ARGS__)
 #define LOG_WARN(_format, ...) fprintf(stderr, ANSI_DIM ANSI_BLUE __FILE__ ANSI_WHITE ":" ANSI_GREEN "%-5d" ANSI_YELLOW "WARN: " ANSI_RESET _format, __LINE__, ##__VA_ARGS__)
 #define LOG_ERR(_format, ...)  fprintf(stderr, ANSI_DIM ANSI_BLUE __FILE__ ANSI_WHITE ":" ANSI_GREEN "%-5d" ANSI_RED    "ERR:  " ANSI_RESET _format, __LINE__, ##__VA_ARGS__)
@@ -209,6 +191,48 @@ static char _logOnceNewBuffer[128];
 	} \
 })
 
+/*
+ * Utility
+ */
+typedef uint8_t     u8;
+typedef uint16_t    u16;
+typedef uint32_t    u32;
+typedef uint64_t    u64;
+typedef int8_t      i8;
+typedef int16_t     i16;
+typedef int32_t     i32;
+typedef int64_t     i64;
+typedef float       f32;
+typedef double      f64;
+typedef unsigned char utf8;
+
+#define CACHE_LINE 64
+
+#define COUNT(_array)     (sizeof(_array) / sizeof(_array[0]))
+
+#define UNUSED            __attribute__((unused))
+#define FALLTHROUGH       __attribute__((fallthrough))
+#define CACHE_ALIGN       __attribute__((aligned(CACHE_LINE)))
+#define FORCE_INLINE      __attribute__((always_inline)) static inline
+#define PACKED            __attribute__((packed))
+#define ALIGN(_size)      __attribute__((aligned(_size)))
+#define NO_RETURN         __attribute__((noreturn))
+
+#define LIKELY(x)         __builtin_expect(!!(x), 1)
+#define UNLIKELY(x)       __builtin_expect(!!(x), 0)
+
+#define XMALLOC_ALIGNED(_align, _size) \
+({ \
+	void* p = _aligned_malloc(_size, _align); \
+	if (p == NULL) PANIC("XMALLOC_ALIGNED FAIL!"); \
+	p; \
+})
+
+#define ZERO_P(_p) memset((void*)(_p), 0, sizeof(*_p))
+
+/*
+ * Validation
+ */
 #define STATIC_ASSERT(...) _Static_assert(__VA_ARGS__)
 #define ASSERT(_condition, ...) assert((_condition) && #_condition " " __VA_ARGS__)
 
@@ -228,110 +252,9 @@ static char _logOnceNewBuffer[128];
 	if (UNLIKELY(_r != RESULT_SUCCESS)) PANIC(#_command " == %s\n", string_RESULT(_r)); \
 })
 
-
-#define XMALLOC_ALIGNED(_align, _size) \
-({ \
-	void* p = _aligned_malloc(_size, _align); \
-	if (p == NULL) PANIC("XMALLOC_ALIGNED FAIL!"); \
-	p; \
-})
-
-#define ZERO_P(_p) memset((void*)(_p), 0, sizeof(*_p))
-
-static const char* TOKEN_DELIMITERS = " \t\n\r\v\f!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~";
-static const char* TOKEN_OPERATORS = "!%&*+-/:<=>?^|~";
-static const char* TOKEN_QUOTES = "\"'`";
-static const char* TOKEN_SCOPES = "(){}[]";
-
-#define TOKEN_TYPES_COLOR (Color){ 156, 220, 254, 255 }
-static const char* TOKEN_TYPES[] = {
-	"unsigned",  
-	"uint64_t",  
-	"ptrdiff_t", 
-	"uint32_t",  
-	"uint16_t",  
-	"wchar_t",   
-	"struct",    
-	"signed",    
-	"size_t",    
-	"int64_t",   
-	"int32_t",   
-	"int16_t",   
-	"double",    
-	"uint8_t",   
-	"float",     
-	"short",     
-	"int8_t",    
-	"_Bool",     
-	"union",     
-	"void",      
-	"long",      
-	"char",      
-	"enum",      
-	"int",       
-	NULL  
-};
-
-static const char* TOKEN_KEYWORDS[] = {
-	"_Static_assert",
-	"_Noreturn",
-	"_Generic",
-	"continue",
-	"volatile",
-	"register",
-	"restrict",
-	"_Alignof",
-	"_Alignas",
-	"typedef",
-	"default",
-	"_Atomic",
-	"typeof",
-	"switch",
-	"static",
-	"sizeof",
-	"return",
-	"inline",
-	"extern",
-	"while",
-	"const",
-	"break",
-	"goto",
-	"else",
-	"case",
-	"auto",
-	"for",
-	"if",
-	"do",
-	NULL
-};
-
-// typedef enum TextMetaType { 
-// 	#define GENERATE_ENUM(_type) TEXT_META_TYPE_##_type ,
-// 	META_TYPES(GENERATE_ENUM)
-// 	#undef GENERATE_ENUM
-// 	TEXT_META_TYPE_COUNT,
-// } TextMetaType;
-
-// typedef enum TextMetaMask { 
-// 	#define GENERATE_ENUM(_type) TEXT_META_MASK_##_type = 0xFULL << TEXT_META_TYPE_##_type ,
-// 	META_TYPES(GENERATE_ENUM)
-// 	#undef GENERATE_ENUM
-// } TextMetaMask;
-
-// typedef enum TextMetaBitMask { 
-// 	#define GENERATE_ENUM(_type) TEXT_META_BIT_MASK_##_type = 0b1 << TEXT_META_TYPE_##_type ,
-// 	META_TYPES(GENERATE_ENUM)
-// 	#undef GENERATE_ENUM
-// } TextMetaBitMask;
-
-// #define GENERATE_ALL_TYPE_BIT_MASK(_type) TEXT_META_BIT_MASK_##_type |
-
-// // typedef struct TextMeta {
-// // 	#define GENERATE_STRUCT(_type) u8 _type : 4;
-// // 	META_TYPES(GENERATE_STRUCT)
-// // 	#undef GENERATE_STRUCT
-// // } TextMeta;
-
+/*
+ * Global Enum
+ */
 #define DEF_ARRAY_ITEM(_item, ...)  _item,
 #define DEF_ENUM_ITEM(_item, ...)   _item __VA_OPT__(=) __VA_ARGS__,
 #define DEF_STRING_ITEM(_item, ...) case _item: return #_item;
@@ -353,6 +276,13 @@ static const char* TOKEN_KEYWORDS[] = {
 	DEF(RESULT_PARSE_ERROR, 2)
 DEF_ENUM(RESULT);
 
+#define DEF_DIRECTION(DEF) \
+	DEF(DIRECTION_NONE) \
+	DEF(DIRECTION_FORWARD) \
+	DEF(DIRECTION_BACKWARD) \
+	DEF(DIRECTION_COUNT)
+DEF_ENUM(DIRECTION);
+
 #define DEF_SCOPE(DEF) \
 	DEF(SCOPE_TAB) \
 	DEF(SCOPE_DEFINE) \
@@ -372,8 +302,11 @@ DEF_ENUM(SCOPE);
 	DEF(TOKEN_WHITESPACE) \
 	DEF(TOKEN_OPERATOR) \
 	DEF(TOKEN_PREPROCESS) \
+	DEF(TOKEN_CONTINUE) \
 	DEF(TOKEN_SCOPE) \
 	DEF(TOKEN_QUOTE) \
+	DEF(TOKEN_TEXT) \
+	DEF(TOKEN_ESCAPE) \
 	DEF(TOKEN_COMMENT) \
 	DEF(TOKEN_COUNT)
 DEF_ENUM(TOKEN);
@@ -383,32 +316,40 @@ DEF_ENUM(TOKEN);
 #define COLOR_COMMAND_BOX    (Color){  20,  20,   2, 200 }
 #define COLOR_TEXT_BOX       (Color){  37,  37,  38, 255 }
 
-#define COLOR_PREPROCESSOR (Color){ 198, 149, 198, 255 }
-#define COLOR_NUMBER       (Color){ 249, 174,  87, 255 }
-#define COLOR_STRING       (Color){ 153, 199, 148, 255 } 
-// #define COLOR_COMMENT      (Color){ 166, 172, 185, 255 }  
-#define COLOR_COMMENT      (Color){ 166, 172, 255, 255 }  
-#define COLOR_MACRO_NAME   (Color){ 249, 174,  87, 255 }
-#define COLOR_BACKGROUND   (Color){  48,  56,  65, 255 } 
-#define COLOR_OPERATOR     (Color){ 249, 123,  87, 255 }
-#define COLOR_TEXT         (Color){ 216, 222, 233, 255 }
-#define COLOR_TEXT_HIDDEN  (Color){  53,  61,  70, 255 } 
-#define COLOR_QUOTE        (Color){  96, 180, 180, 255 } 
-#define COLOR_SCOPE        (Color){ 255, 255, 255, 255 } 
-#define COLOR_KEYWORD      (Color){ 236,  96, 102, 255 }
-#define COLOR_TYPE         (Color){ 198, 149, 198, 255 }
+#define HIDDEN_ADD 30
+
+#define COLOR_CODE        (Color){ 216, 222, 233, 255 }
+#define COLOR_PREPROCESS  (Color){ 198, 149, 198, 255 }
+#define COLOR_CONTINUE    (Color){ 148,  99, 148, 255 }
+#define COLOR_NUMBER      (Color){ 249, 174,  87, 255 }
+#define COLOR_STRING      (Color){ 153, 199, 148, 255 } 
+#define COLOR_COMMENT     (Color){ 166, 172, 185, 255 }  
+#define COLOR_MACRO_NAME  (Color){ 249, 174,  87, 255 }
+#define COLOR_OPERATOR    (Color){ 249, 123,  87, 255 }
+#define COLOR_BACKGROUND  (Color){  48,  56,  65, 255 } 
+#define COLOR_WHITESPACE  (Color){  38,  46,  55, 255 } 
+#define COLOR_ESCAPE      (Color){ 198, 149, 198, 255 } 
+#define COLOR_TEXT        (Color){ 127, 199, 148, 255 } 
+#define COLOR_QUOTE       (Color){  96, 180, 180, 255 } 
+#define COLOR_SCOPE       (Color){ 255, 255, 255, 255 } 
+#define COLOR_KEYWORD     (Color){ 236,  96, 102, 255 }
+#define COLOR_TYPE        (Color){ 198, 149, 198, 255 }
 
 static Color TOKEN_COLOR[] = {
-	   [TOKEN_NONE]       = COLOR_TEXT,
-	   [TOKEN_TYPE]       = COLOR_TYPE,
-	   [TOKEN_KEYWORD]    = COLOR_KEYWORD,
-	   [TOKEN_WHITESPACE] = COLOR_TEXT_HIDDEN,
-	   [TOKEN_OPERATOR]   = COLOR_OPERATOR,
-	   [TOKEN_PREPROCESS] = COLOR_PREPROCESSOR,
-	   [TOKEN_SCOPE]      = COLOR_SCOPE,
-	   [TOKEN_QUOTE]      = COLOR_QUOTE,
-	   [TOKEN_COMMENT]    = COLOR_COMMENT,
+	[TOKEN_NONE]       = COLOR_CODE,
+	[TOKEN_TYPE]       = COLOR_TYPE,
+	[TOKEN_KEYWORD]    = COLOR_KEYWORD,
+	[TOKEN_WHITESPACE] = COLOR_WHITESPACE,
+	[TOKEN_OPERATOR]   = COLOR_OPERATOR,
+	[TOKEN_PREPROCESS] = COLOR_PREPROCESS,
+	[TOKEN_CONTINUE]   = COLOR_CONTINUE,
+	[TOKEN_SCOPE]      = COLOR_SCOPE,
+	[TOKEN_QUOTE]      = COLOR_QUOTE,
+	[TOKEN_TEXT]       = COLOR_TEXT,
+	[TOKEN_ESCAPE]     = COLOR_ESCAPE,
+	[TOKEN_COMMENT]    = COLOR_COMMENT,
 };
+STATIC_ASSERT(COUNT(TOKEN_COLOR) == TOKEN_COUNT);
 
 #define DEF_PREPROCESS_TOKENS(DEF) \
 	DEF("define") \
@@ -510,7 +451,7 @@ static RESULT ContructTokenMap(TOKEN category, int tokenCount, const char** toke
 	for (int iTkn = 0; iTkn < tokenCount; iTkn++) {
 		tok_k k = TokenKey(tokens[iTkn]);
 		if (TOKEN_MAP[k] != TOKEN_NONE) {
-			LOG("Type Hash Collision! %s %d %s\n", tokens[iTkn], k, string_TOKEN(category));
+			LOG_ERR("Type Hash Collision! %s %d %s\n", tokens[iTkn], k, string_TOKEN(category));
 			return RESULT_COLLISION;
 		}
 		TOKEN_MAP[k] = category;
@@ -538,40 +479,25 @@ const float fontYSpacing = 20;
 const float fontSize = 24;
 const char availableChars[] = "·¬ abcdefghijklmnopqrstuvwxyzABDCEFGHIJKLMNOPQRSTUVWXYZ1234567890-=!@#$%^&*()_+[];',./{}:\"<>?|`~\n\t\\";
 
-typedef enum Direction {
-	DIRECTION_NONE,
-	DIRECTION_FORWARD,
-	DIRECTION_BACKWARD,
-	DIRECTION_COUNT,
-} Direction;
-
-static const char* string_Direction[] = {
-	[DIRECTION_NONE]     = "DIRECTION_NONE",
-	[DIRECTION_FORWARD]  = "DIRECTION_FORWARD",
-	[DIRECTION_BACKWARD] = "DIRECTION_BACKWARD",
-};
-
 #define CARET_COUNT 128
 #define CARET_INVALID INT_MIN
 
-#define META_CATEGORY_MAX_INCREMENT 15
-typedef struct TextMeta {
-	TOKEN token : 5;
+#define TOKEN_MAX_INCREMENT 15
+typedef struct PACKED TextMeta {
+	TOKEN token : 6;
 
 	u8 BLOCK_COMMENT : 1;
 	u8 LINE_COMMENT  : 1;
-	u8 DEFINE        : 1;
-
-	u8 iTokenChar : 4; // Index of char in token TODO probably want start and end
-
-	u8 iTokenStartOffset : 4; // Index of char in token TODO probably want start and end
-	u8 iTokenEndOfset    : 4; // Index of char in token TODO probably want start and end
+	u8 PREPROCESS    : 1;
+	u8 QUOTE         : 1;
 
 	u8 SCOPE_TAB     : 4;
 	u8 SCOPE_CURLY   : 4;
 	u8 SCOPE_PAREN   : 4;
 	u8 SCOPE_BRACKET : 4;
-	u8 SCOPE_QUOTE   : 4;
+
+	u8 iTokenStartOffset : 4;
+	u8 iTokenEndOffset   : 4;
 
 	u16 iScopeStartOffset : 16; // Could someone really have a scope bigger than 65k?
 	u16 iScopeEndOffset   : 16;
@@ -620,8 +546,7 @@ typedef struct Command {
 	bool skipCount;
 	bool firstKeyPressed;
 
-	Direction scanDirection;
-	int       scanFoundIndex;
+	int  scanFoundIndex;
 
 	int  bufferCount;
 	char buffer[32];
@@ -643,21 +568,7 @@ static inline bool Delimiter(char c)
 		case '\f': // Form feed
 
 		/* Operators */
-		case '!':
-		case '%':
-		case '&':
-		case '*':
-		case '+':
-		case '-':
-		case '/':
-		case ':':
-		case '<':
-		case '=':
-		case '>':
-		case '?':
-		case '^':
-		case '|':
-		case '~':
+		case '!': case '%': case '&': case '*': case '+': case '-': case '/': case ':': case '<': case '=': case '>': case '?': case '^': case '|': case '~': 	
 
 		/* Quotes */
 		case '"': case '\'': case '`':
@@ -694,60 +605,72 @@ static RESULT ProcessMeta(CodeBox* pCode) {
 	TextMeta meta; ZERO_P(&meta);
 
 processChar:
-	pc = c;
-	c  = nc;
-	nc = pBuf[iC + 1];
-
-	pd = d;
-	d  = nd;
-	nd = Delimiter(nc);
+	pc = c;	c  = nc; nc = pBuf[iC + 1];
+	pd = d;	d  = nd; nd = Delimiter(nc);
 
 	if (UNLIKELY(c == '\0')) goto error;
 
-	bool parseComment = meta.BLOCK_COMMENT || meta.LINE_COMMENT;
-	bool parseQuote =  meta.SCOPE_QUOTE > 0;
-	switch (parseComment | parseQuote << 1) 
+	bool comment    = meta.BLOCK_COMMENT || meta.LINE_COMMENT;
+	bool quote      = meta.QUOTE;
+	bool preprocess = meta.PREPROCESS;
+	switch (comment | quote << 1) 
 	{
 		/* Parse Comment */
-		case (true | false << 1): {
+		case (true): {
 			switch (c) 
 			{
-				/* Comment Raw Parsing */
-				case (33)...(46):
-				// Skip '/' 47 to catch comment block end
-				case (48)...(127):
+				case '/':
+					if (pc == '*') {
+						pMeta[iC] = meta;
+						meta.token = TOKEN_NONE;
+						meta.BLOCK_COMMENT = 0; 
+						goto next;
+					}	
 					goto setMetaNext;
 
-				case '/':
-					switch (pc) 
-					{
-						case '*':
-							pMeta[iC] = meta;
-							meta = (TextMeta){.token = TOKEN_NONE, .BLOCK_COMMENT = 0}; 
-							goto next;
-						default:
-							goto setMetaNext;
-					}
-
 				case '\n': 
-					// Set to whitespace but keep recycled meta as comment
-					pMeta[iC] = (TextMeta){.token = TOKEN_WHITESPACE, .LINE_COMMENT = meta.LINE_COMMENT, .BLOCK_COMMENT = meta.BLOCK_COMMENT};
-					meta = (TextMeta){.token = TOKEN_COMMENT, .LINE_COMMENT = 0, .BLOCK_COMMENT = meta.BLOCK_COMMENT};
+					meta.token = TOKEN_WHITESPACE;
+					pMeta[iC] = meta;
+					meta.token = TOKEN_COMMENT;
+					meta.LINE_COMMENT = 0;
 					goto next;
 
 				case ' ': 
 				case '\t': 
-					// Set to whitespace but keep recycled meta as comment
-					pMeta[iC] = (TextMeta){.token = TOKEN_WHITESPACE, .LINE_COMMENT = meta.LINE_COMMENT, .BLOCK_COMMENT = meta.BLOCK_COMMENT};
+					meta.token = TOKEN_WHITESPACE;
+					pMeta[iC] = meta;
+					meta.token = TOKEN_COMMENT;
 					goto next;
+
+				default:
+					goto setMetaNext;
 			}
 		}
 
 		/* Parse Quote */
-		case (false | true << 1): {
-			goto setMetaNext;
+		case (true << 1): {
+			switch (c) 
+			{
+				case '\\':
+					meta.token = TOKEN_ESCAPE;
+					pMeta[iC]      = meta;
+					pMeta[iC + 1]  = meta;
+					meta.token = TOKEN_TEXT;
+					goto nextNext;
+
+				case '"':
+					meta.token = TOKEN_QUOTE;
+					pMeta[iC]  = meta;
+					meta.token = TOKEN_NONE;
+					meta.QUOTE = 0;
+					goto next;
+
+				default:
+					goto setMetaNext;
+			}
 		}
 
+		/* Parse Text */
 		default: {
 			// TODO can this be melded into the switch below?
 			u8 delimitTransition = pd | d << 1 | nd << 2;
@@ -757,20 +680,22 @@ processChar:
 					iStrt = iC;
 					break;
 
-				case true  | false << 1 | true << 2:
+				case true  | false << 1 | true  << 2:
 					iStrt = iC;
 					FALLTHROUGH;
 
-				case false | false << 1 | true << 2:
+				case false | false << 1 | true  << 2:
 					int iEnd = iC;
 					int len  = iEnd + 1 - iStrt;
 					tok_k t  = TokenKeyRange(pBuf, iStrt, iEnd);
-					TOKEN category = TOKEN_MAP[t];
-					meta.token = category;
-					meta.iTokenChar = iEnd;
-					for (int i = iStrt; i < iEnd; ++i) {
-						pMeta[i].token = category;
-						pMeta[i].iTokenChar = i;
+					meta.token = TOKEN_MAP[t];
+					bool isPreprocess = (meta.token == TOKEN_PREPROCESS);
+					meta.PREPROCESS = isPreprocess | meta.PREPROCESS;
+					for (int i = iStrt - isPreprocess; i < iEnd; ++i) {
+						pMeta[i].token      = meta.token;
+						pMeta[i].PREPROCESS = meta.PREPROCESS;
+						pMeta[i].iTokenStartOffset = i - iStrt;
+						pMeta[i].iTokenEndOffset   = iEnd - i;
 					}
 					break;
 			}
@@ -779,19 +704,19 @@ processChar:
 			{
 			#define INCREMENT_CASE(_add, _sub, _scope, _token) \
 				case _add: \
-					meta._scope += (meta._scope < META_CATEGORY_MAX_INCREMENT); \
+					meta._scope += (meta._scope < TOKEN_MAX_INCREMENT); \
 					meta.token = _token; \
 					goto setMetaNext; \
 				case _sub: \
 					meta.token = _token; \
-					pMeta[iC] = meta; \
+					pMeta[iC]  = meta; \
 					meta._scope -= (meta._scope > 0);  \
 					goto next;
 
 				/* Scopes */
-				INCREMENT_CASE('[', ']', SCOPE_BRACKET,     TOKEN_SCOPE)
-				INCREMENT_CASE('{', '}', SCOPE_CURLY,       TOKEN_SCOPE)
-				INCREMENT_CASE('(', ')', SCOPE_PAREN, TOKEN_SCOPE)
+				INCREMENT_CASE('[', ']', SCOPE_BRACKET, TOKEN_SCOPE)
+				INCREMENT_CASE('{', '}', SCOPE_CURLY,   TOKEN_SCOPE)
+				INCREMENT_CASE('(', ')', SCOPE_PAREN,   TOKEN_SCOPE)
 
 			#undef INCREMENT_CASE
 
@@ -802,10 +727,19 @@ processChar:
 					goto setMetaNext;
 
 				/* Whitespace */
-				case  ' ':
+				case '\n':
+					if (meta.PREPROCESS && pc != '\\') {
+						meta.token = TOKEN_WHITESPACE;
+						pMeta[iC]  = meta;
+						meta.PREPROCESS = 0;
+						goto next;
+					}
+					meta.token = TOKEN_WHITESPACE;
+					goto setMetaNext;
+
+				case ' ' :
 				case '\0':
 				case '\t':
-				case '\n':
 				case '\r': // Carriage return
 				case '\v': // Vertical tab
 				case '\f': // Form feed
@@ -818,15 +752,13 @@ processChar:
 					{
 						case '/':
 							meta = (TextMeta){.token = TOKEN_COMMENT, .LINE_COMMENT = 1, .BLOCK_COMMENT = meta.BLOCK_COMMENT};
-							pMeta[iC] = meta;
 							goto setMetaNext;
 						case '*':
-							meta = (TextMeta){.token = TOKEN_COMMENT, .BLOCK_COMMENT = 1}; 
-							pMeta[iC] = meta; 
+							meta.token = TOKEN_COMMENT;
+							meta.BLOCK_COMMENT = 1;
 							goto setMetaNext;
 						default:
 							meta.token = TOKEN_OPERATOR;
-							pMeta[iC] = meta;
 							goto setMetaNext;
 					}
 	 
@@ -850,6 +782,12 @@ processChar:
 
 				/* Quotes */
 				case '"':
+					meta.token = TOKEN_QUOTE;
+					meta.QUOTE = 1; 
+					pMeta[iC] = meta; 
+					meta.token = TOKEN_TEXT;
+					goto next;
+
 				case '\'':
 				case '`':
 					meta.token = TOKEN_QUOTE;
@@ -860,22 +798,41 @@ processChar:
 					meta.token = TOKEN_PREPROCESS;
 					goto setMetaNext;
 
+				case '\\':
+					if (meta.PREPROCESS && nc == '\n') {
+						meta.token = TOKEN_CONTINUE;
+						pMeta[iC]  = meta;
+						meta.token = TOKEN_WHITESPACE;
+						pMeta[iC + 1]  = meta;
+						meta.token = TOKEN_PREPROCESS;
+						goto nextNext;
+					}
+					goto setMetaNext;
+
 				case ',':
 				case '.':
 				case ';':
 				case '@':
-				case '\\':
 					meta.token = TOKEN_NONE;
 					goto setMetaNext;
 			}
 		}
 	} // switch (parseComment | parseQuote << 1) 
 
+nextNext:
+	++iC;
+	pc = c;	c  = nc; nc = pBuf[iC + 1];
+	pd = d;	d  = nd; nd = Delimiter(nc);
+	goto next;
+
 setMetaNext:
 	pMeta[iC] = meta;
+	goto next;
+
 next:
 	if (UNLIKELY(++iC == count)) return RESULT_SUCCESS; 
 	goto processChar;
+
 error:
 	LOG_ERR("Unexpected Parse Char! %c%c%c\n", pc, c, nc);
 	return RESULT_PARSE_ERROR;
@@ -1016,7 +973,6 @@ static bool TextFindCountCharBackward(const char* pText, char searchChar, char c
 // The index of char on current line
 static inline int CodeBoxIndexCollumn(const CodeBox* pCode, int index) {
 	int lineStartIndex = TextFindCharBackward(pCode->pText, index - 1, '\n') + endCharLength;
-	LOG("%d %d\n", lineStartIndex, index);
 	return index - lineStartIndex;
 }
 
@@ -1610,26 +1566,27 @@ int main(void)
 	 */
 	BeginDrawing();
 	{
+		/* 
+		 * Window
+		 */
+		ClearBackground(RAYWHITE);
+
+		float frameTime = GetFrameTime();
+		DrawText(TextFormat("frameTime: %f/", frameTime), 512, 0, 20, GRAY);
+		DrawText(TextFormat("caretCollumn: %i caretRow: %i caretIndex: %i", pCode->caretCollumn, pCode->caretRow, pCode->caretIndex, pCode->focusStartRow), 0, 0, 20, DARKGRAY);
+
+		/* 
+		 * Code Box
+		 */
+		DrawRectangleRec(textBox, COLOR_BACKGROUND);
+		DrawRectangleLines((int)textBox.x, (int)textBox.y, (int)textBox.width, (int)textBox.height, DARKGRAY);
+
 		Color textColor = COLOR_TEXT;
 		Color caretColor = BLANK;
 		Vector2 mousePosition = GetMousePosition();
 		Vector2 caretPosition = { -1, -1};
 		Vector2 scanFoundPosition = { -1, -1};;
-		float frameTime = GetFrameTime();
 		int iChar = pCode->focusStartRowIndex;
-		int scanAheadCount = 0;
-		// bool delimiter = false;
-
-		ClearBackground(RAYWHITE);
-
-		DrawText(TextFormat("frameTime: %f/", frameTime), 512, 0, 20, GRAY);
-		DrawText(TextFormat("caretCollumn: %i caretRow: %i caretIndex: %i", pCode->caretCollumn, pCode->caretRow, pCode->caretIndex, pCode->focusStartRow), 0, 0, 20, DARKGRAY);
-
-		/* 
-		 * Text Panel
-		 */
-		DrawRectangleRec(textBox, COLOR_BACKGROUND);
-		DrawRectangleLines((int)textBox.x, (int)textBox.y, (int)textBox.width, (int)textBox.height, DARKGRAY);
 
 		for (int y = 0; y < yCharCapacity; ++y) {
 			int tabCount = 0;
@@ -1647,7 +1604,7 @@ int main(void)
 				if (iChar == text.caretIndex) {
 					caretColor = ORANGE;
 					caretPosition = position;
-					DEBUG_LOG_ONCE("%s\n", string_TOKEN(m.token));
+					DEBUG_LOG_ONCE("%s %d %d\n", string_TOKEN(m.token), m.QUOTE, Delimiter(c));
 				}
 
 				if (iChar == command.scanFoundIndex) 
@@ -1663,7 +1620,7 @@ int main(void)
 				// u16 mask = (u16)META_TYPES(GENERATE_BITMASK) 0;
 				// #undef GENERATE_BITMASK
 
-				// #define COLOR_A(_color, _a) (Color){_color.r, _color.g, _color.b, _a}
+				#define COLOR_A(_color, _a) (Color){_color.r, _color.g, _color.b, _a}
 
 				// if (m.SCOPE_PAREN > 0) {
 				// 	DrawRectangleRec(rect, COLOR_A(WHITE, m.SCOPE_PAREN * 10));
@@ -1672,6 +1629,14 @@ int main(void)
 				// if (m.BLOCK_COMMENT) {
 				// 	DrawRectangleRec(rect, COLOR_A(BLUE, 10));
 				// }
+
+				if (m.PREPROCESS) {
+					DrawRectangleRec(rect, COLOR_A(COLOR_PREPROCESS, 50));
+				}
+
+				if (m.QUOTE) {
+					DrawRectangleRec(rect, COLOR_A(COLOR_QUOTE, 50));
+				}
 
 				switch (c) 
 				{
