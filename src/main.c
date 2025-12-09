@@ -208,7 +208,14 @@ typedef unsigned char utf8;
 
 #define CACHE_LINE 64
 
-#define COUNT(_array)     (sizeof(_array) / sizeof(_array[0]))
+#define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
+
+#define MIN(_a, _b) \
+({ \
+	__auto_type _valA = (_a); \
+	__auto_type _valB = (_b); \
+	_valA < _valB ? _valA : _valB; \
+})
 
 #define UNUSED            __attribute__((unused))
 #define FALLTHROUGH       __attribute__((fallthrough))
@@ -318,6 +325,7 @@ DEF_ENUM(TOKEN);
 
 #define HIDDEN_ADD 30
 
+#define COLOR_CARET       ORANGE
 #define COLOR_CODE        (Color){ 216, 222, 233, 255 }
 #define COLOR_PREPROCESS  (Color){ 198, 149, 198, 255 }
 #define COLOR_CONTINUE    (Color){ 148,  99, 148, 255 }
@@ -327,7 +335,7 @@ DEF_ENUM(TOKEN);
 #define COLOR_MACRO_NAME  (Color){ 249, 174,  87, 255 }
 #define COLOR_OPERATOR    (Color){ 249, 123,  87, 255 }
 #define COLOR_BACKGROUND  (Color){  48,  56,  65, 255 } 
-#define COLOR_WHITESPACE  (Color){  38,  46,  55, 255 } 
+#define COLOR_WHITESPACE  (Color){  68,  76,  85, 255 } 
 #define COLOR_ESCAPE      (Color){ 198, 149, 198, 255 } 
 #define COLOR_TEXT        (Color){ 127, 199, 148, 255 } 
 #define COLOR_QUOTE       (Color){  96, 180, 180, 255 } 
@@ -460,6 +468,17 @@ static RESULT ContructTokenMap(TOKEN category, int tokenCount, const char** toke
 	return RESULT_SUCCESS;
 }
 
+
+static inline Vector2 GetWorldToBoxLocal(Vector2 point, Rectangle rect)
+{
+    return (Vector2){ point.x - rect.x, point.y - rect.y };
+}
+
+static inline Vector2 GetBoxLocalToWorld(Vector2 point, Rectangle rect)
+{
+    return (Vector2){ point.x + rect.x, point.y + rect.y };
+}
+
 /*
  * CodeBox
  */
@@ -469,14 +488,11 @@ static RESULT ContructTokenMap(TOKEN category, int tokenCount, const char** toke
 #define CASE_EITHER(_key, _a, _b) case _key | _a | _b: case _key | _a: case _key | _b
 #define TO_LOWER_C(_c) 'a' + (_c - 'A')
 
-float xCharCapacity = 128;
-float yCharCapacity = 128;
-
 const int endCharLength = 1;
 const int tabWidth = 4;
-const float fontXSpacing = 10;
-const float fontYSpacing = 20;
-const float fontSize = 24;
+const int fontXSpacing = 10;
+const int fontYSpacing = 20;
+const int fontSize = 24;
 const char availableChars[] = "·¬ abcdefghijklmnopqrstuvwxyzABDCEFGHIJKLMNOPQRSTUVWXYZ1234567890-=!@#$%^&*()_+[];',./{}:\"<>?|`~\n\t\\";
 
 #define CARET_COUNT 128
@@ -515,26 +531,31 @@ typedef struct Highlight {
 	int endIndex;
 } Highlight;
 
+typedef struct CodeRow {
+	int startIndex;
+	int endIndex;
+} CodeRow;
+
 typedef struct CodeBox {
 	int focusStartRowIndex;
 	int focusStartRow;
 
 	bool  caretEnabled[CARET_COUNT];
 	Caret caret[CARET_COUNT];
-
-	// Index in entire buffer.
-	int caretIndex;
-	// Index of line. CaretRow?
+	
+	int caretIndex; // Index in entire buffer.
 	int caretRow;
-	// Index of caret on current line. CaretCollumn?
 	int caretCollumn;
 
-	int newLineCount;
-	int bufferCount;
+	int rowCount;
+	int colCount;
+	CodeRow* pRows;
 
-	char*           pText;
-	TOKEN* pToken;
-	TextMeta*       pTextMeta;
+	int newLineCount;
+	int textCount;
+	char*     pText;
+	TOKEN*    pToken;
+	TextMeta* pTextMeta;
 
 	char* path;
 	bool dirty;
@@ -585,7 +606,7 @@ static inline bool Delimiter(char c)
 }
 
 static RESULT ProcessMeta(CodeBox* pCode) {
-	const int   count = pCode->bufferCount;
+	const int   count = pCode->textCount;
 	const char* pBuf  = pCode->pText; 
 	TextMeta*   pMeta = pCode->pTextMeta;
 
@@ -626,7 +647,7 @@ processChar:
 						meta.BLOCK_COMMENT = 0; 
 						goto next;
 					}	
-					goto setMetaNext;
+					goto metaAndNext;
 
 				case '\n': 
 					meta.token = TOKEN_WHITESPACE;
@@ -643,7 +664,7 @@ processChar:
 					goto next;
 
 				default:
-					goto setMetaNext;
+					goto metaAndNext;
 			}
 		}
 
@@ -656,8 +677,9 @@ processChar:
 					pMeta[iC]      = meta;
 					pMeta[iC + 1]  = meta;
 					meta.token = TOKEN_TEXT;
-					goto nextNext;
+					goto skipAndNext;
 
+				case '\'':
 				case '"':
 					meta.token = TOKEN_QUOTE;
 					pMeta[iC]  = meta;
@@ -666,7 +688,7 @@ processChar:
 					goto next;
 
 				default:
-					goto setMetaNext;
+					goto metaAndNext;
 			}
 		}
 
@@ -706,7 +728,7 @@ processChar:
 				case _add: \
 					meta._scope += (meta._scope < TOKEN_MAX_INCREMENT); \
 					meta.token = _token; \
-					goto setMetaNext; \
+					goto metaAndNext; \
 				case _sub: \
 					meta.token = _token; \
 					pMeta[iC]  = meta; \
@@ -721,10 +743,11 @@ processChar:
 			#undef INCREMENT_CASE
 
 				case '_':
+				case '`':
 				case 'a'...'z':
 				case 'A'...'Z':
 				case '0'...'9':
-					goto setMetaNext;
+					goto metaAndNext;
 
 				/* Whitespace */
 				case '\n':
@@ -735,7 +758,7 @@ processChar:
 						goto next;
 					}
 					meta.token = TOKEN_WHITESPACE;
-					goto setMetaNext;
+					goto metaAndNext;
 
 				case ' ' :
 				case '\0':
@@ -744,7 +767,7 @@ processChar:
 				case '\v': // Vertical tab
 				case '\f': // Form feed
 					meta.token = TOKEN_WHITESPACE;
-					goto setMetaNext;
+					goto metaAndNext;
 
 				/* Comment or Operator */
 				case '/':
@@ -752,14 +775,14 @@ processChar:
 					{
 						case '/':
 							meta = (TextMeta){.token = TOKEN_COMMENT, .LINE_COMMENT = 1, .BLOCK_COMMENT = meta.BLOCK_COMMENT};
-							goto setMetaNext;
+							goto metaAndNext;
 						case '*':
 							meta.token = TOKEN_COMMENT;
 							meta.BLOCK_COMMENT = 1;
-							goto setMetaNext;
+							goto metaAndNext;
 						default:
 							meta.token = TOKEN_OPERATOR;
-							goto setMetaNext;
+							goto metaAndNext;
 					}
 	 
 				/* Operators */
@@ -778,25 +801,21 @@ processChar:
 				case '|':
 				case '~':
 					meta.token = TOKEN_OPERATOR;
-					goto setMetaNext;
+					goto metaAndNext;
 
 				/* Quotes */
 				case '"':
+				case '\'':
 					meta.token = TOKEN_QUOTE;
 					meta.QUOTE = 1; 
 					pMeta[iC] = meta; 
 					meta.token = TOKEN_TEXT;
 					goto next;
 
-				case '\'':
-				case '`':
-					meta.token = TOKEN_QUOTE;
-					goto setMetaNext;
-
 				/* Preprocess */
 				case '#':
 					meta.token = TOKEN_PREPROCESS;
-					goto setMetaNext;
+					goto metaAndNext;
 
 				case '\\':
 					if (meta.PREPROCESS && nc == '\n') {
@@ -805,31 +824,31 @@ processChar:
 						meta.token = TOKEN_WHITESPACE;
 						pMeta[iC + 1]  = meta;
 						meta.token = TOKEN_PREPROCESS;
-						goto nextNext;
+						goto skipAndNext;
 					}
-					goto setMetaNext;
+					goto metaAndNext;
 
 				case ',':
 				case '.':
 				case ';':
 				case '@':
 					meta.token = TOKEN_NONE;
-					goto setMetaNext;
+					goto metaAndNext;
 			}
 		}
 	} // switch (parseComment | parseQuote << 1) 
 
-nextNext:
+skipAndNext: // Skip char and go to next
 	++iC;
 	pc = c;	c  = nc; nc = pBuf[iC + 1];
 	pd = d;	d  = nd; nd = Delimiter(nc);
 	goto next;
 
-setMetaNext:
+metaAndNext: // Set meta and go to next
 	pMeta[iC] = meta;
 	goto next;
 
-next:
+next: // Go to next char
 	if (UNLIKELY(++iC == count)) return RESULT_SUCCESS; 
 	goto processChar;
 
@@ -993,7 +1012,7 @@ static inline int CodeBoxCaretRow(const CodeBox* pCode) {
 
 // Focus on a given row.
 static void CodeBoxFocusRow(CodeBox* pCode, int toRow) {
-	int charCapacity = (int)yCharCapacity;
+	int rowCount = (int)pCode->rowCount;
 
 	int yMin = pCode->focusStartRow;
 	if (toRow < yMin) {
@@ -1001,9 +1020,9 @@ static void CodeBoxFocusRow(CodeBox* pCode, int toRow) {
 		pCode->focusStartRowIndex = TextFindCharSkipForward(pCode->pText, '\n', pCode->focusStartRow);
 	}
 
-	int yMax = yMin + charCapacity;
+	int yMax = yMin + rowCount;
 	if (toRow > yMax) {
-		pCode->focusStartRow = toRow - charCapacity;
+		pCode->focusStartRow = toRow - rowCount;
 		pCode->focusStartRowIndex = TextFindCharSkipForward(pCode->pText, '\n', pCode->focusStartRow);
 	}
 } 
@@ -1029,7 +1048,7 @@ static void CodeBoxUpdateCaretIndex(CodeBox* pCode, int newCaretIndex) {
 	pCode->caretRow     = CodeBoxCaretRow(pCode);
 	pCode->caretCollumn = CodeBoxCaretCollumn(pCode);
 	assert(pCode->caretIndex >= 0);
-	assert(pCode->caretIndex <= pCode->bufferCount);
+	assert(pCode->caretIndex <= pCode->textCount);
 	assert(pCode->caretRow   >= 0);
 	assert(pCode->caretRow   <= pCode->newLineCount);
 	assert(pCode->caretCollumn >= 0);
@@ -1041,17 +1060,17 @@ static void CodeBoxUpdateCaretIndexLine(CodeBox* pCode, int newCaretIndex, int n
 	pCode->caretCollumn = CodeBoxCaretCollumn(pCode);
 	assert(newCaretLine == CodeBoxCaretRow(pCode));
 	assert(pCode->caretIndex >= 0);
-	assert(pCode->caretIndex <= pCode->bufferCount);
+	assert(pCode->caretIndex <= pCode->textCount);
 	assert(pCode->caretRow   >= 0);
 	assert(pCode->caretRow   <= pCode->newLineCount);
 	assert(pCode->caretCollumn >= 0);
 }
 
 static void CodeBoxInsertCharAtIndex(CodeBox* pCode, int index, char c) {
-	memmove(pCode->pText + index + 1, pCode->pText + index, pCode->bufferCount - index - 1);
+	memmove(pCode->pText + index + 1, pCode->pText + index, pCode->textCount - index - 1);
 	pCode->dirty = true;
 	pCode->pText[index] = c;
-	pCode->bufferCount++;
+	pCode->textCount++;
 	pCode->caretIndex++;
 	pCode->caretCollumn++;
 	pCode->newLineCount += c == '\n';
@@ -1062,10 +1081,10 @@ static inline void CodeBoxInsertChar(CodeBox* pCode, char c) {
 }
 
 static void CodeBoxDeleteCharAtIndex(CodeBox* pCode, int index) {
-	if (pCode->bufferCount == 0) return;
-	memmove(pCode->pText + index - 1, pCode->pText + index, pCode->bufferCount - index);
+	if (pCode->textCount == 0) return;
+	memmove(pCode->pText + index - 1, pCode->pText + index, pCode->textCount - index);
 	pCode->newLineCount -= pCode->pText[index - 1] == '\n';
-	pCode->bufferCount--;
+	pCode->textCount--;
 }
 
 static inline void CodeBoxDeleteChar(CodeBox* pCode) {
@@ -1121,32 +1140,9 @@ int main(void)
 	SetTextureFilter(font.texture, TEXTURE_FILTER_BILINEAR);
 	SetTextLineSpacing(0); 
 
-	/* File */
-	{
-		text.path = "./src/main.c";
-		char* loadedFile = LoadFileText(text.path);
-		while (loadedFile[text.bufferCount] != '\0') {
-			if (loadedFile[text.bufferCount] == '\n') text.newLineCount++;
-			text.bufferCount++;
-		}
-		LOG("Loaded Buffer Size %d\n", text.bufferCount);
-		assert(text.bufferCount < TEXT_BUFFER_CAPACITY && "Loaded buffer size too big!");
-
-		text.pText   = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(char));
-		text.pToken    = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(TOKEN));
-		text.pTextMeta = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(TextMeta));
-
-		memset(text.pText,   0, TEXT_BUFFER_CAPACITY * sizeof(char));
-		memset(text.pToken,    0, TEXT_BUFFER_CAPACITY * sizeof(TOKEN));
-		memset(text.pTextMeta, 0, TEXT_BUFFER_CAPACITY * sizeof(TextMeta));
-
-		memcpy(text.pText, loadedFile, text.bufferCount + 1);
-		free(loadedFile);
-
-		ProcessMeta(&text);
-	}
-
 	/* State */
+	CodeBox* pCode = &text;
+
 	struct {
 		float scrollMouse;
 		bool  lMouse;
@@ -1167,18 +1163,45 @@ int main(void)
 	int priorKey = 0;
 
 	Rectangle textBox = { 5, 20, screenWidth - 10, screenHeight - 25 };
-	CodeBox*  pCode   = &text;
+	// TODO dynamically update
+	pCode->colCount = (int)(textBox.width  / fontXSpacing);
+	pCode->rowCount = (int)(textBox.height / fontYSpacing);
+	pCode->pRows = XMALLOC_ALIGNED(CACHE_LINE, text.rowCount * sizeof(CodeRow));
+	// text.pCollumns = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(CodeRow));
 
-	/*
-	 * Main Loop
-	 */
-	LoopBegin:
+
+	/* File Load */
+	{
+		pCode->path = "./src/main.c";
+		char* loadedFile = LoadFileText(text.path);
+		while (loadedFile[text.textCount] != '\0') {
+			if (loadedFile[text.textCount] == '\n') pCode->newLineCount++;
+			pCode->textCount++;
+		}
+		LOG("Loaded Buffer Size %d\n", text.textCount);
+		ASSERT(text.textCount < TEXT_BUFFER_CAPACITY, "Loaded buffer size too big!");
+
+		pCode->pText     = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(char));
+		pCode->pToken    = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(TOKEN));
+		pCode->pTextMeta = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(TextMeta));
+
+		memset(pCode->pText,     0, TEXT_BUFFER_CAPACITY * sizeof(char));
+		memset(pCode->pToken,    0, TEXT_BUFFER_CAPACITY * sizeof(TOKEN));
+		memset(pCode->pTextMeta, 0, TEXT_BUFFER_CAPACITY * sizeof(TextMeta));
+
+		memcpy(pCode->pText, loadedFile, pCode->textCount + 1);
+		free(loadedFile);
+
+		ProcessMeta(&text);
+	}
+
+/*
+ * Main Loop
+ */
+LoopBegin:
 
 	framesCounter++;
 
-	xCharCapacity = (textBox.width / fontXSpacing) - 1;
-	yCharCapacity = (textBox.height / fontYSpacing) - 1;
-	
 	/* Input Read */
 	{
 		SetMouseCursor(mouseOnText ? MOUSE_CURSOR_IBEAM : MOUSE_CURSOR_DEFAULT);
@@ -1296,7 +1319,7 @@ int main(void)
 			/* Move Right Keys */
 			case KEY_RIGHT: 
 			case KEY_D | KEY_ALT_MOD:
-				if (pCode->caretIndex >= pCode->bufferCount - endCharLength) 
+				if (pCode->caretIndex >= pCode->textCount - endCharLength) 
 					break;
 
 				pCode->caretIndex++;		
@@ -1358,7 +1381,7 @@ int main(void)
 				int currentLineEnd = TextFindCharForward(pCode->pText, pCode->caretIndex, '\n');
 				int downLineStart  = currentLineEnd + endCharLength;
 				int downLineEnd    = TextFindCharForward(pCode->pText, downLineStart, '\n');
-				if (downLineStart >= pCode->bufferCount - endCharLength) break;
+				if (downLineStart >= pCode->textCount - endCharLength) break;
 				int downLineDiff  = downLineEnd - downLineStart;
 				pCode->caretIndex = downLineStart + (pCode->caretCollumn < downLineDiff ? pCode->caretCollumn : downLineDiff);
 				pCode->caretRow++;
@@ -1570,31 +1593,41 @@ int main(void)
 		 * Window
 		 */
 		ClearBackground(RAYWHITE);
-
-		float frameTime = GetFrameTime();
-		DrawText(TextFormat("frameTime: %f/", frameTime), 512, 0, 20, GRAY);
-		DrawText(TextFormat("caretCollumn: %i caretRow: %i caretIndex: %i", pCode->caretCollumn, pCode->caretRow, pCode->caretIndex, pCode->focusStartRow), 0, 0, 20, DARKGRAY);
+		const Vector2 hoverPos = GetMousePosition();
 
 		/* 
 		 * Code Box
 		 */
+		bool boxHover = CheckCollisionPointRec(hoverPos, textBox);
+		Vector2 hoverBoxPos = GetWorldToBoxLocal(hoverPos, textBox);
+
+		int hoverCol = hoverBoxPos.x / fontXSpacing;
+		int hoverRow = hoverBoxPos.y / fontYSpacing;
+
+		// DrawText(TextFormat("frameTime: %f/", GetFrameTime()), 512, 0, 20, GRAY);
+		DrawText(TextFormat("caretCollumn: %i caretRow: %i caretIndex: %i hoverPos: x%.1f y%.1f c%i r%i", 
+			pCode->caretCollumn, pCode->caretRow, pCode->caretIndex, hoverBoxPos.x, hoverBoxPos.y, hoverCol, hoverRow), 0, 0, 20, DARKGRAY);
+
 		DrawRectangleRec(textBox, COLOR_BACKGROUND);
-		DrawRectangleLines((int)textBox.x, (int)textBox.y, (int)textBox.width, (int)textBox.height, DARKGRAY);
+		DrawRectangleLines((int)textBox.x, (int)textBox.y, (int)textBox.width, (int)textBox.height, boxHover ? COLOR_CARET : DARKGRAY);
 
 		Color textColor = COLOR_TEXT;
 		Color caretColor = BLANK;
-		Vector2 mousePosition = GetMousePosition();
 		Vector2 caretPosition = { -1, -1};
-		Vector2 scanFoundPosition = { -1, -1};;
+		Vector2 scanFoundPosition = { -1, -1};
+		CodeRow* pRows = pCode->pRows;
+		int rowCount = pCode->rowCount;
+		int colCount = pCode->colCount;
 		int iChar = pCode->focusStartRowIndex;
 
-		for (int y = 0; y < yCharCapacity; ++y) {
+		for (int iRow = 0; iRow < rowCount; ++iRow) {
+			pRows[iRow].startIndex = iChar;
 			int tabCount = 0;
-			for (int x = 0; x < xCharCapacity - (tabCount * tabWidth); ++x) {
+			for (int iCol = 0; iCol < colCount - (tabCount * tabWidth); ++iCol) {
 				
 				Vector2 position = {
-					textBox.x + (fontXSpacing * x) + (tabCount * fontXSpacing * 4), 
-					textBox.y + (fontYSpacing * y)
+					textBox.x + (fontXSpacing * iCol) + (tabCount * fontXSpacing * 4), 
+					textBox.y + (fontYSpacing * iRow)
 				};										
 				Rectangle rect = {position.x, position.y, fontXSpacing, fontYSpacing};
 
@@ -1602,19 +1635,13 @@ int main(void)
 				TextMeta m = text.pTextMeta[iChar];
 
 				if (iChar == text.caretIndex) {
-					caretColor = ORANGE;
+					caretColor = COLOR_CARET;
 					caretPosition = position;
 					DEBUG_LOG_ONCE("%s %d %d\n", string_TOKEN(m.token), m.QUOTE, Delimiter(c));
 				}
 
 				if (iChar == command.scanFoundIndex) 
 					scanFoundPosition = position;
-				
-				if (input.lMouse && CheckCollisionPointRec(mousePosition, rect)) {
-					float xDiff = mousePosition.x - (rect.x + (rect.width / 2));
-					text.caretIndex = xDiff > 0 ? iChar + 1 : iChar;
-					text.caretCollumn = CodeBoxCaretCollumn(&text);
-				}
 
 				// #define GENERATE_BITMASK(_type) ((m._type > 0) << TEXT_META_TYPE_##_type ) | 
 				// u16 mask = (u16)META_TYPES(GENERATE_BITMASK) 0;
@@ -1631,7 +1658,7 @@ int main(void)
 				// }
 
 				if (m.PREPROCESS) {
-					DrawRectangleRec(rect, COLOR_A(COLOR_PREPROCESS, 50));
+					DrawRectangleRec(rect, COLOR_A(COLOR_PREPROCESS, 20));
 				}
 
 				if (m.QUOTE) {
@@ -1641,6 +1668,7 @@ int main(void)
 				switch (c) 
 				{
 					case '\0':
+						pRows[iRow].endIndex = iChar;
 						goto FinishDrawingText;
 
 					/* Whitespace */
@@ -1659,30 +1687,38 @@ int main(void)
 					case '\v':
 					case '\f':
 					case '\n':
-						// Check click on entire line
-						rect.width = textBox.width - rect.width;
-						if (input.lMouse && CheckCollisionPointRec(mousePosition, rect)){
-							text.caretIndex = iChar;
-							text.caretCollumn = CodeBoxCaretCollumn(&text);
-						}
-
-						x = xCharCapacity;
+						pRows[iRow].endIndex = iChar;
+						iCol = colCount;
 						c =  '\\';
 						goto DrawChar;
 
+				DrawChar:
 					default:
-					DrawChar: {
 						int codePointSize;
 						int codePoint = GetCodepoint(&c, &codePointSize);
 						Color color = TOKEN_COLOR[m.token];
 						DrawTextCodepoint(font, codePoint, position, fontSize, color);
 						iChar++;
 						break;
-					}
 				}									
 			}
 		}      
 		FinishDrawingText:
+
+		Vector2 hoverSnapBoxPos = (Vector2){ (hoverCol * fontXSpacing), (hoverRow * fontYSpacing) };
+		Vector2 hoverSnapPos    = GetBoxLocalToWorld(hoverSnapBoxPos, textBox);
+
+		DrawLineEx(
+			(Vector2){hoverSnapPos.x, hoverSnapPos.y}, 
+			(Vector2){hoverSnapPos.x, hoverSnapPos.y + fontYSpacing}, 
+			4, caretColor);
+
+		CodeRow selectRow = pRows[hoverRow];
+		int selectIndex = MIN(selectRow.startIndex + hoverCol, selectRow.endIndex);
+		if (input.lMouse) {
+			pCode->caretIndex = selectIndex;
+			text.caretCollumn = CodeBoxCaretCollumn(pCode);
+		}
 
 		/*
 		 * Command Caret
