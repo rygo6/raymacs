@@ -1,7 +1,10 @@
+#define CONCAT(a, b) a  ##  b #a
+
 static int Test(int input) {
 	int output = input;
 	// comment
-	const char* str = "Hello\n";
+	const char* str = "Hello\'\n";
+	char tick = '"';
 	int vala = 10 + 2;
 	int valb = 10 / 2;
 	return output;
@@ -32,7 +35,6 @@ static int Test(int input) {
 | Ctrl+Y (or Ctrl+Shift+Z)  | Redo                                           |
 | Ctrl+A                    | Select all                                     |
 | Ctrl+L                    | Select entire current line                     |
-| Ctrl+Shift+K              | Delete entire line                             |
 | Ctrl+R                    | Delete character                               |
 | Ctrl+Shift+R              | Delete line                                    |
 | Ctrl+D                    | Duplicate line below                           |
@@ -50,14 +52,14 @@ static int Test(int input) {
 | Ctrl+Home                 | Go to beginning of document                    |
 | Ctrl+End                  | Go to end of document                          |
 | Ctrl+Left/Right           | Word jump                                      |
-| Alt+Left/Right            | Word jump                                      |
+| Ctrl+Alt+J/L              | Word jump                                      |
 | Ctrl+Up/Down              | Block jump                                     |
-| Alt+Up/Down               | Block jump                                     |
-| Up Down Left Right        | Move                                           |
-| Ctrl+I J K L              | Move Alt                                       |
+| Ctrl+Alt+I/K              | Block jump                                     |
+| Up/Down/Left/Right        | Move                                           |
+| Alt+I/J/K/L               | Move Alt                                       |
 | Ctrl+G                    | Go to line number                              |
 | Ctrl+M                    | Go to matching bracket                         |
-| Alt+Alphanumeric Char     | Jump To Char. Jump To Next Ocurrance.          |
+| Alt Toggle                | Command Mode                                   |
 +---------------------------+------------------------------------------------+
 | SELECTION                                                                  |
 +---------------------------+------------------------------------------------+
@@ -66,7 +68,9 @@ static int Test(int input) {
 | Shift+Home                | Select to beginning of line                    |
 | Shift+End                 | Select to end of line                          |
 | Ctrl+Shift+Left/Right     | Select word jump                               |
+| Ctrl+Shift+Alt+J/L        | Select word jump                               |
 | Ctrl+Shift+Up/Down        | Block select / Multi-cursor                    |
+| Ctrl+Shift+Alt+I/K        | Block select / Multi-cursor                    |
 | Ctrl+Shift+Mouse Drag     | Block select                                   |
 | Mouse Double Click        | Select word                                    |
 | Mouse Triple Click        | Select line                                    |
@@ -217,6 +221,13 @@ typedef unsigned char utf8;
 	_valA < _valB ? _valA : _valB; \
 })
 
+#define MAX(_a, _b) \
+({ \
+	__auto_type _valA = (_a); \
+	__auto_type _valB = (_b); \
+	_valA > _valB ? _valA : _valB; \
+})
+
 #define UNUSED            __attribute__((unused))
 #define FALLTHROUGH       __attribute__((fallthrough))
 #define CACHE_ALIGN       __attribute__((aligned(CACHE_LINE)))
@@ -322,10 +333,8 @@ DEF_ENUM(TOKEN);
 #define FIND_HIGHLIGHT_COLOR (Color){   0, 255,   0, 64  }
 #define COLOR_COMMAND_BOX    (Color){  20,  20,   2, 200 }
 #define COLOR_TEXT_BOX       (Color){  37,  37,  38, 255 }
-
-#define HIDDEN_ADD 30
-
 #define COLOR_CARET       ORANGE
+#define COLOR_HOVER       (Color){   0, 255,   0, 64  }
 #define COLOR_CODE        (Color){ 216, 222, 233, 255 }
 #define COLOR_PREPROCESS  (Color){ 198, 149, 198, 255 }
 #define COLOR_CONTINUE    (Color){ 148,  99, 148, 255 }
@@ -360,8 +369,8 @@ static Color TOKEN_COLOR[] = {
 STATIC_ASSERT(COUNT(TOKEN_COLOR) == TOKEN_COUNT);
 
 #define DEF_PREPROCESS_TOKENS(DEF) \
-	DEF("define") \
-	DEF("include")
+	DEF("#define") \
+	DEF("#include")
 
 #define DEF_KEYWORD_TOKENS(DEF) \
 	DEF("_Static_assert") \
@@ -438,19 +447,22 @@ typedef u16 tok_k;
 
 static TOKEN TOKEN_MAP[MAP_CAPACITY];
 
+#define TOKEN_HASH_SEED 11
 #define TOKEN_HASH(_h, _c) (_h + (_h << 5) + (_c))  
 
 static tok_k TokenKeyRange(const char *str, int iStart, int iEnd)
 {
-	tok_k hash = 0;
-	for (int i = iStart; i <= iEnd; ++i) hash = TOKEN_HASH(hash, str[i]);
+	tok_k hash = TOKEN_HASH_SEED;
+	for (int i = iStart; i <= iEnd; ++i) 
+		hash = TOKEN_HASH(hash, str[i]);
 	return hash & TOKEN_MASK;
 }
 
 static tok_k TokenKey(const char *str)
 {
-	tok_k hash = 0; utf8 c;
-	while ((c = *str++)) hash = TOKEN_HASH(hash, c);
+	tok_k hash = TOKEN_HASH_SEED; utf8 c;
+	while ((c = *str++))
+		hash = TOKEN_HASH(hash, c);
 	return hash & TOKEN_MASK;
 }
 
@@ -495,7 +507,7 @@ const int fontYSpacing = 20;
 const int fontSize = 24;
 const char availableChars[] = "·¬ abcdefghijklmnopqrstuvwxyzABDCEFGHIJKLMNOPQRSTUVWXYZ1234567890-=!@#$%^&*()_+[];',./{}:\"<>?|`~\n\t\\";
 
-#define CARET_COUNT 128
+#define CARET_MAX_CAPACITY 8
 #define CARET_INVALID INT_MIN
 
 #define TOKEN_MAX_INCREMENT 15
@@ -520,12 +532,6 @@ typedef struct PACKED TextMeta {
 
 } TextMeta;
 
-typedef struct Caret {
-	int index;
-	int collumn;
-	int line;
-} Caret;
-
 typedef struct Highlight {
 	int startIndex;
 	int endIndex;
@@ -536,25 +542,30 @@ typedef struct CodeRow {
 	int endIndex;
 } CodeRow;
 
+typedef struct CodePos {
+	int index;
+	int row;
+	int col;
+} CodePos;
+
 typedef struct CodeBox {
 	int focusStartRowIndex;
 	int focusStartRow;
 
-	bool  caretEnabled[CARET_COUNT];
-	Caret caret[CARET_COUNT];
-	
-	int caretIndex; // Index in entire buffer.
-	int caretRow;
-	int caretCollumn;
+	int 	 caretCount;
+	CodePos* pCarets;
 
-	int rowCount;
-	int colCount;
-	CodeRow* pRows;
+	CodePos mark;
 
-	int newLineCount;
+	int boxRowCount;
+	int boxColCount;
+	CodeRow* pBoxRows;
+
+	int textRowCount;
 	int textCount;
 	char*     pText;
-	TOKEN*    pToken;
+	CodeRow*  pTextRows;
+	TOKEN*    pTextToken;
 	TextMeta* pTextMeta;
 
 	char* path;
@@ -597,7 +608,7 @@ static inline bool Delimiter(char c)
 		/* Scopes */
 		case '(': case ')': case '{': case '}':	case '[': case ']':
 
-		case '#': case ',':	case '.': case ';':	case '@': case '\\':
+		case ',': case '.': case ';':	case '@': case '\\':
 			return true;
 
 		default:
@@ -605,9 +616,10 @@ static inline bool Delimiter(char c)
 	}
 }
 
-static RESULT ProcessMeta(CodeBox* pCode) {
+static RESULT ProcessMeta(CodeBox* pCode) 
+{
 	const int   count = pCode->textCount;
-	const char* pBuf  = pCode->pText; 
+	const char* pText = pCode->pText; 
 	TextMeta*   pMeta = pCode->pTextMeta;
 
 	int iC    = 0;
@@ -616,7 +628,7 @@ static RESULT ProcessMeta(CodeBox* pCode) {
 	// Prev Char, Current Char, Next Char
 	char pc = '\0';
 	char c  = '\0';
-	char nc = pBuf[0];
+	char nc = pText[0];
 
 	// Prev Delim, Current Delim, Next Delim
 	bool pd = true;
@@ -626,14 +638,13 @@ static RESULT ProcessMeta(CodeBox* pCode) {
 	TextMeta meta; ZERO_P(&meta);
 
 processChar:
-	pc = c;	c  = nc; nc = pBuf[iC + 1];
-	pd = d;	d  = nd; nd = Delimiter(nc);
-
-	if (UNLIKELY(c == '\0')) goto error;
-
 	bool comment    = meta.BLOCK_COMMENT || meta.LINE_COMMENT;
 	bool quote      = meta.QUOTE;
 	bool preprocess = meta.PREPROCESS;
+
+	pc = c;	c  = nc; nc = pText[iC + 1];
+	pd = d;	d  = nd; nd = Delimiter(nc);
+
 	switch (comment | quote << 1) 
 	{
 		/* Parse Comment */
@@ -673,19 +684,26 @@ processChar:
 			switch (c) 
 			{
 				case '\\':
-					meta.token = TOKEN_ESCAPE;
+					meta.token     = TOKEN_ESCAPE;
 					pMeta[iC]      = meta;
 					pMeta[iC + 1]  = meta;
-					meta.token = TOKEN_TEXT;
+					meta.token     = TOKEN_TEXT;
 					goto skipAndNext;
 
 				case '\'':
 				case '"':
-					meta.token = TOKEN_QUOTE;
-					pMeta[iC]  = meta;
-					meta.token = TOKEN_NONE;
-					meta.QUOTE = 0;
-					goto next;
+					switch (pc) 
+					{
+					case '\'':
+						goto metaAndNext;
+
+					default:
+						meta.token = TOKEN_QUOTE;
+						pMeta[iC]  = meta;
+						meta.token = TOKEN_NONE;
+						meta.QUOTE = 0;
+						goto next;
+					}
 
 				default:
 					goto metaAndNext;
@@ -693,37 +711,55 @@ processChar:
 		}
 
 		/* Parse Text */
-		default: {
-			// TODO can this be melded into the switch below?
+		default:
+			
+			/* Test Delimit and Token Lookup*/
 			u8 delimitTransition = pd | d << 1 | nd << 2;
 			switch (delimitTransition) 
 			{
+				/* Start Token */
 				case true  | false << 1 | false << 2:
 					iStrt = iC;
 					break;
 
+				/* Start Single Char Token */
 				case true  | false << 1 | true  << 2:
 					iStrt = iC;
 					FALLTHROUGH;
 
+				/* End Token */
 				case false | false << 1 | true  << 2:
 					int iEnd = iC;
-					int len  = iEnd + 1 - iStrt;
-					tok_k t  = TokenKeyRange(pBuf, iStrt, iEnd);
-					meta.token = TOKEN_MAP[t];
+					tok_k kTok = TokenKeyRange(pText, iStrt, iEnd);
+					TOKEN tok = TOKEN_MAP[kTok];
+					if (tok == TOKEN_NONE) 
+						goto next;
+
 					bool isPreprocess = (meta.token == TOKEN_PREPROCESS);
+					meta.token = tok;
 					meta.PREPROCESS = isPreprocess | meta.PREPROCESS;
-					for (int i = iStrt - isPreprocess; i < iEnd; ++i) {
+					for (int i = iStrt; i <= iEnd; ++i) {
 						pMeta[i].token      = meta.token;
 						pMeta[i].PREPROCESS = meta.PREPROCESS;
 						pMeta[i].iTokenStartOffset = i - iStrt;
 						pMeta[i].iTokenEndOffset   = iEnd - i;
 					}
-					break;
+					goto next;
 			}
 
+			/* Test Char */
 			switch (c) 
 			{
+				/* Token Chars */
+				// case '_':
+				// case '`':
+				// case 'a'...'z':
+				// case 'A'...'Z':
+				// case '0'...'9':
+				// 	goto next;
+				default: goto next;
+
+				/* Increment */
 			#define INCREMENT_CASE(_add, _sub, _scope, _token) \
 				case _add: \
 					meta._scope += (meta._scope < TOKEN_MAX_INCREMENT); \
@@ -741,13 +777,6 @@ processChar:
 				INCREMENT_CASE('(', ')', SCOPE_PAREN,   TOKEN_SCOPE)
 
 			#undef INCREMENT_CASE
-
-				case '_':
-				case '`':
-				case 'a'...'z':
-				case 'A'...'Z':
-				case '0'...'9':
-					goto metaAndNext;
 
 				/* Whitespace */
 				case '\n':
@@ -807,22 +836,32 @@ processChar:
 				case '"':
 				case '\'':
 					meta.token = TOKEN_QUOTE;
-					meta.QUOTE = 1; 
-					pMeta[iC] = meta; 
+					meta.QUOTE = true; 
+					pMeta[iC]  = meta; 
 					meta.token = TOKEN_TEXT;
 					goto next;
 
 				/* Preprocess */
 				case '#':
-					meta.token = TOKEN_PREPROCESS;
-					goto metaAndNext;
+					switch (nc) 
+					{
+						case '#':
+							meta.token = TOKEN_PREPROCESS; 
+							pMeta[iC]   = meta; 
+							pMeta[iC+1] = meta;						
+							goto skipAndNext;
+
+						default:
+							meta.token = TOKEN_PREPROCESS;
+							goto metaAndNext;
+					}
 
 				case '\\':
 					if (meta.PREPROCESS && nc == '\n') {
-						meta.token = TOKEN_CONTINUE;
-						pMeta[iC]  = meta;
-						meta.token = TOKEN_WHITESPACE;
-						pMeta[iC + 1]  = meta;
+						meta.token = TOKEN_CONTINUE;   
+						pMeta[iC] = meta;
+						meta.token = TOKEN_WHITESPACE; 
+						pMeta[iC+1] = meta;
 						meta.token = TOKEN_PREPROCESS;
 						goto skipAndNext;
 					}
@@ -835,18 +874,16 @@ processChar:
 					meta.token = TOKEN_NONE;
 					goto metaAndNext;
 			}
-		}
 	} // switch (parseComment | parseQuote << 1) 
 
 skipAndNext: // Skip char and go to next
 	++iC;
-	pc = c;	c  = nc; nc = pBuf[iC + 1];
+	pc = c;	c  = nc; nc = pText[iC + 1];
 	pd = d;	d  = nd; nd = Delimiter(nc);
 	goto next;
 
 metaAndNext: // Set meta and go to next
 	pMeta[iC] = meta;
-	goto next;
 
 next: // Go to next char
 	if (UNLIKELY(++iC == count)) return RESULT_SUCCESS; 
@@ -862,19 +899,22 @@ error:
  */
 
 // Find specified char. 
-static int TextFindCharBackward(const char* text, int index, char c) {
+static int TextFindCharBackward(const char* text, int index, char c)
+{
 	while (index >= 0 && text[index] != c) index--;    
 	return index;
 }
 
 // Find specified char. 
-static int TextFindCharForward(const char* pText, int index, char c) {
+static int TextFindCharForward(const char* pText, int index, char c)
+{
 	while (pText[index] != c && pText[index] != '\0') index++;    
 	return index;
 }
 
 // Find specified substring. 
-static int TextFindTextBackward(const char* text, int index, const char* find) {
+static int TextFindTextBackward(const char* text, int index, const char* find)
+{
 	while (index >= 0) {
 		int i = 0; while (text[index + i] == find[i]) 
 			if (find[++i] == '\0') return index;
@@ -884,7 +924,8 @@ static int TextFindTextBackward(const char* text, int index, const char* find) {
 }
 
 // Find specified substring. Will return end null terminator index if it doesn't find.
-static int TextFindTextForward(const char* text, int index, const char* find) {
+static int TextFindTextForward(const char* text, int index, const char* find)
+{
 	const char* s = text;
 	int foundIndex = index;
 	while (s[foundIndex] != '\0') {
@@ -895,7 +936,8 @@ static int TextFindTextForward(const char* text, int index, const char* find) {
 	return index;
 }
 
-static int TextFindTextsForward(const char* text, int index, const char** finds) {
+static int TextFindTextsForward(const char* text, int index, const char** finds)
+{
 	while (text[index] != '\0') {
 		int f = 0; while (finds[f] != NULL) {
 			const char* find = finds[f++];
@@ -908,7 +950,8 @@ static int TextFindTextsForward(const char* text, int index, const char** finds)
 }
 
 // Test if Text exactly equals given text. 0 if false. strlen of equals if true.
-static int TextEqualsText(const char* text, const char* equals) {
+static int TextEqualsText(const char* text, const char* equals)
+{
 	assert(equals[0] != '\0');
 	int index = 0;
 	while (text[index] == equals[index] && text[index] != '\0')
@@ -917,18 +960,21 @@ static int TextEqualsText(const char* text, const char* equals) {
 }
 
 // Find first char which is not the specified char.
-static int TextNegateFindCharBackward(const char* text, int index, char find) {
+static int TextNegateFindCharBackward(const char* text, int index, char find)
+{
 	while (index >= 0 && text[index] == find) index--;    
 	return index;
 }
 
 // Find first char which is not the specified char.
-static int TextNegateFindCharForward(const char* text, int index, char find) {
+static int TextNegateFindCharForward(const char* text, int index, char find)
+{
 	while (text[index] == find && text[index] != '\0') index++;    
 	return index;
 }
 
-static int TextFindCharsForward(const char* text, int index, const char* find) {
+static int TextFindCharsForward(const char* text, int index, const char* find)
+{
 	while (text[index] != '\0') {
 		int i = 0; while (find[i] != '\0') 
 			if (text[index] == find[i++]) return index;
@@ -937,7 +983,8 @@ static int TextFindCharsForward(const char* text, int index, const char* find) {
 	return index;
 }
 
-static int TextFindCharsBackward(const char* text, int index, const char* find) {
+static int TextFindCharsBackward(const char* text, int index, const char* find)
+{
 	while (index >= 0) {
 		int i = 0; while (find[i] != '\0') 
 			if (text[index] == find[i++]) return index;
@@ -947,7 +994,8 @@ static int TextFindCharsBackward(const char* text, int index, const char* find) 
 }
 
 // Find char skipping a specified number of matches. 
-static int TextFindCharSkipForward(const char* pText, char find, int skipCount) {
+static int TextFindCharSkipForward(const char* pText, char find, int skipCount)
+{
 	int index = 0;
 	while (pText[index] != '\0' && skipCount > 0) {
 		if (pText[index] == find) skipCount--;   
@@ -957,7 +1005,8 @@ static int TextFindCharSkipForward(const char* pText, char find, int skipCount) 
 }
 
 // Count occurances of char.
-static int TextCountCharForward(const char* text, int index, int range, char find) {
+static int TextCountCharForward(const char* text, int index, int range, char find)
+{
 	int count = 0;
 	for (; index < range; ++index) {
 		if (text[index] == find) count++;
@@ -967,7 +1016,8 @@ static int TextCountCharForward(const char* text, int index, int range, char fin
 }
 
 // Find char index and also count occurense of another char during scan.
-static bool TextFindCountCharForward(const char* pText, char searchChar, char countChar, int* pFoundIndex, int *pCount) {
+static bool TextFindCountCharForward(const char* pText, char searchChar, char countChar, int* pFoundIndex, int *pCount)
+{
 	int index = *pFoundIndex, count = *pCount; 
 	char c;	do {
 		c = pText[index++];
@@ -978,7 +1028,8 @@ static bool TextFindCountCharForward(const char* pText, char searchChar, char co
 }
 
 // Find char index and also count occurense of another char during scan.
-static bool TextFindCountCharBackward(const char* pText, char searchChar, char countChar, int* pFoundIndex, int *pCount) {
+static bool TextFindCountCharBackward(const char* pText, char searchChar, char countChar, int* pFoundIndex, int *pCount)
+{
 	int index = *pFoundIndex;
 	while (pText[index] != searchChar) {
 		if (pText[index] == countChar) *pCount = *pCount + 1;
@@ -990,29 +1041,22 @@ static bool TextFindCountCharBackward(const char* pText, char searchChar, char c
 }
 
 // The index of char on current line
-static inline int CodeBoxIndexCollumn(const CodeBox* pCode, int index) {
+static inline int CodeBoxIndexCol(const CodeBox* pCode, int index)
+{
 	int lineStartIndex = TextFindCharBackward(pCode->pText, index - 1, '\n') + endCharLength;
 	return index - lineStartIndex;
 }
 
-// The index of caret on current line.
-static inline int CodeBoxCaretCollumn(const CodeBox* pCode) {
-	return CodeBoxIndexCollumn(pCode, pCode->caretIndex);
-}
-
 // Line given index is on
-static inline int CodeBoxIndexRow(const CodeBox* pCode, int index) {
+static inline int CodeBoxIndexRow(const CodeBox* pCode, int index)
+{
 	return TextCountCharForward(pCode->pText, 0, index, '\n');
 }
 
-// Line the caret is on.
-static inline int CodeBoxCaretRow(const CodeBox* pCode) {
-	return CodeBoxIndexRow(pCode, pCode->caretIndex);
-}
-
 // Focus on a given row.
-static void CodeBoxFocusRow(CodeBox* pCode, int toRow) {
-	int rowCount = (int)pCode->rowCount;
+static void CodeBoxFocusRow(CodeBox* pCode, int toRow)
+{
+	int boxRowCount = (int)pCode->boxRowCount;
 
 	int yMin = pCode->focusStartRow;
 	if (toRow < yMin) {
@@ -1020,80 +1064,101 @@ static void CodeBoxFocusRow(CodeBox* pCode, int toRow) {
 		pCode->focusStartRowIndex = TextFindCharSkipForward(pCode->pText, '\n', pCode->focusStartRow);
 	}
 
-	int yMax = yMin + rowCount;
+	int yMax = yMin + boxRowCount;
 	if (toRow > yMax) {
-		pCode->focusStartRow = toRow - rowCount;
+		pCode->focusStartRow = toRow - boxRowCount;
 		pCode->focusStartRowIndex = TextFindCharSkipForward(pCode->pText, '\n', pCode->focusStartRow);
 	}
 } 
 
-static void CodeBoxIncrementFocusRow(CodeBox* pCode, int increment) {
+static void CodeBoxIncrementFocusRow(CodeBox* pCode, int increment)
+{
 	pCode->focusStartRow -= increment;
+	pCode->focusStartRow = MAX(pCode->focusStartRow, 0);
+	pCode->focusStartRow = MIN(pCode->focusStartRow, pCode->textRowCount);
 	pCode->focusStartRowIndex = TextFindCharSkipForward(pCode->pText, '\n', pCode->focusStartRow);
+	// LOG("focusStartRow: %d\n", pCode->focusStartRow);
 }
 
 // Focus on a given character index.
-static inline void CodeBoxFocusIndex(CodeBox* pCode, int toIndex) {
+static inline void CodeBoxFocusIndex(CodeBox* pCode, int toIndex)
+{
 	int toRow = CodeBoxIndexRow(pCode, toIndex);
 	CodeBoxFocusRow(pCode, toRow);
 }
 
-static inline void CodeBoxFocusCaret(CodeBox* pCode) {
-	CodeBoxFocusRow(pCode, pCode->caretRow);
+/* Focus on Mark */
+static inline void CodeBoxFocusMark(CodeBox* pCode)
+{
+	CodeBoxFocusRow(pCode, pCode->mark.row);
 }
 
-// Update all caret state for index.
-static void CodeBoxUpdateCaretIndex(CodeBox* pCode, int newCaretIndex) {
-	pCode->caretIndex   = newCaretIndex;
-	pCode->caretRow     = CodeBoxCaretRow(pCode);
-	pCode->caretCollumn = CodeBoxCaretCollumn(pCode);
-	assert(pCode->caretIndex >= 0);
-	assert(pCode->caretIndex <= pCode->textCount);
-	assert(pCode->caretRow   >= 0);
-	assert(pCode->caretRow   <= pCode->newLineCount);
-	assert(pCode->caretCollumn >= 0);
+/* Update Mark Index */
+static void CodeSetMarkIndex(CodeBox* pCode, int newMarkIndex)
+{
+	pCode->mark.index   = newMarkIndex;
+	pCode->mark.row     = CodeBoxIndexRow(pCode, newMarkIndex);
+	pCode->mark.col     = CodeBoxIndexCol(pCode, newMarkIndex);
+	assert(pCode->mark.index >= 0);
+	assert(pCode->mark.index <= pCode->textCount);
+	assert(pCode->mark.row   >= 0);
+	assert(pCode->mark.row   <= pCode->textRowCount);
+	assert(pCode->mark.col   >= 0);
 }
 
-static void CodeBoxUpdateCaretIndexLine(CodeBox* pCode, int newCaretIndex, int newCaretLine) {
-	pCode->caretIndex   = newCaretIndex;
-	pCode->caretRow     = newCaretLine;
-	pCode->caretCollumn = CodeBoxCaretCollumn(pCode);
-	assert(newCaretLine == CodeBoxCaretRow(pCode));
-	assert(pCode->caretIndex >= 0);
-	assert(pCode->caretIndex <= pCode->textCount);
-	assert(pCode->caretRow   >= 0);
-	assert(pCode->caretRow   <= pCode->newLineCount);
-	assert(pCode->caretCollumn >= 0);
+/* Sync Current Mark To Specified Caret  */
+static void CodeSyncMarkToCaret(CodeBox* pCode, u8 iCaret)
+{
+	memcpy(pCode->pCarets + iCaret, &pCode->mark, sizeof(CodePos));
 }
 
-static void CodeBoxInsertCharAtIndex(CodeBox* pCode, int index, char c) {
+/* Sync Current Mark Row To Specified Caret */
+static void CodeSyncMarkRowToCaret(CodeBox* pCode, u8 iCaret)
+{
+	CodePos mark = pCode->mark;
+	CodeRow row  = pCode->pTextRows[mark.row];
+	int newCol = MIN(row.endIndex - row.startIndex, mark.col);
+	int newIndex = row.startIndex + newCol;
+	CodePos* pCaret = pCode->pCarets + iCaret;
+	pCaret->index = newIndex;
+	pCaret->col   = newCol;
+	pCaret->row   = mark.row;
+	pCode->mark.index = newIndex;
+}
+
+static void CodeBoxInsertCharAtIndex(CodeBox* pCode, int index, char c)
+{
 	memmove(pCode->pText + index + 1, pCode->pText + index, pCode->textCount - index - 1);
 	pCode->dirty = true;
 	pCode->pText[index] = c;
 	pCode->textCount++;
-	pCode->caretIndex++;
-	pCode->caretCollumn++;
-	pCode->newLineCount += c == '\n';
+	pCode->pCarets[0].index++;
+	pCode->pCarets[0].col++;
+	pCode->textRowCount += c == '\n';
 }
 
-static inline void CodeBoxInsertChar(CodeBox* pCode, char c) {
-	CodeBoxInsertCharAtIndex(pCode, pCode->caretIndex, c);
+static inline void CodeBoxInsertChar(CodeBox* pCode, char c)
+{
+	CodeBoxInsertCharAtIndex(pCode, pCode->pCarets[0].index, c);
 }
 
-static void CodeBoxDeleteCharAtIndex(CodeBox* pCode, int index) {
+static void CodeBoxDeleteCharAtIndex(CodeBox* pCode, int index)
+{
 	if (pCode->textCount == 0) return;
 	memmove(pCode->pText + index - 1, pCode->pText + index, pCode->textCount - index);
-	pCode->newLineCount -= pCode->pText[index - 1] == '\n';
+	pCode->textRowCount -= pCode->pText[index - 1] == '\n';
 	pCode->textCount--;
 }
 
-static inline void CodeBoxDeleteChar(CodeBox* pCode) {
-	CodeBoxDeleteCharAtIndex(pCode, pCode->caretIndex);
+static inline void CodeBoxDeleteChar(CodeBox* pCode) 
+{
+	CodeBoxDeleteCharAtIndex(pCode, pCode->pCarets[0].index);
 }
 
-static void CommandFinish(CodeBox* pCode, Command* pCommand) {
-	CodeBoxUpdateCaretIndex(pCode, pCommand->scanFoundIndex);
-	CodeBoxFocusRow(pCode, pCode->caretRow);
+static void CommandFinish(CodeBox* pCode, Command* pCommand)
+{
+	CodeSetMarkIndex(pCode, pCommand->scanFoundIndex);
+	CodeBoxFocusRow(pCode, pCode->pCarets[0].row);
 	pCommand->scanFoundIndex  = 0;
 	pCommand->bufferCount     = 0;
 	pCommand->enabled         = false;
@@ -1164,30 +1229,46 @@ int main(void)
 
 	Rectangle textBox = { 5, 20, screenWidth - 10, screenHeight - 25 };
 	// TODO dynamically update
-	pCode->colCount = (int)(textBox.width  / fontXSpacing);
-	pCode->rowCount = (int)(textBox.height / fontYSpacing);
-	pCode->pRows = XMALLOC_ALIGNED(CACHE_LINE, text.rowCount * sizeof(CodeRow));
-	// text.pCollumns = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(CodeRow));
+	pCode->boxColCount = (int)(textBox.width  / fontXSpacing);
+	pCode->boxRowCount = (int)(textBox.height / fontYSpacing);
+	pCode->pBoxRows    = XMALLOC_ALIGNED(CACHE_LINE, text.boxRowCount * sizeof(CodeRow));
+	memset(pCode->pBoxRows, 0, text.boxRowCount * sizeof(CodeRow));
 
+	pCode->pCarets = XMALLOC_ALIGNED(CACHE_LINE, CARET_MAX_CAPACITY * sizeof(CodePos));
+	memset(pCode->pBoxRows, 0, CARET_MAX_CAPACITY * sizeof(CodePos));
+	pCode->caretCount = 1;
 
 	/* File Load */
 	{
+		pCode->pText      = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(char));
+		pCode->pTextRows  = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(CodeRow));
+		pCode->pTextToken = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(TOKEN));
+		pCode->pTextMeta  = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(TextMeta));
+
+		memset(pCode->pText,      0, TEXT_BUFFER_CAPACITY * sizeof(char));
+		memset(pCode->pTextRows,  0, TEXT_BUFFER_CAPACITY * sizeof(CodeRow));
+		memset(pCode->pTextToken, 0, TEXT_BUFFER_CAPACITY * sizeof(TOKEN));
+		memset(pCode->pTextMeta,  0, TEXT_BUFFER_CAPACITY * sizeof(TextMeta));
+
 		pCode->path = "./src/main.c";
-		char* loadedFile = LoadFileText(text.path);
-		while (loadedFile[text.textCount] != '\0') {
-			if (loadedFile[text.textCount] == '\n') pCode->newLineCount++;
-			pCode->textCount++;
+		char* loadedFile = LoadFileText(pCode->path);
+		int index = 0;
+		int rowIndex = 0;
+		int startIndex = 0;
+		CodeRow* pTextRows = pCode->pTextRows;
+		while (loadedFile[index] != '\0') {
+			if (loadedFile[index] == '\n') {
+				pTextRows[rowIndex].startIndex = startIndex;
+				pTextRows[rowIndex].endIndex = index;
+				startIndex = index + 1;
+				rowIndex++;
+			}
+			index++;
 		}
+		pCode->textRowCount = rowIndex;
+		pCode->textCount = index;
 		LOG("Loaded Buffer Size %d\n", text.textCount);
 		ASSERT(text.textCount < TEXT_BUFFER_CAPACITY, "Loaded buffer size too big!");
-
-		pCode->pText     = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(char));
-		pCode->pToken    = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(TOKEN));
-		pCode->pTextMeta = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(TextMeta));
-
-		memset(pCode->pText,     0, TEXT_BUFFER_CAPACITY * sizeof(char));
-		memset(pCode->pToken,    0, TEXT_BUFFER_CAPACITY * sizeof(TOKEN));
-		memset(pCode->pTextMeta, 0, TEXT_BUFFER_CAPACITY * sizeof(TextMeta));
 
 		memcpy(pCode->pText, loadedFile, pCode->textCount + 1);
 		free(loadedFile);
@@ -1276,8 +1357,12 @@ LoopBegin:
 	 */
 
 	// TODO pull this into struct function to be used solely for text input
-	const char* pBuf = pCode->pText;
-	const int iCrt   = pCode->caretIndex;
+	const int iCaret = 0;
+	const CodePos mark = pCode->mark;
+	CodePos* pMark = &pCode->mark;
+	CodePos caret = pCode->pCarets[0];
+	CodePos* pCaret = &pCode->pCarets[0];
+	char* pText = pCode->pText;
 	while (currentKey > 0)
 	{
 		int modifiedKey = currentKey;
@@ -1286,31 +1371,26 @@ LoopBegin:
 			/* Move Left Keys */
 			case KEY_LEFT: 
 			case KEY_A | KEY_ALT_MOD:
-				if (pCode->caretIndex <= 0) break;
-
-				pCode->caretIndex--;
-				pCode->caretCollumn = CodeBoxCaretCollumn(pCode);
-				if (pCode->pText[pCode->caretIndex] == '\n') {
-					pCode->caretRow--;
-					CodeBoxFocusCaret(pCode);
-				}
-
+				if (caret.index <= 0) break;
+				CodeSetMarkIndex(pCode, mark.index - 1);
+				CodeSyncMarkToCaret(pCode, 0);
 				break;
 
 			case KEY_LEFT | KEY_CTRL_MOD:
 			case KEY_A    | KEY_CTRL_MOD | KEY_ALT_MOD: {
-				if (iCrt <= 0) break;
+				if (caret.index <= 0) break;
 
 				int newIndex = CARET_INVALID;
-				switch(pBuf[iCrt - 1]){
-					case ' ':  newIndex = TextNegateFindCharBackward(pBuf, iCrt - 1, ' ');  break;
-					case '\n': newIndex = TextNegateFindCharBackward(pBuf, iCrt - 1, '\n'); break;
-					default:   newIndex = TextFindCharsBackward(pBuf, iCrt - 1, " \n");     break;
+				switch(pText[mark.index - 1]){
+					case ' ':  newIndex = TextNegateFindCharBackward(pText, mark.index - 1, ' ');  break;
+					case '\n': newIndex = TextNegateFindCharBackward(pText, mark.index - 1, '\n'); break;
+					default:   newIndex = TextFindCharsBackward(pText, mark.index - 1, " \n");     break;
 				}
 
 				if (newIndex != CARET_INVALID) {
-					CodeBoxUpdateCaretIndex(pCode, newIndex + 1);
-					CodeBoxFocusCaret(pCode);
+					CodeSetMarkIndex(pCode, newIndex + 1);
+					CodeSyncMarkRowToCaret(pCode, 0);
+					CodeBoxFocusMark(pCode);
 				}
 
 				break;
@@ -1319,32 +1399,26 @@ LoopBegin:
 			/* Move Right Keys */
 			case KEY_RIGHT: 
 			case KEY_D | KEY_ALT_MOD:
-				if (pCode->caretIndex >= pCode->textCount - endCharLength) 
-					break;
-
-				pCode->caretIndex++;		
-				pCode->caretCollumn = CodeBoxCaretCollumn(pCode);
-				if (pCode->pText[pCode->caretIndex] == '\n') {
-					pCode->caretRow++;
-					CodeBoxFocusCaret(pCode);
-				}
-
+				if (caret.index >= pCode->textCount) break;
+				CodeSetMarkIndex(pCode, mark.index + 1);
+				CodeSyncMarkToCaret(pCode, 0);
 				break;
 
 			case KEY_RIGHT | KEY_CTRL_MOD:
 			case KEY_D     | KEY_CTRL_MOD | KEY_ALT_MOD: {
-				if (pBuf[iCrt] == '\0') break;
+				if (caret.index >= pCode->textCount) break;
 
 				int newIndex = CARET_INVALID;
-				switch(pBuf[iCrt]){
-					case ' ':  newIndex = TextNegateFindCharForward(pBuf, iCrt, ' ');  break;
-					case '\n': newIndex = TextNegateFindCharForward(pBuf, iCrt, '\n'); break;
-					default:   newIndex = TextFindCharsForward(pBuf, iCrt, " \n");     break;
+				switch(pText[mark.index]){
+					case ' ':  newIndex = TextNegateFindCharForward(pText, mark.index, ' ');  break;
+					case '\n': newIndex = TextNegateFindCharForward(pText, mark.index, '\n'); break;
+					default:   newIndex = TextFindCharsForward(pText, mark.index, " \n");     break;
 				}
 
 				if (newIndex != CARET_INVALID) {
-					CodeBoxUpdateCaretIndex(pCode, newIndex);
-					CodeBoxFocusCaret(pCode);
+					CodeSetMarkIndex(pCode, newIndex);
+					CodeSyncMarkRowToCaret(pCode, 0);
+					CodeBoxFocusMark(pCode);
 				}
 
 				break;
@@ -1353,52 +1427,44 @@ LoopBegin:
 			/* Move Up Keys */
 			case KEY_UP: 
 			case KEY_W | KEY_ALT_MOD:{
-				int upLineEnd     = TextFindCharBackward(pCode->pText, pCode->caretIndex - 1, '\n');     	   
-				int upLineStart   = TextFindCharBackward(pCode->pText, upLineEnd - 1, '\n') + endCharLength;
-				int upLineLength  = upLineEnd - upLineStart;
-				LOG("%d %d\n", upLineEnd, upLineStart);
-				if (upLineStart < 0) break;
-				pCode->caretIndex = upLineStart + (pCode->caretCollumn < upLineLength ? text.caretCollumn : upLineLength);
-				pCode->caretRow--;
-				CodeBoxFocusRow(pCode, pCode->caretRow);
+				pMark->row--;
+				CodeSyncMarkRowToCaret(pCode, 0);
+				CodeBoxFocusMark(pCode);
 				break;
 			}
 
 			case KEY_UP | KEY_CTRL_MOD:
 			case KEY_W  | KEY_CTRL_MOD | KEY_ALT_MOD: {
-				int startIndex      = pCode->pText[pCode->caretIndex] == '\n' ? pCode->caretIndex - endCharLength : pCode->caretIndex;
-				int blockStartIndex = TextFindTextBackward(pCode->pText, startIndex, "\n\n");
-				int blockEndIndex   = TextNegateFindCharBackward(pCode->pText, blockStartIndex, '\n');  
+				int startIndex      = pText[mark.index] == '\n' ? mark.index - endCharLength : mark.index;
+				int blockStartIndex = TextFindTextBackward(pText, startIndex, "\n\n");
+				int blockEndIndex   = TextNegateFindCharBackward(pText, blockStartIndex, '\n');  
 				int newCaretIndex   = blockEndIndex + 1;
-				CodeBoxUpdateCaretIndex(pCode, newCaretIndex);
-				CodeBoxFocusCaret(pCode);
+				CodeSetMarkIndex(pCode, newCaretIndex);
+				CodeSyncMarkRowToCaret(pCode, 0);
+				CodeBoxFocusMark(pCode);
 				break;
 			}
 
 			/* Move Down Keys */
 			case KEY_DOWN: 
 			case KEY_S | KEY_ALT_MOD: {
-				int currentLineEnd = TextFindCharForward(pCode->pText, pCode->caretIndex, '\n');
-				int downLineStart  = currentLineEnd + endCharLength;
-				int downLineEnd    = TextFindCharForward(pCode->pText, downLineStart, '\n');
-				if (downLineStart >= pCode->textCount - endCharLength) break;
-				int downLineDiff  = downLineEnd - downLineStart;
-				pCode->caretIndex = downLineStart + (pCode->caretCollumn < downLineDiff ? pCode->caretCollumn : downLineDiff);
-				pCode->caretRow++;
-				CodeBoxFocusCaret(pCode);
+				pMark->row++;
+				CodeSyncMarkRowToCaret(pCode, 0);
+				CodeBoxFocusMark(pCode);
 				break;
 			}
 
 			case KEY_DOWN | KEY_CTRL_MOD:
 			case KEY_S    | KEY_CTRL_MOD | KEY_ALT_MOD: {
 				// Search"\n\n" to find where there is a new line gap
-				int blockEndIndex   = TextFindTextForward(pCode->pText, pCode->caretIndex, "\n\n");
-				int blockStartIndex = TextNegateFindCharForward(pCode->pText, blockEndIndex, '\n');
-				blockStartIndex = TextNegateFindCharForward(pCode->pText, blockStartIndex, ' ');
-				blockStartIndex = TextNegateFindCharForward(pCode->pText, blockStartIndex, '\t');
+				int blockEndIndex   = TextFindTextForward(pText, mark.index, "\n\n");
+				int blockStartIndex = TextNegateFindCharForward(pText, blockEndIndex, '\n');
+				blockStartIndex = TextNegateFindCharForward(pText, blockStartIndex, ' ');
+				blockStartIndex = TextNegateFindCharForward(pText, blockStartIndex, '\t');
 				int newCaretIndex   = blockStartIndex;
-				CodeBoxUpdateCaretIndex(pCode, newCaretIndex);
-				CodeBoxFocusCaret(pCode);
+				CodeSetMarkIndex(pCode, newCaretIndex);
+				CodeSyncMarkRowToCaret(pCode, 0);
+				CodeBoxFocusMark(pCode);
 				break;
 			}
 
@@ -1408,7 +1474,7 @@ LoopBegin:
 			// 	if (!command.enabled) {
 			// 		LOG("Command Begin\n");
 			// 		command.enabled = true;
-			// 		command.scanFoundIndex = pCode->caretIndex;
+			// 		command.scanFoundIndex = pCode->pActiveCaret->index;
 			// 		LOG("%d\n", command.scanFoundIndex);
 			// 		break;
 			// 	} 
@@ -1442,11 +1508,11 @@ LoopBegin:
 			// 	if (!command.enabled)
 			// 		break;
 
-			// 	LOG("%d %d\n", pCode->caretIndex, command.scanFoundIndex);
+			// 	LOG("%d %d\n", pCode->pActiveCaret->index, command.scanFoundIndex);
 
 			// 	command.scanFoundIndex = TextFindTextForward(pCode->pText, command.scanFoundIndex + 1, command.pText);
 			// 	if (command.scanFoundIndex > 0) {
-			// 		int scanFoundLine = TextCountCharForward(pCode->pText, pCode->caretIndex, command.scanFoundIndex, '\n') + pCode->caretRow;
+			// 		int scanFoundLine = TextCountCharForward(pCode->pText, pCode->pActiveCaret->index, command.scanFoundIndex, '\n') + pCode->pActiveCaret->row;
 			// 		CodeBoxFocusRow(pCode, scanFoundLine);
 			// 		LOG("%d \n", scanFoundLine);
 			// 	}
@@ -1519,7 +1585,7 @@ LoopBegin:
 
 			UpdateCommandScan:
 				LOG("%d\n", command.scanFoundIndex);
-				command.scanFoundIndex = TextFindTextForward(pCode->pText, pCode->caretIndex, command.buffer);
+				command.scanFoundIndex = TextFindTextForward(pText, mark.index, command.buffer);
 				break;
 
 			/* Utility Keys */
@@ -1529,7 +1595,7 @@ LoopBegin:
 				break;
 
 			/* Character Delete Keys */
-			case KEY_BACKSPACE: CodeBoxDeleteChar(pCode); pCode->caretIndex--; break;
+			case KEY_BACKSPACE: CodeBoxDeleteChar(pCode); pCode->mark.index--; break;
 			case KEY_DELETE:    CodeBoxDeleteChar(pCode); break;
 
 			/* Character Insert Keys */
@@ -1605,28 +1671,29 @@ LoopBegin:
 		int hoverRow = hoverBoxPos.y / fontYSpacing;
 
 		// DrawText(TextFormat("frameTime: %f/", GetFrameTime()), 512, 0, 20, GRAY);
-		DrawText(TextFormat("caretCollumn: %i caretRow: %i caretIndex: %i hoverPos: x%.1f y%.1f c%i r%i", 
-			pCode->caretCollumn, pCode->caretRow, pCode->caretIndex, hoverBoxPos.x, hoverBoxPos.y, hoverCol, hoverRow), 0, 0, 20, DARKGRAY);
+		DrawText(TextFormat("col: %i >row: %i pCaret[0].index: %i hoverPos: x%.1f y%.1f c%i r%i", 
+			pCode->mark.col, pCode->mark.row, pCode->pCarets[0].index, hoverBoxPos.x, hoverBoxPos.y, hoverCol, hoverRow), 0, 0, 20, DARKGRAY);
 
 		DrawRectangleRec(textBox, COLOR_BACKGROUND);
 		DrawRectangleLines((int)textBox.x, (int)textBox.y, (int)textBox.width, (int)textBox.height, boxHover ? COLOR_CARET : DARKGRAY);
 
 		Color textColor = COLOR_TEXT;
 		Color caretColor = BLANK;
-		Vector2 caretPosition = { -1, -1};
 		Vector2 scanFoundPosition = { -1, -1};
-		CodeRow* pRows = pCode->pRows;
-		int rowCount = pCode->rowCount;
-		int colCount = pCode->colCount;
+		CodeRow* pBoxRows = pCode->pBoxRows;
+		int boxRowCount = pCode->boxRowCount;
+		int boxColCount = pCode->boxColCount;
 		int iChar = pCode->focusStartRowIndex;
 
-		for (int iRow = 0; iRow < rowCount; ++iRow) {
-			pRows[iRow].startIndex = iChar;
-			int tabCount = 0;
-			for (int iCol = 0; iCol < colCount - (tabCount * tabWidth); ++iCol) {
+		for (int iRow = 0; iRow < boxRowCount; ++iRow) {
+			pBoxRows[iRow].startIndex = iChar;
+			// int tabCount = 0;
+			// for (int iCol = 0; iCol < boxColCount - (tabCount * tabWidth); ++iCol) {
+			for (int iCol = 0; iCol < boxColCount; ++iCol) {
 				
 				Vector2 position = {
-					textBox.x + (fontXSpacing * iCol) + (tabCount * fontXSpacing * 4), 
+					// textBox.x + (fontXSpacing * iCol) + (tabCount * fontXSpacing * 4), 
+					textBox.x + (fontXSpacing * iCol), 
 					textBox.y + (fontYSpacing * iRow)
 				};										
 				Rectangle rect = {position.x, position.y, fontXSpacing, fontYSpacing};
@@ -1634,11 +1701,11 @@ LoopBegin:
 				char c = text.pText[iChar];
 				TextMeta m = text.pTextMeta[iChar];
 
-				if (iChar == text.caretIndex) {
-					caretColor = COLOR_CARET;
-					caretPosition = position;
-					DEBUG_LOG_ONCE("%s %d %d\n", string_TOKEN(m.token), m.QUOTE, Delimiter(c));
-				}
+				// if (iChar == text.pActiveCaret->index) {
+				// 	caretColor = COLOR_CARET;
+				// 	caretPosition = position;
+				// 	DEBUG_LOG_ONCE("%s %d %d\n", string_TOKEN(m.token), m.QUOTE, Delimiter(c));
+				// }
 
 				if (iChar == command.scanFoundIndex) 
 					scanFoundPosition = position;
@@ -1649,9 +1716,9 @@ LoopBegin:
 
 				#define COLOR_A(_color, _a) (Color){_color.r, _color.g, _color.b, _a}
 
-				// if (m.SCOPE_PAREN > 0) {
-				// 	DrawRectangleRec(rect, COLOR_A(WHITE, m.SCOPE_PAREN * 10));
-				// }
+				if (m.SCOPE_PAREN > 0) {
+					DrawRectangleRec(rect, COLOR_A(WHITE, m.SCOPE_PAREN * 10));
+				}
 
 				// if (m.BLOCK_COMMENT) {
 				// 	DrawRectangleRec(rect, COLOR_A(BLUE, 10));
@@ -1668,7 +1735,7 @@ LoopBegin:
 				switch (c) 
 				{
 					case '\0':
-						pRows[iRow].endIndex = iChar;
+						pBoxRows[iRow].endIndex = iChar;
 						goto FinishDrawingText;
 
 					/* Whitespace */
@@ -1677,9 +1744,9 @@ LoopBegin:
 						goto DrawChar;
 
 					case '\t':
-						// Step more spaces for tab width
-						rect.width += (tabCount * fontXSpacing * tabWidth);
-						tabCount++;
+						// // Step more spaces for tab width
+						// rect.width += (tabCount * fontXSpacing * tabWidth);
+						// tabCount++;
 						c = '-';
 						goto DrawChar;
 
@@ -1687,8 +1754,8 @@ LoopBegin:
 					case '\v':
 					case '\f':
 					case '\n':
-						pRows[iRow].endIndex = iChar;
-						iCol = colCount;
+						pBoxRows[iRow].endIndex = iChar;
+						iCol = boxColCount;
 						c =  '\\';
 						goto DrawChar;
 
@@ -1705,29 +1772,46 @@ LoopBegin:
 		}      
 		FinishDrawingText:
 
+		/*
+		 * Hover
+		 */
 		Vector2 hoverSnapBoxPos = (Vector2){ (hoverCol * fontXSpacing), (hoverRow * fontYSpacing) };
 		Vector2 hoverSnapPos    = GetBoxLocalToWorld(hoverSnapBoxPos, textBox);
+		DrawRectangleRec((Rectangle){hoverSnapPos.x, hoverSnapPos.y, fontXSpacing, fontYSpacing}, COLOR_HOVER);
 
-		DrawLineEx(
-			(Vector2){hoverSnapPos.x, hoverSnapPos.y}, 
-			(Vector2){hoverSnapPos.x, hoverSnapPos.y + fontYSpacing}, 
-			4, caretColor);
-
-		CodeRow selectRow = pRows[hoverRow];
-		int selectIndex = MIN(selectRow.startIndex + hoverCol, selectRow.endIndex);
 		if (input.lMouse) {
-			pCode->caretIndex = selectIndex;
-			text.caretCollumn = CodeBoxCaretCollumn(pCode);
+			pCode->mark.col = hoverCol;
+			pCode->mark.row = hoverRow;
+			CodeSyncMarkRowToCaret(pCode, 0);
+
+			TextMeta m = pCode->pTextMeta[pCode->pCarets[0].index];
+			char c = pCode->pText[pCode->pCarets[0].index];
+			DEBUG_LOG_ONCE("%s %d %d\n", string_TOKEN(m.token), m.QUOTE, Delimiter(c));
 		}
 
 		/*
-		 * Command Caret
+		 * Mark
 		 */
+		Vector2 markBoxPos = (Vector2){ (pCode->mark.col * fontXSpacing), ((pCode->mark.row - pCode->focusStartRow) * fontYSpacing) };
+		Vector2 markPos    = GetBoxLocalToWorld(markBoxPos, textBox);
 		DrawLineEx(
-			(Vector2){caretPosition.x, caretPosition.y}, 
-			(Vector2){caretPosition.x, caretPosition.y + fontYSpacing}, 
-			4, caretColor);
+			(Vector2){markPos.x, markPos.y}, 
+			(Vector2){markPos.x, markPos.y + fontYSpacing}, 
+			2, GREEN);
 
+		/*
+		 * Caret
+		 */
+		Vector2 caretBoxPos = (Vector2){ (pCode->pCarets[0].col * fontXSpacing), ((pCode->pCarets[0].row - pCode->focusStartRow) * fontYSpacing) };
+		Vector2 caretPos    = GetBoxLocalToWorld(caretBoxPos, textBox);
+		DrawLineEx(
+			(Vector2){caretPos.x, caretPos.y}, 
+			(Vector2){caretPos.x, caretPos.y + fontYSpacing}, 
+			4, COLOR_CARET);
+
+		/*
+		 * Command
+		 */
 		/* Scan Highlight */
 		if (command.enabled && command.scanFoundIndex > 0) {
 			DrawRectangleRec((Rectangle){
@@ -1746,8 +1830,8 @@ LoopBegin:
 		if (command.enabled) {
 			const int commandBoxExpand = 4;
 			Rectangle commandBoxRect = {
-				.x = caretPosition.x - commandBoxExpand,
-				.y = caretPosition.y - commandBoxExpand,
+				.x = caretPos.x - commandBoxExpand,
+				.y = caretPos.y - commandBoxExpand,
 				.width = fontXSpacing * command.bufferCount + commandBoxExpand * 2, 
 				.height = fontYSpacing + commandBoxExpand * 2,
 			};
@@ -1759,7 +1843,7 @@ LoopBegin:
 				char c = command.buffer[iCommand];
 				int codePointSize;
 				int codePoint = GetCodepoint(&c, &codePointSize);
-				Vector2 position = { caretPosition.x + (fontXSpacing * iCommand), caretPosition.y };								
+				Vector2 position = { caretPos.x + (fontXSpacing * iCommand), caretPos.y };								
 				DrawTextCodepoint(font, codePoint, position, fontSize, WHITE);
 			}
 		}
