@@ -123,6 +123,7 @@ Alt + " - ...
 */
 
 #include <stdio.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
@@ -131,6 +132,12 @@ Alt + " - ...
 
 #include "raylib.h"
 #include "raymath.h"
+
+// #undef true
+// #undef false
+
+// #define true  (-1)
+// #define false (0)
 
 /*
  * Logging
@@ -441,45 +448,63 @@ static const char* TYPE_TOKENS[] = {
 	DEF_TYPE_TOKENS(DEF_ARRAY_ITEM)
 };
 
-typedef u16 tok_k;
+typedef u16 token_hash;
+typedef u8  token_hash_prefix;
+typedef struct TokenKey {
+	token_hash a : 12;
+	token_hash b : 12;
+} TokenKey;
 #define MAP_CAPACITY 4096
+#define MAP_PREFIX_CAPACITY 256
+#define TOKEN_MAX_SIZE 32
 #define TOKEN_MASK 0x0FFF // 12 bit mask
 
-static TOKEN TOKEN_MAP[MAP_CAPACITY];
+static TOKEN TOKEN_MAP_A[MAP_CAPACITY];
+static TOKEN TOKEN_MAP_B[MAP_CAPACITY];
 
-#define TOKEN_HASH_SEED 11
-#define TOKEN_HASH(_h, _c) (_h + (_h << 5) + (_c))  
+#define TOKEN_HASH_SEED 31
+#define TOKEN_HASH_DJB2(_h, _c)  (((_h) << 5) + (_h) + (_c)) 
+#define TOKEN_HASH_FNV1A(_h, _c) ((_h) ^ (_c)) * 16777619UL
 
-static tok_k TokenKeyRange(const char *str, int iStart, int iEnd)
+/* Calc token key hashes via range or null termination */
+static TokenKey CalcTokenKey(const char *str, int iStart, int iEnd)
 {
-	tok_k hash = TOKEN_HASH_SEED;
-	for (int i = iStart; i <= iEnd; ++i) 
-		hash = TOKEN_HASH(hash, str[i]);
-	return hash & TOKEN_MASK;
-}
-
-static tok_k TokenKey(const char *str)
-{
-	tok_k hash = TOKEN_HASH_SEED; utf8 c;
-	while ((c = *str++))
-		hash = TOKEN_HASH(hash, c);
-	return hash & TOKEN_MASK;
+	char c;
+	str += iStart;
+	int len = iEnd - iStart + 1;
+	token_hash hashA = TOKEN_HASH_SEED; 
+	token_hash hashB = TOKEN_HASH_SEED; 
+	while ((c = *str++) && len-- > 0) {
+		hashA = TOKEN_HASH_DJB2(hashA, c);
+		hashB = TOKEN_HASH_FNV1A(hashB, c);
+	}
+	return (TokenKey){ hashA, hashB };
 }
 
 static RESULT ContructTokenMap(TOKEN category, int tokenCount, const char** tokens)
 {
 	for (int iTkn = 0; iTkn < tokenCount; iTkn++) {
-		tok_k k = TokenKey(tokens[iTkn]);
-		if (TOKEN_MAP[k] != TOKEN_NONE) {
-			LOG_ERR("Type Hash Collision! %s %d %s\n", tokens[iTkn], k, string_TOKEN(category));
+		TokenKey k = CalcTokenKey(tokens[iTkn], 0, TOKEN_MAX_SIZE);
+		TOKEN tokA = TOKEN_MAP_A[k.a];
+		TOKEN tokB = TOKEN_MAP_B[k.b];
+		if (tokA != TOKEN_NONE || tokB != TOKEN_NONE) {
+			LOG_ERR("Type Hash Collision! %s %d %d %s\n", tokens[iTkn], k.a, k.b, string_TOKEN(category));
 			return RESULT_COLLISION;
 		}
-		TOKEN_MAP[k] = category;
-		LOG("%s %d %s\n", tokens[iTkn], k, string_TOKEN(category));
+		TOKEN_MAP_A[k.a] = category;
+		TOKEN_MAP_B[k.b] = category;
+		LOG("%s %d %d %s\n", tokens[iTkn], k.a, k.b, string_TOKEN(category));
 	}
 	return RESULT_SUCCESS;
 }
 
+static token_hash CalcTokenKeyIteration(const char *str, token_hash hash, int iStart, int iEnd)
+{
+	str += iStart;
+	char c;	while ((c = *str++) && iEnd-- > 0)
+		hash = TOKEN_HASH_DJB2(hash, c);
+	return hash;
+}
 
 static inline Vector2 GetWorldToBoxLocal(Vector2 point, Rectangle rect)
 {
@@ -730,8 +755,10 @@ processChar:
 				/* End Token */
 				case false | false << 1 | true  << 2:
 					int iEnd = iC;
-					tok_k kTok = TokenKeyRange(pText, iStrt, iEnd);
-					TOKEN tok = TOKEN_MAP[kTok];
+					TokenKey k = CalcTokenKey(pText, iStrt, iEnd);
+					TOKEN tokA = TOKEN_MAP_A[k.a];
+					TOKEN tokB = TOKEN_MAP_B[k.b];
+					TOKEN tok = (tokA == tokB) * tokA;
 					if (tok == TOKEN_NONE) 
 						goto next;
 
@@ -744,6 +771,7 @@ processChar:
 						pMeta[i].iTokenStartOffset = i - iStrt;
 						pMeta[i].iTokenEndOffset   = iEnd - i;
 					}
+
 					goto next;
 			}
 
@@ -1107,13 +1135,13 @@ static void CodeSetMarkIndex(CodeBox* pCode, int newMarkIndex)
 }
 
 /* Sync Current Mark To Specified Caret  */
-static void CodeSyncMarkToCaret(CodeBox* pCode, u8 iCaret)
+static void CodeSyncCaretToMark(CodeBox* pCode, u8 iCaret)
 {
 	memcpy(pCode->pCarets + iCaret, &pCode->mark, sizeof(CodePos));
 }
 
-/* Sync Current Mark Row To Specified Caret */
-static void CodeSyncMarkRowToCaret(CodeBox* pCode, u8 iCaret)
+/* Sync Specified Caret to Current Mark Row */
+static void CodeSyncCaretToMarkRow(CodeBox* pCode, u8 iCaret)
 {
 	CodePos mark = pCode->mark;
 	CodeRow row  = pCode->pTextRows[mark.row];
@@ -1186,7 +1214,7 @@ int main(void)
 {
 	REQUIRE(ContructTokenMap(TOKEN_PREPROCESS, COUNT(PREPROCESS_TOKENS), PREPROCESS_TOKENS));
 	REQUIRE(ContructTokenMap(TOKEN_TYPE,       COUNT(TYPE_TOKENS),       TYPE_TOKENS));
-	REQUIRE(ContructTokenMap(TOKEN_KEYWORD,    COUNT(KEYWORD_TOKENS),    KEYWORD_TOKENS));
+	REQUIRE(ContructTokenMap(TOKEN_KEYWORD,    COUNT(KEYWORD_TOKENS),    KEYWORD_TOKENS));	
 
 	/* Config */
 	SetTraceLogLevel(LOG_ALL);
@@ -1373,7 +1401,7 @@ LoopBegin:
 			case KEY_A | KEY_ALT_MOD:
 				if (caret.index <= 0) break;
 				CodeSetMarkIndex(pCode, mark.index - 1);
-				CodeSyncMarkToCaret(pCode, 0);
+				CodeSyncCaretToMark(pCode, 0);
 				break;
 
 			case KEY_LEFT | KEY_CTRL_MOD:
@@ -1389,7 +1417,7 @@ LoopBegin:
 
 				if (newIndex != CARET_INVALID) {
 					CodeSetMarkIndex(pCode, newIndex + 1);
-					CodeSyncMarkRowToCaret(pCode, 0);
+					CodeSyncCaretToMarkRow(pCode, 0);
 					CodeBoxFocusMark(pCode);
 				}
 
@@ -1401,7 +1429,7 @@ LoopBegin:
 			case KEY_D | KEY_ALT_MOD:
 				if (caret.index >= pCode->textCount) break;
 				CodeSetMarkIndex(pCode, mark.index + 1);
-				CodeSyncMarkToCaret(pCode, 0);
+				CodeSyncCaretToMark(pCode, 0);
 				break;
 
 			case KEY_RIGHT | KEY_CTRL_MOD:
@@ -1417,7 +1445,7 @@ LoopBegin:
 
 				if (newIndex != CARET_INVALID) {
 					CodeSetMarkIndex(pCode, newIndex);
-					CodeSyncMarkRowToCaret(pCode, 0);
+					CodeSyncCaretToMarkRow(pCode, 0);
 					CodeBoxFocusMark(pCode);
 				}
 
@@ -1428,7 +1456,7 @@ LoopBegin:
 			case KEY_UP: 
 			case KEY_W | KEY_ALT_MOD:{
 				pMark->row--;
-				CodeSyncMarkRowToCaret(pCode, 0);
+				CodeSyncCaretToMarkRow(pCode, 0);
 				CodeBoxFocusMark(pCode);
 				break;
 			}
@@ -1440,7 +1468,7 @@ LoopBegin:
 				int blockEndIndex   = TextNegateFindCharBackward(pText, blockStartIndex, '\n');  
 				int newCaretIndex   = blockEndIndex + 1;
 				CodeSetMarkIndex(pCode, newCaretIndex);
-				CodeSyncMarkRowToCaret(pCode, 0);
+				CodeSyncCaretToMarkRow(pCode, 0);
 				CodeBoxFocusMark(pCode);
 				break;
 			}
@@ -1449,7 +1477,7 @@ LoopBegin:
 			case KEY_DOWN: 
 			case KEY_S | KEY_ALT_MOD: {
 				pMark->row++;
-				CodeSyncMarkRowToCaret(pCode, 0);
+				CodeSyncCaretToMarkRow(pCode, 0);
 				CodeBoxFocusMark(pCode);
 				break;
 			}
@@ -1463,7 +1491,7 @@ LoopBegin:
 				blockStartIndex = TextNegateFindCharForward(pText, blockStartIndex, '\t');
 				int newCaretIndex   = blockStartIndex;
 				CodeSetMarkIndex(pCode, newCaretIndex);
-				CodeSyncMarkRowToCaret(pCode, 0);
+				CodeSyncCaretToMarkRow(pCode, 0);
 				CodeBoxFocusMark(pCode);
 				break;
 			}
@@ -1664,29 +1692,31 @@ LoopBegin:
 		/* 
 		 * Code Box
 		 */
-		bool boxHover = CheckCollisionPointRec(hoverPos, textBox);
+		bool    boxHovering = CheckCollisionPointRec(hoverPos, textBox);
 		Vector2 hoverBoxPos = GetWorldToBoxLocal(hoverPos, textBox);
 
-		int hoverCol = hoverBoxPos.x / fontXSpacing;
-		int hoverRow = hoverBoxPos.y / fontYSpacing;
+		int iHoverBoxCol =  hoverBoxPos.x / fontXSpacing;
+		int iHoverBoxRow =  hoverBoxPos.y / fontYSpacing;
+		int iHoverCol    =  iHoverBoxCol;
+		int iHoverRow    =  pCode->focusStartRow + iHoverBoxRow;
+		CodeRow hoverRow = pCode->pTextRows[iHoverRow];
+		int iHoverChar = MIN(hoverRow.startIndex + iHoverBoxCol, hoverRow.endIndex);
 
 		// DrawText(TextFormat("frameTime: %f/", GetFrameTime()), 512, 0, 20, GRAY);
 		DrawText(TextFormat("col: %i >row: %i pCaret[0].index: %i hoverPos: x%.1f y%.1f c%i r%i", 
-			pCode->mark.col, pCode->mark.row, pCode->pCarets[0].index, hoverBoxPos.x, hoverBoxPos.y, hoverCol, hoverRow), 0, 0, 20, DARKGRAY);
+			pCode->mark.col, pCode->mark.row, pCode->pCarets[0].index, hoverBoxPos.x, hoverBoxPos.y, iHoverBoxCol, iHoverBoxRow), 0, 0, 20, DARKGRAY);
 
 		DrawRectangleRec(textBox, COLOR_BACKGROUND);
-		DrawRectangleLines((int)textBox.x, (int)textBox.y, (int)textBox.width, (int)textBox.height, boxHover ? COLOR_CARET : DARKGRAY);
+		DrawRectangleLines((int)textBox.x, (int)textBox.y, (int)textBox.width, (int)textBox.height, boxHovering ? COLOR_CARET : DARKGRAY);
 
 		Color textColor = COLOR_TEXT;
 		Color caretColor = BLANK;
 		Vector2 scanFoundPosition = { -1, -1};
-		CodeRow* pBoxRows = pCode->pBoxRows;
 		int boxRowCount = pCode->boxRowCount;
 		int boxColCount = pCode->boxColCount;
 		int iChar = pCode->focusStartRowIndex;
 
 		for (int iRow = 0; iRow < boxRowCount; ++iRow) {
-			pBoxRows[iRow].startIndex = iChar;
 			// int tabCount = 0;
 			// for (int iCol = 0; iCol < boxColCount - (tabCount * tabWidth); ++iCol) {
 			for (int iCol = 0; iCol < boxColCount; ++iCol) {
@@ -1698,13 +1728,13 @@ LoopBegin:
 				};										
 				Rectangle rect = {position.x, position.y, fontXSpacing, fontYSpacing};
 
-				char c = text.pText[iChar];
+				char currentChar = text.pText[iChar];
 				TextMeta m = text.pTextMeta[iChar];
 
 				// if (iChar == text.pActiveCaret->index) {
 				// 	caretColor = COLOR_CARET;
 				// 	caretPosition = position;
-				// 	DEBUG_LOG_ONCE("%s %d %d\n", string_TOKEN(m.token), m.QUOTE, Delimiter(c));
+				// 	DEBUG_LOG_ONCE("%s %d %d\n", string_TOKEN(m.token), m.QUOTE, Delimiter(currentChar));
 				// }
 
 				if (iChar == command.scanFoundIndex) 
@@ -1732,37 +1762,35 @@ LoopBegin:
 					DrawRectangleRec(rect, COLOR_A(COLOR_QUOTE, 50));
 				}
 
-				switch (c) 
+				switch (currentChar) 
 				{
 					case '\0':
-						pBoxRows[iRow].endIndex = iChar;
 						goto FinishDrawingText;
 
 					/* Whitespace */
 					case ' ':
-						c =  '_';
+						currentChar =  '_';
 						goto DrawChar;
 
 					case '\t':
 						// // Step more spaces for tab width
 						// rect.width += (tabCount * fontXSpacing * tabWidth);
 						// tabCount++;
-						c = '-';
+						currentChar = '-';
 						goto DrawChar;
 
 					case '\r':
 					case '\v':
 					case '\f':
 					case '\n':
-						pBoxRows[iRow].endIndex = iChar;
 						iCol = boxColCount;
-						c =  '\\';
+						currentChar =  '\\';
 						goto DrawChar;
 
 				DrawChar:
 					default:
 						int codePointSize;
-						int codePoint = GetCodepoint(&c, &codePointSize);
+						int codePoint = GetCodepoint(&currentChar, &codePointSize);
 						Color color = TOKEN_COLOR[m.token];
 						DrawTextCodepoint(font, codePoint, position, fontSize, color);
 						iChar++;
@@ -1775,18 +1803,31 @@ LoopBegin:
 		/*
 		 * Hover
 		 */
-		Vector2 hoverSnapBoxPos = (Vector2){ (hoverCol * fontXSpacing), (hoverRow * fontYSpacing) };
-		Vector2 hoverSnapPos    = GetBoxLocalToWorld(hoverSnapBoxPos, textBox);
-		DrawRectangleRec((Rectangle){hoverSnapPos.x, hoverSnapPos.y, fontXSpacing, fontYSpacing}, COLOR_HOVER);
+		if (boxHovering) {
+			Vector2 hoverSnapBoxPos = (Vector2){ (iHoverBoxCol * fontXSpacing), (iHoverBoxRow * fontYSpacing) };
+			Vector2 hoverSnapPos    = GetBoxLocalToWorld(hoverSnapBoxPos, textBox);
+			DrawRectangleRec((Rectangle){hoverSnapPos.x, hoverSnapPos.y, fontXSpacing, fontYSpacing}, COLOR_HOVER);
 
-		if (input.lMouse) {
-			pCode->mark.col = hoverCol;
-			pCode->mark.row = hoverRow;
-			CodeSyncMarkRowToCaret(pCode, 0);
+			TextMeta hoverMeta = pCode->pTextMeta[iHoverChar];
 
-			TextMeta m = pCode->pTextMeta[pCode->pCarets[0].index];
-			char c = pCode->pText[pCode->pCarets[0].index];
-			DEBUG_LOG_ONCE("%s %d %d\n", string_TOKEN(m.token), m.QUOTE, Delimiter(c));
+			int iHoverStartCol = iHoverCol - hoverMeta.iTokenStartOffset;
+			int iHoverEndCol   = iHoverCol + hoverMeta.iTokenEndOffset;
+
+			Vector2 startBoxPos = (Vector2){ (iHoverStartCol   * fontXSpacing), (iHoverBoxRow * fontYSpacing) };
+			Vector2 endBoxPos   = (Vector2){ ((iHoverEndCol+1) * fontXSpacing), (iHoverBoxRow * fontYSpacing) };
+			Vector2 startPos    = GetBoxLocalToWorld(startBoxPos, textBox);
+			Vector2 endPos      = GetBoxLocalToWorld(endBoxPos,   textBox);
+			DrawRectangleRec((Rectangle){ startPos.x, startPos.y, endPos.x - startPos.x, fontYSpacing }, COLOR_HOVER);
+
+			if (input.lMouse) {
+				pCode->mark.col = iHoverCol;
+				pCode->mark.row = iHoverRow;
+				CodeSyncCaretToMarkRow(pCode, 0);
+
+				char c = pCode->pText[pCode->pCarets[0].index];
+				TextMeta m = pCode->pTextMeta[pCode->pCarets[0].index];
+				DEBUG_LOG_ONCE("%s %d %d start: %d end: %d\n", string_TOKEN(m.token), m.QUOTE, Delimiter(c), m.iTokenStartOffset, m.iTokenEndOffset);
+			}
 		}
 
 		/*
