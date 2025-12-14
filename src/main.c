@@ -1,14 +1,14 @@
-#define CONCAT(a, b) a  ##  b #a
-
-static int Test(int input) {
+static double Test(int input) {
+	const char* str = "Hello\'\n";
 	int output = input;
 	// comment
-	const char* str = "Hello\'\n";
 	char tick = '"';
 	int vala = 10 + 2;
 	int valb = 10 / 2;
 	return output;
 }
+
+#define CONCAT(a, b) a  ##  b #a
 
 #define HELLO { \
 	int i = 0; /* Test */ \
@@ -259,11 +259,20 @@ typedef unsigned char utf8;
  * Validation
  */
 #define STATIC_ASSERT(...) _Static_assert(__VA_ARGS__)
-#define ASSERT(_condition, ...) assert((_condition) && #_condition " " __VA_ARGS__)
+
+#ifdef NDEBUG
+	#define ASSERT(_condition, _format, ...)
+#else
+	#define ASSERT(_condition, _format, ...) ({ \
+		if (UNLIKELY(!(_condition))) \
+			fprintf(stderr, "\n" ANSI_RED __FILE__ ":%d ASSERT! " #_condition " " _format "\n" ANSI_RESET, __LINE__, ##__VA_ARGS__); \
+		assert((_condition) && #_condition); \
+	})
+#endif
 
 #define PANIC(_format, ...) \
 ({ \
-	fprintf(stderr, ANSI_RED __FILE__ ":%d PANIC! " _format ANSI_RESET, __LINE__, ##__VA_ARGS__); \
+	fprintf(stderr, "\n" ANSI_RED __FILE__ ":%d PANIC! " _format "\n" ANSI_RESET, __LINE__, ##__VA_ARGS__); \
 	__builtin_trap(); \
 })
 
@@ -273,8 +282,8 @@ typedef unsigned char utf8;
 
 #define REQUIRE(_command) \
 ({ \
-	RESULT _r = _command; \
-	if (UNLIKELY(_r != RESULT_SUCCESS)) PANIC(#_command " == %s\n", string_RESULT(_r)); \
+	RESULT _result = _command; \
+	if (UNLIKELY(_result != RESULT_SUCCESS)) PANIC(#_command " == %s\n", string_RESULT(_result)); \
 })
 
 /*
@@ -343,7 +352,7 @@ DEF_ENUM(TOKEN);
 #define COLOR_CARET       ORANGE
 #define COLOR_HOVER       (Color){   0, 255,   0, 64  }
 #define COLOR_CODE        (Color){ 216, 222, 233, 255 }
-#define COLOR_PREPROCESS  (Color){ 198, 149, 198, 255 }
+#define COLOR_PREPROCESS  (Color){ 182, 160, 191, 255 }
 #define COLOR_CONTINUE    (Color){ 148,  99, 148, 255 }
 #define COLOR_NUMBER      (Color){ 249, 174,  87, 255 }
 #define COLOR_STRING      (Color){ 153, 199, 148, 255 } 
@@ -355,10 +364,13 @@ DEF_ENUM(TOKEN);
 #define COLOR_ESCAPE      (Color){ 198, 149, 198, 255 } 
 #define COLOR_TEXT        (Color){ 127, 199, 148, 255 } 
 #define COLOR_QUOTE       (Color){  96, 180, 180, 255 } 
-#define COLOR_SCOPE       (Color){ 255, 255, 255, 255 } 
+#define COLOR_SCOPE       (Color){ 255, 196, 202, 255 } 
 #define COLOR_KEYWORD     (Color){ 236,  96, 102, 255 }
 #define COLOR_TYPE        (Color){ 198, 149, 198, 255 }
 
+/*
+ * C11 Lexer
+ */
 static Color TOKEN_COLOR[] = {
 	[TOKEN_NONE]       = COLOR_CODE,
 	[TOKEN_TYPE]       = COLOR_TYPE,
@@ -376,151 +388,308 @@ static Color TOKEN_COLOR[] = {
 STATIC_ASSERT(COUNT(TOKEN_COLOR) == TOKEN_COUNT);
 
 #define DEF_PREPROCESS_TOKENS(DEF) \
-	DEF("#define") \
-	DEF("#include")
+	DEF("#include", TOK_PP_INCLUDE) \
+	DEF("#define",  TOK_PP_DEFINE) \
+	DEF("#ifndef",  TOK_PP_IFNDEF) \
+	DEF("#ifdef",   TOK_PP_IFDEF) \
+	DEF("#endif",   TOK_PP_ENDIF) \
+	DEF("#undef",   TOK_PP_UNDEF) \
+	DEF("#elif",    TOK_PP_ELIF) \
+	DEF("#else",    TOK_PP_ELSE) \
+	DEF("#error",   TOK_PP_ERROR) \
+	DEF("#pragma",  TOK_PP_PRAGMA) \
+	DEF("#line",    TOK_PP_LINE) \
+	DEF("#if",      TOK_PP_IF) \
+	DEF("##",       TOK_PP_HASH_HASH) \
+	DEF("#",        TOK_PP_HASH)
 
 #define DEF_KEYWORD_TOKENS(DEF) \
-	DEF("_Static_assert") \
-	DEF("_Noreturn") \
-	DEF("_Generic") \
-	DEF("continue") \
-	DEF("volatile") \
-	DEF("register") \
-	DEF("restrict") \
-	DEF("_Alignof") \
-	DEF("_Alignas") \
-	DEF("typedef") \
-	DEF("default") \
-	DEF("_Atomic") \
-	DEF("typeof") \
-	DEF("switch") \
-	DEF("static") \
-	DEF("sizeof") \
-	DEF("return") \
-	DEF("inline") \
-	DEF("extern") \
-	DEF("while") \
-	DEF("const") \
-	DEF("break") \
-	DEF("goto") \
-	DEF("else") \
-	DEF("case") \
-	DEF("auto") \
-	DEF("for") \
-	DEF("if") \
-	DEF("do")
+	DEF("_Static_assert", TOK_STATIC_ASSERT) \
+	DEF("_Thread_local",  TOK_THREAD_LOCAL) \
+	DEF("_Imaginary",     TOK_IMAGINARY) \
+	DEF("_Noreturn",      TOK_NORETURN) \
+	DEF("_Complex",       TOK_COMPLEX) \
+	DEF("_Generic",       TOK_GENERIC) \
+	DEF("_Alignof",       TOK_ALIGNOF) \
+	DEF("_Alignas",       TOK_ALIGNAS) \
+	DEF("_Atomic",        TOK_ATOMIC) \
+	DEF("continue",       TOK_CONTINUE) \
+	DEF("volatile",       TOK_VOLATILE) \
+	DEF("register",       TOK_REGISTER) \
+	DEF("restrict",       TOK_RESTRICT) \
+	DEF("typedef",        TOK_TYPEDEF) \
+	DEF("default",        TOK_DEFAULT) \
+	DEF("typeof",         TOK_TYPEOF) \
+	DEF("switch",         TOK_SWITCH) \
+	DEF("static",         TOK_STATIC) \
+	DEF("sizeof",         TOK_SIZEOF) \
+	DEF("return",         TOK_RETURN) \
+	DEF("inline",         TOK_INLINE) \
+	DEF("extern",         TOK_EXTERN) \
+	DEF("while",          TOK_WHILE) \
+	DEF("const",          TOK_CONST) \
+	DEF("break",          TOK_BREAK) \
+	DEF("goto",           TOK_GOTO) \
+	DEF("else",           TOK_ELSE) \
+	DEF("case",           TOK_CASE) \
+	DEF("auto",           TOK_AUTO) \
+	DEF("for",            TOK_FOR) \
+	DEF("if",             TOK_IF) \
+	DEF("do",             TOK_DO)
 
 #define DEF_TYPE_TOKENS(DEF) \
-	DEF("unsigned") \
-	DEF("uint64_t") \
-	DEF("ptrdiff_t") \
-	DEF("uint32_t") \
-	DEF("uint16_t") \
-	DEF("wchar_t") \
-	DEF("struct") \
-	DEF("signed") \
-	DEF("size_t") \
-	DEF("int64_t") \
-	DEF("int32_t") \
-	DEF("int16_t") \
-	DEF("double") \
-	DEF("uint8_t") \
-	DEF("float") \
-	DEF("short") \
-	DEF("int8_t") \
-	DEF("_Bool") \
-	DEF("union") \
-	DEF("void") \
-	DEF("long") \
-	DEF("char") \
-	DEF("enum") \
-	DEF("int")
+	DEF("unsigned", TOK_UNSIGNED) \
+	DEF("struct",   TOK_STRUCT) \
+	DEF("signed",   TOK_SIGNED) \
+	DEF("double",   TOK_DOUBLE) \
+	DEF("float",    TOK_FLOAT) \
+	DEF("short",    TOK_SHORT) \
+	DEF("_Bool",    TOK_BOOL) \
+	DEF("union",    TOK_UNION) \
+	DEF("void",     TOK_VOID) \
+	DEF("long",     TOK_LONG) \
+	DEF("char",     TOK_CHAR) \
+	DEF("enum",     TOK_ENUM) \
+	DEF("int",      TOK_INT)
 
-static const char* PREPROCESS_TOKENS[] = {
-	DEF_PREPROCESS_TOKENS(DEF_ARRAY_ITEM)
+#define DEF_STDTYPE_TOKENS(DEF) \
+	DEF("ptrdiff_t", TOK_PTRDIFF_T) \
+	DEF("uint64_t",  TOK_UINT64_T) \
+	DEF("uint32_t",  TOK_UINT32_T) \
+	DEF("uint16_t",  TOK_UINT16_T) \
+	DEF("int64_t",   TOK_INT64_T) \
+	DEF("int32_t",   TOK_INT32_T) \
+	DEF("int16_t",   TOK_INT16_T) \
+	DEF("wchar_t",   TOK_WCHAR_T) \
+	DEF("uint8_t",   TOK_UINT8_T) \
+	DEF("size_t",    TOK_SIZE_T) \
+	DEF("int8_t",    TOK_INT8_T)
+
+#define DEF_WHITESPACE_TOKENS(DEF) \
+	DEF(" ",  TOK_SPACE) \
+	DEF("\t", TOK_TAB) \
+	DEF("\n", TOK_NEWLINE) \
+	DEF("\r", TOK_CARRIAGE_RETURN) \
+	DEF("\f", TOK_FORM_FEED) \
+	DEF("\v", TOK_VERTICAL_TAB)
+
+#define DEF_GROUPING_TOKENS(DEF) \
+	DEF("(", TOK_PAREN_OPEN) \
+	DEF(")", TOK_PAREN_CLOSE) \
+	DEF("{", TOK_BRACE_OPEN) \
+	DEF("}", TOK_BRACE_CLOSE) \
+	DEF("[", TOK_BRACKET_OPEN) \
+	DEF("]", TOK_BRACKET_CLOSE)
+
+#define DEF_ACCESS_TOKENS(DEF) \
+	DEF("->", TOK_ARROW) \
+	DEF(".",  TOK_DOT)
+
+#define DEF_STATEMENT_TOKENS(DEF) \
+	DEF(";", TOK_SEMICOLON) \
+	DEF(",", TOK_COMMA) \
+	DEF(":", TOK_COLON)
+
+#define DEF_ARITHMETIC_TOKENS(DEF) \
+	DEF("++", TOK_INCREMENT) \
+	DEF("--", TOK_DECREMENT) \
+	DEF("+",  TOK_PLUS) \
+	DEF("-",  TOK_MINUS) \
+	DEF("*",  TOK_STAR) \
+	DEF("/",  TOK_SLASH) \
+	DEF("%",  TOK_PERCENT)
+
+#define DEF_BITWISE_TOKENS(DEF) \
+	DEF("<<=", TOK_LEFT_SHIFT_ASSIGN) \
+	DEF(">>=", TOK_RIGHT_SHIFT_ASSIGN) \
+	DEF("<<",  TOK_LEFT_SHIFT) \
+	DEF(">>",  TOK_RIGHT_SHIFT) \
+	DEF("&",   TOK_AMPERSAND) \
+	DEF("|",   TOK_PIPE) \
+	DEF("^",   TOK_CARET) \
+	DEF("~",   TOK_TILDE)
+
+#define DEF_LOGICAL_TOKENS(DEF) \
+	DEF("&&", TOK_LOGICAL_AND) \
+	DEF("||", TOK_LOGICAL_OR) \
+	DEF("!",  TOK_EXCLAMATION)
+
+#define DEF_COMPARISON_TOKENS(DEF) \
+	DEF("<=", TOK_LESS_EQUAL) \
+	DEF(">=", TOK_GREATER_EQUAL) \
+	DEF("==", TOK_EQUAL_EQUAL) \
+	DEF("!=", TOK_NOT_EQUAL) \
+	DEF("<",  TOK_LESS) \
+	DEF(">",  TOK_GREATER)
+
+#define DEF_ASSIGNMENT_TOKENS(DEF) \
+	DEF("+=",  TOK_PLUS_ASSIGN) \
+	DEF("-=",  TOK_MINUS_ASSIGN) \
+	DEF("*=",  TOK_STAR_ASSIGN) \
+	DEF("/=",  TOK_SLASH_ASSIGN) \
+	DEF("%=",  TOK_PERCENT_ASSIGN) \
+	DEF("&=",  TOK_AMPERSAND_ASSIGN) \
+	DEF("|=",  TOK_PIPE_ASSIGN) \
+	DEF("^=",  TOK_CARET_ASSIGN) \
+	DEF("=",   TOK_ASSIGN)
+
+#define DEF_OTHER_OPERATOR_TOKENS(DEF) \
+	DEF("?",   TOK_QUESTION) \
+	DEF("...", TOK_ELLIPSIS)
+
+#define DEF_STRING_DELIMITER_TOKENS(DEF) \
+	DEF("\"", TOK_DOUBLE_QUOTE) \
+	DEF("'",  TOK_SINGLE_QUOTE)
+
+#define DEF_COMMENT_DELIMITER_TOKENS(DEF) \
+	DEF("/*", TOK_COMMENT_OPEN) \
+	DEF("*/", TOK_COMMENT_CLOSE) \
+	DEF("//", TOK_LINE_COMMENT)
+
+#define DEF_ALL_CATEGORY_TOKENS(DEF) \
+	DEF(PREPROCESS_TOKENS) \
+	DEF(KEYWORD_TOKENS) \
+	DEF(TYPE_TOKENS) \
+	DEF(STDTYPE_TOKENS) \
+	DEF(WHITESPACE_TOKENS) \
+	DEF(GROUPING_TOKENS) \
+	DEF(ACCESS_TOKENS) \
+	DEF(STATEMENT_TOKENS) \
+	DEF(ARITHMETIC_TOKENS) \
+	DEF(BITWISE_TOKENS) \
+	DEF(LOGICAL_TOKENS) \
+	DEF(COMPARISON_TOKENS) \
+	DEF(ASSIGNMENT_TOKENS) \
+	DEF(OTHER_OPERATOR_TOKENS) \
+	DEF(STRING_DELIMITER_TOKENS) \
+	DEF(COMMENT_DELIMITER_TOKENS)
+
+/*
+ * Lexer
+ */ 
+#define DEF_ENUM_TOKEN_DEFINITION(_name, _tok) _tok,
+#define DEF_ALL_ENUM_TOKEN_DEFINITION(_category) DEF_##_category(DEF_ENUM_TOKEN_DEFINITION)
+typedef enum TOK { 
+	TOK_NONE,
+	DEF_ALL_CATEGORY_TOKENS(DEF_ALL_ENUM_TOKEN_DEFINITION) 
+	TOK_COUNT,
+} TOK;
+
+#define DEF_LEN_TOKEN_DEFINITION(_name, _tok) [_tok] = sizeof(_name) - 1,
+#define DEF_ALL_LEN_TOKEN_DEFINITION(_category) DEF_##_category(DEF_LEN_TOKEN_DEFINITION)
+static const int TOK_NAME_LEN[] = { 
+	DEF_ALL_CATEGORY_TOKENS(DEF_ALL_LEN_TOKEN_DEFINITION) 
 };
 
-static const char* KEYWORD_TOKENS[] = {
-	DEF_KEYWORD_TOKENS(DEF_ARRAY_ITEM)
-};
+#define DEF_STRING_TOKEN_DEFINITION(_name, _tok) case _tok: return #_tok " " #_name;
+#define DEF_ALL_STRING_TOKEN_DEFINITION(_category) DEF_##_category(DEF_STRING_TOKEN_DEFINITION)
+static const char* string_TOK(TOK tok) {
+	switch(tok) {
+		DEF_ALL_CATEGORY_TOKENS(DEF_ALL_STRING_TOKEN_DEFINITION)
+		default: return "TOK N/A";
+	}
+}
 
-static const char* TYPE_TOKENS[] = {
-	DEF_TYPE_TOKENS(DEF_ARRAY_ITEM)
-};
+typedef struct TokenDefintion {
+	const char* name;
+	TOK tok;
+} TokenDefintion;
+#define DEF_ARRAY_TOKEN_DEFINITION(_name, _token) (TokenDefintion){ _name, _token },
+#define DEF_ALL_ARRAY_TOKEN_DEFINITION(_category)  static const TokenDefintion _category[] = { DEF_##_category(DEF_ARRAY_TOKEN_DEFINITION) };
+DEF_ALL_CATEGORY_TOKENS(DEF_ALL_ARRAY_TOKEN_DEFINITION)
 
-typedef u16 token_hash;
+typedef u32 tok_hash;
 typedef u8  token_hash_prefix;
 typedef struct TokenKey {
-	token_hash a : 12;
-	token_hash b : 12;
+	tok_hash a : 12;
+	tok_hash b : 12;
+	u8 len       : 4;
 } TokenKey;
 #define MAP_CAPACITY 4096
 #define MAP_PREFIX_CAPACITY 256
-#define TOKEN_MAX_SIZE 32
+#define MAP_PAGE_CAPACITY 16
+#define TOKEN_MAX_SIZE 16
+#define TOKEN_MAX_END  15
 #define TOKEN_MASK 0x0FFF // 12 bit mask
 
-static TOKEN TOKEN_MAP_A[MAP_CAPACITY];
-static TOKEN TOKEN_MAP_B[MAP_CAPACITY];
+static TOKEN TOKEN_MAP_A[MAP_PAGE_CAPACITY][MAP_CAPACITY];
+static TOKEN TOKEN_MAP_B[MAP_PAGE_CAPACITY][MAP_CAPACITY];
 
-#define TOKEN_HASH_SEED 31
-#define TOKEN_HASH_DJB2(_h, _c)  (((_h) << 5) + (_h) + (_c)) 
-#define TOKEN_HASH_FNV1A(_h, _c) ((_h) ^ (_c)) * 16777619UL
+#define TOKEN_HASH_SEED 0
+#define TOKEN_HASH_DJB2(_h, _c)  ((((_h) << 5) + (_h) + (_c)) * 33) 
+#define TOKEN_HASH_FNV1A(_h, _c) (((_h) ^ (_c)) * 16777619UL)
 
 /* Calc token key hashes via range or null termination */
 static TokenKey CalcTokenKey(const char *str, int iStart, int iEnd)
 {
-	char c;
-	str += iStart;
-	int len = iEnd - iStart + 1;
-	token_hash hashA = TOKEN_HASH_SEED; 
-	token_hash hashB = TOKEN_HASH_SEED; 
-	while ((c = *str++) && len-- > 0) {
-		hashA = TOKEN_HASH_DJB2(hashA, c);
-		hashB = TOKEN_HASH_FNV1A(hashB, c);
+	int range = iEnd - iStart;
+	str += iStart; char c; u8 len = 0;
+	tok_hash ha = TOKEN_HASH_SEED; 
+	tok_hash hb = TOKEN_HASH_SEED; 
+	while ((c = *str++) && range-->= 0) {
+		ha = TOKEN_HASH_DJB2(ha, c); hb = TOKEN_HASH_FNV1A(hb, c); len++;
 	}
-	return (TokenKey){ hashA, hashB };
+	return (TokenKey){ ha, hb, len };
 }
 
-static RESULT ContructTokenMap(TOKEN category, int tokenCount, const char** tokens)
+static RESULT ContructTokenMap(TOKEN category, int tokenCount, const TokenDefintion* tokens)
 {
 	for (int iTkn = 0; iTkn < tokenCount; iTkn++) {
-		TokenKey k = CalcTokenKey(tokens[iTkn], 0, TOKEN_MAX_SIZE);
-		TOKEN tokA = TOKEN_MAP_A[k.a];
-		TOKEN tokB = TOKEN_MAP_B[k.b];
+		TokenKey k = CalcTokenKey(tokens[iTkn].name, 0, TOKEN_MAX_END);
+		TOKEN tokA = TOKEN_MAP_A[k.len][k.a];
+		TOKEN tokB = TOKEN_MAP_B[k.len][k.b];
 		if (tokA != TOKEN_NONE || tokB != TOKEN_NONE) {
-			LOG_ERR("Type Hash Collision! %s %d %d %s\n", tokens[iTkn], k.a, k.b, string_TOKEN(category));
+			LOG_ERR("Type Hash Collision! %s %d %d %d %s\n", tokens[iTkn].name, k.a, k.b, k.len, string_TOKEN(category));
 			return RESULT_COLLISION;
 		}
-		TOKEN_MAP_A[k.a] = category;
-		TOKEN_MAP_B[k.b] = category;
-		LOG("%s %d %d %s\n", tokens[iTkn], k.a, k.b, string_TOKEN(category));
+		TOKEN_MAP_A[k.len][k.a] = category;
+		TOKEN_MAP_B[k.len][k.b] = category;
+		LOG("%s %d %d %d %s\n", tokens[iTkn].name, k.a, k.b, k.len, string_TOKEN(category));
 	}
 	return RESULT_SUCCESS;
 }
 
-static token_hash CalcTokenKeyIteration(const char *str, token_hash hash, int iStart, int iEnd)
+typedef struct MapTok {
+	TOK      tok;
+	tok_hash hash; // full hash
+} MapTok;
+static MapTok TOK_MAP[MAP_PAGE_CAPACITY][MAP_CAPACITY];
+
+static tok_hash CalcTokKey(const char *str, int iStart, int iEnd)
 {
-	str += iStart;
-	char c;	while ((c = *str++) && iEnd-- > 0)
-		hash = TOKEN_HASH_DJB2(hash, c);
-	return hash;
+	str += iStart; 
+	tok_hash h = TOKEN_HASH_SEED; 
+	int range = iEnd - iStart;
+	char c; while ((c = *str++) && range-->= 0) h = TOKEN_HASH_FNV1A(h, c);
+	return h;
 }
 
-static inline Vector2 GetWorldToBoxLocal(Vector2 point, Rectangle rect)
+#define TOK_MAP_HASH_MASK 0x0FFF // 12 bit mask = 4096
+#define TOK_MAP_PAGE_MASK 0xF    //  4 bit mask = 16
+static RESULT ContructTokMap(int tokenCount, const TokenDefintion* tokens)
 {
-    return (Vector2){ point.x - rect.x, point.y - rect.y };
-}
-
-static inline Vector2 GetBoxLocalToWorld(Vector2 point, Rectangle rect)
-{
-    return (Vector2){ point.x + rect.x, point.y + rect.y };
+	for (int iTkn = 0; iTkn < tokenCount; iTkn++) {
+		MapTok mt = {
+			.tok  = tokens[iTkn].tok,
+			.hash = CalcTokKey(tokens[iTkn].name, 0, TOKEN_MAX_END),
+		};
+		u16 h = mt.hash & TOK_MAP_HASH_MASK;
+		u8  p = TOK_NAME_LEN[mt.tok] & TOK_MAP_PAGE_MASK;
+		if (TOK_MAP[p][h].tok != TOK_NONE) {
+			LOG_ERR("Type Hash Collision! %s hash: %d page: %d fullhash: %d\n", tokens[iTkn].name, h, p, mt.hash);
+			return RESULT_COLLISION;
+		}
+		TOK_MAP[p][h] = mt;
+		LOG("%s hash: %d page: %d fullhash: %d\n", string_TOK(mt.tok), h, p, mt.hash);
+	}
+	return RESULT_SUCCESS;
 }
 
 /*
  * CodeBox
  */
 #define MAX_INPUT_CHARS      2048
-#define TEXT_BUFFER_CAPACITY 64000
+#define TEXT_BUFFER_CAPACITY 65536 * 2
 
 #define CASE_EITHER(_key, _a, _b) case _key | _a | _b: case _key | _a: case _key | _b
 #define TO_LOWER_C(_c) 'a' + (_c - 'A')
@@ -609,6 +778,16 @@ typedef struct Command {
 	char buffer[32];
 } Command;
 
+static inline Vector2 GetWorldToBoxLocal(Vector2 point, Rectangle rect)
+{
+    return (Vector2){ point.x - rect.x, point.y - rect.y };
+}
+
+static inline Vector2 GetBoxLocalToWorld(Vector2 point, Rectangle rect)
+{
+    return (Vector2){ point.x + rect.x, point.y + rect.y };
+}
+
 /*
  * CodeBox Parse
  */
@@ -640,6 +819,239 @@ static inline bool Delimiter(char c)
 			return false;
 	}
 }
+
+static RESULT ProcessMeta2(CodeBox* pCode) 
+{
+#define DEF_DISPATCH(_name, _tok)  [_tok] = &&_tok,
+#define DEF_ALL_DISPATCH(_category) DEF_##_category(DEF_DISPATCH)
+    static void *dispatch[] = { 
+    	[TOK_NONE] = &&TOK_NONE,
+    	DEF_ALL_CATEGORY_TOKENS(DEF_ALL_DISPATCH) 
+    };
+#undef DEF_DISPATCH
+#undef DEF_ALL_DISPATCH
+
+	const int count      = pCode->textCount;
+	char*     pText      = pCode->pText;
+	TextMeta* pTextMeta  = pCode->pTextMeta;
+	TOKEN*    pTextToken = pCode->pTextToken;
+
+#define RESET_HASH() ({ hashLen = 0; hash = TOKEN_HASH_SEED; })
+	tok_hash hash; int hashLen;
+    RESET_HASH();
+
+    TextMeta prospMeta;
+    bool preprocesing = false;
+    bool maxMunch = false;
+    int iChar = -1;
+
+processChar:
+	if (iChar == count) return RESULT_SUCCESS;
+
+	iChar++; char c = pText[iChar];
+	if (Delimiter(c)) RESET_HASH();
+	hash = TOKEN_HASH_FNV1A(hash, c); 
+
+	hashLen++; 
+	MapTok mt  = TOK_MAP[hashLen & TOK_MAP_PAGE_MASK][hash & TOK_MAP_HASH_MASK];
+	TOK    tok = mt.hash == hash ? mt.tok : TOK_NONE;
+	// LOG("%d %c %d %d %s\n", iChar, pText[iChar], hashLen, hash & TOKEN_MASK, string_TOK(tok));
+	goto *dispatch[tok];
+
+TOK_NONE:
+	goto processChar;
+
+/* PREPROCESS_TOKENS */
+TOK_PP_INCLUDE:
+TOK_PP_DEFINE:
+TOK_PP_IFNDEF:
+TOK_PP_IFDEF:
+TOK_PP_ENDIF:
+TOK_PP_UNDEF:
+TOK_PP_ELIF:
+TOK_PP_ELSE:
+TOK_PP_ERROR:
+TOK_PP_PRAGMA:
+TOK_PP_LINE:
+TOK_PP_IF:
+TOK_PP_HASH_HASH: {
+	int tokenLen = TOK_NAME_LEN[tok];
+	memset(pTextToken + (iChar - tokenLen) + 1, TOKEN_PREPROCESS, tokenLen);
+    RESET_HASH();
+	goto processChar;
+}
+TOK_PP_HASH: {
+	preprocesing = true;
+	pTextToken[iChar] = TOKEN_PREPROCESS;
+	goto processChar;
+}
+/* KEYWORD_TOKENS */
+TOK_STATIC_ASSERT:
+TOK_THREAD_LOCAL:
+TOK_IMAGINARY:
+TOK_NORETURN:
+TOK_COMPLEX:
+TOK_GENERIC:
+TOK_ALIGNOF:
+TOK_ALIGNAS:
+TOK_ATOMIC:
+TOK_CONTINUE:
+TOK_VOLATILE:
+TOK_REGISTER:
+TOK_RESTRICT:
+TOK_TYPEDEF:
+TOK_DEFAULT:
+TOK_TYPEOF:
+TOK_SWITCH:
+TOK_STATIC:
+TOK_SIZEOF:
+TOK_RETURN:
+TOK_INLINE:
+TOK_EXTERN:
+TOK_WHILE:
+TOK_CONST:
+TOK_BREAK:
+TOK_GOTO:
+TOK_ELSE:
+TOK_CASE:
+TOK_AUTO:
+TOK_FOR:
+TOK_IF:
+TOK_DO: {
+	int tokenLen = TOK_NAME_LEN[tok];
+	memset(pTextToken + (iChar - tokenLen) + 1, TOKEN_KEYWORD, tokenLen);
+    RESET_HASH();
+	goto processChar;
+}
+/* TYPE_TOKENS */
+TOK_UNSIGNED:
+TOK_STRUCT:
+TOK_SIGNED:
+TOK_DOUBLE:
+TOK_FLOAT:
+TOK_SHORT:
+TOK_BOOL:
+TOK_UNION:
+TOK_VOID:
+TOK_LONG:
+TOK_CHAR:
+TOK_ENUM:
+TOK_INT:
+TOK_PTRDIFF_T:
+TOK_UINT64_T:
+TOK_UINT32_T:
+TOK_UINT16_T:
+TOK_INT64_T:
+TOK_INT32_T:
+TOK_INT16_T:
+TOK_WCHAR_T:
+TOK_UINT8_T:
+TOK_SIZE_T:
+TOK_INT8_T: {
+	int tokenLen = TOK_NAME_LEN[tok];
+	memset(pTextToken + (iChar - tokenLen) + 1, TOKEN_TYPE, tokenLen);
+    RESET_HASH();
+	goto processChar;
+}
+/* WHITESPACE_TOKENS */
+TOK_SPACE:
+TOK_TAB:
+TOK_NEWLINE:
+TOK_CARRIAGE_RETURN:
+TOK_FORM_FEED:
+TOK_VERTICAL_TAB:
+	pTextToken[iChar] = TOKEN_WHITESPACE;
+    RESET_HASH();
+	goto processChar;
+
+/* GROUPING_TOKENS */
+TOK_PAREN_OPEN:
+TOK_PAREN_CLOSE:
+TOK_BRACE_OPEN:
+TOK_BRACE_CLOSE:
+TOK_BRACKET_OPEN:
+TOK_BRACKET_CLOSE:
+	pTextToken[iChar] = TOKEN_SCOPE;
+    RESET_HASH();
+	goto processChar;
+
+/* ACCESS_TOKENS */
+TOK_ARROW:
+TOK_DOT:
+
+/* STATEMENT_TOKENS */
+TOK_SEMICOLON:
+TOK_COMMA:
+TOK_COLON:
+
+/* ARITHMETIC_TOKENS */
+TOK_INCREMENT:
+TOK_DECREMENT:
+TOK_PLUS:
+TOK_MINUS:
+TOK_STAR:
+TOK_SLASH:
+TOK_PERCENT:
+	pTextToken[iChar] = TOKEN_OPERATOR;
+    RESET_HASH();
+	goto processChar;
+
+/* BITWISE_TOKENS */
+TOK_LEFT_SHIFT_ASSIGN:
+TOK_RIGHT_SHIFT_ASSIGN:
+TOK_LEFT_SHIFT:
+TOK_RIGHT_SHIFT:
+TOK_AMPERSAND:
+TOK_PIPE:
+TOK_CARET:
+TOK_TILDE:
+
+/* LOGICAL_TOKENS */
+TOK_LOGICAL_AND:
+TOK_LOGICAL_OR:
+TOK_EXCLAMATION:
+
+/* COMPARISON_TOKENS */
+TOK_LESS_EQUAL:
+TOK_GREATER_EQUAL:
+TOK_EQUAL_EQUAL:
+TOK_NOT_EQUAL:
+TOK_LESS:
+TOK_GREATER:
+
+/* ASSIGNMENT_TOKENS */
+TOK_PLUS_ASSIGN:
+TOK_MINUS_ASSIGN:
+TOK_STAR_ASSIGN:
+TOK_SLASH_ASSIGN:
+TOK_PERCENT_ASSIGN:
+TOK_AMPERSAND_ASSIGN:
+TOK_PIPE_ASSIGN:
+TOK_CARET_ASSIGN:
+TOK_ASSIGN:
+	int tokenLen = TOK_NAME_LEN[tok];
+	memset(pTextToken + (iChar - tokenLen) + 1, TOKEN_OPERATOR, tokenLen);
+    RESET_HASH();
+	goto processChar;
+
+/* DEF_OTHER_OPERATOR_TOKENS */
+TOK_QUESTION:
+TOK_ELLIPSIS:
+
+/* DEF_STRING_DELIMITER_TOKENS */
+TOK_DOUBLE_QUOTE:
+TOK_SINGLE_QUOTE:
+
+/* COMMENT_DELIMITER_TOKENS */
+TOK_COMMENT_OPEN:
+TOK_COMMENT_CLOSE:
+TOK_LINE_COMMENT:
+    RESET_HASH();
+	goto processChar;
+
+	return 0;
+}
+
 
 static RESULT ProcessMeta(CodeBox* pCode) 
 {
@@ -716,6 +1128,19 @@ processChar:
 					goto skipAndNext;
 
 				case '\'':
+					switch (pc) 
+					{
+					case '\'':
+						goto metaAndNext;
+
+					default:
+						meta.token = TOKEN_QUOTE;
+						pMeta[iC]  = meta;
+						meta.token = TOKEN_NONE;
+						meta.QUOTE = 0;
+						goto next;
+					}
+
 				case '"':
 					switch (pc) 
 					{
@@ -745,7 +1170,7 @@ processChar:
 				/* Start Token */
 				case true  | false << 1 | false << 2:
 					iStrt = iC;
-					break;
+					goto metaAndNext;
 
 				/* Start Single Char Token */
 				case true  | false << 1 | true  << 2:
@@ -756,14 +1181,12 @@ processChar:
 				case false | false << 1 | true  << 2:
 					int iEnd = iC;
 					TokenKey k = CalcTokenKey(pText, iStrt, iEnd);
-					TOKEN tokA = TOKEN_MAP_A[k.a];
-					TOKEN tokB = TOKEN_MAP_B[k.b];
-					TOKEN tok = (tokA == tokB) * tokA;
-					if (tok == TOKEN_NONE) 
-						goto next;
-
+					TOKEN tokA = TOKEN_MAP_A[k.len][k.a];
+					TOKEN tokB = TOKEN_MAP_B[k.len][k.b];
+					// TOKEN tok = tokA == tokB ? tokA : TOKEN_NONE;
+					TOKEN tok = tokA;
 					bool isPreprocess = (meta.token == TOKEN_PREPROCESS);
-					meta.token = tok;
+					meta.token = tokA;
 					meta.PREPROCESS = isPreprocess | meta.PREPROCESS;
 					for (int i = iStrt; i <= iEnd; ++i) {
 						pMeta[i].token      = meta.token;
@@ -771,21 +1194,25 @@ processChar:
 						pMeta[i].iTokenStartOffset = i - iStrt;
 						pMeta[i].iTokenEndOffset   = iEnd - i;
 					}
-
 					goto next;
+				// Put all tokens operators etc in hash lists and look up purely based on that with computed gotos for differing logic
+				// This needs a mechanism to determine << ++ etc.
 			}
 
 			/* Test Char */
 			switch (c) 
 			{
 				/* Token Chars */
+				// case ',':
+				// case '.':
+				// case ';':
+				// case '@':
 				// case '_':
 				// case '`':
 				// case 'a'...'z':
 				// case 'A'...'Z':
 				// case '0'...'9':
-				// 	goto next;
-				default: goto next;
+				default: goto metaAndNext;
 
 				/* Increment */
 			#define INCREMENT_CASE(_add, _sub, _scope, _token) \
@@ -893,13 +1320,6 @@ processChar:
 						meta.token = TOKEN_PREPROCESS;
 						goto skipAndNext;
 					}
-					goto metaAndNext;
-
-				case ',':
-				case '.':
-				case ';':
-				case '@':
-					meta.token = TOKEN_NONE;
 					goto metaAndNext;
 			}
 	} // switch (parseComment | parseQuote << 1) 
@@ -1212,9 +1632,16 @@ static CodeBox text;
 
 int main(void)
 {
-	REQUIRE(ContructTokenMap(TOKEN_PREPROCESS, COUNT(PREPROCESS_TOKENS), PREPROCESS_TOKENS));
-	REQUIRE(ContructTokenMap(TOKEN_TYPE,       COUNT(TYPE_TOKENS),       TYPE_TOKENS));
-	REQUIRE(ContructTokenMap(TOKEN_KEYWORD,    COUNT(KEYWORD_TOKENS),    KEYWORD_TOKENS));	
+#define DEF_ALL_CONSTRUCT_TOKEN_MAP(_category) REQUIRE(ContructTokMap(COUNT(_category), _category));
+	DEF_ALL_CATEGORY_TOKENS(DEF_ALL_CONSTRUCT_TOKEN_MAP)
+#undef DEF_ALL_CONSTRUCT_TOKEN_MAP
+
+	// REQUIRE(ContructTokMap(COUNT(PREPROCESS_TOKENS), PREPROCESS_TOKENS));
+	// REQUIRE(ContructTokMap(COUNT(TYPE_TOKENS),       TYPE_TOKENS));
+	// REQUIRE(ContructTokMap(COUNT(KEYWORD_TOKENS),    KEYWORD_TOKENS));	
+	// REQUIRE(ContructTokMap(COUNT(WHITESPACE_TOKENS), WHITESPACE_TOKENS));	
+	// REQUIRE(ContructTokMap(COUNT(GROUPING_TOKENS),   GROUPING_TOKENS));	
+	// REQUIRE(ContructTokMap(COUNT(ASSIGNMENT_TOKENS), ASSIGNMENT_TOKENS));	
 
 	/* Config */
 	SetTraceLogLevel(LOG_ALL);
@@ -1301,7 +1728,8 @@ int main(void)
 		memcpy(pCode->pText, loadedFile, pCode->textCount + 1);
 		free(loadedFile);
 
-		ProcessMeta(&text);
+		// ProcessMeta(&text);
+		ProcessMeta2(&text);
 	}
 
 /*
@@ -1383,299 +1811,300 @@ LoopBegin:
 	/*
 	 * Input Process
 	 */
-
-	// TODO pull this into struct function to be used solely for text input
-	const int iCaret = 0;
-	const CodePos mark = pCode->mark;
-	CodePos* pMark = &pCode->mark;
-	CodePos caret = pCode->pCarets[0];
-	CodePos* pCaret = &pCode->pCarets[0];
-	char* pText = pCode->pText;
-	while (currentKey > 0)
 	{
-		int modifiedKey = currentKey;
-		switch (currentKey | input.modifierCombination) {
+		// TODO pull this into struct function to be used solely for text input
+		const int iCaret = 0;
+		const CodePos mark = pCode->mark;
+		CodePos* pMark = &pCode->mark;
+		CodePos caret = pCode->pCarets[0];
+		CodePos* pCaret = &pCode->pCarets[0];
+		char* pText = pCode->pText;
+		while (currentKey > 0)
+		{
+			int modifiedKey = currentKey;
+			switch (currentKey | input.modifierCombination) {
 
-			/* Move Left Keys */
-			case KEY_LEFT: 
-			case KEY_A | KEY_ALT_MOD:
-				if (caret.index <= 0) break;
-				CodeSetMarkIndex(pCode, mark.index - 1);
-				CodeSyncCaretToMark(pCode, 0);
-				break;
+				/* Move Left Keys */
+				case KEY_LEFT: 
+				case KEY_A | KEY_ALT_MOD:
+					if (caret.index <= 0) break;
+					CodeSetMarkIndex(pCode, mark.index - 1);
+					CodeSyncCaretToMark(pCode, 0);
+					break;
 
-			case KEY_LEFT | KEY_CTRL_MOD:
-			case KEY_A    | KEY_CTRL_MOD | KEY_ALT_MOD: {
-				if (caret.index <= 0) break;
+				case KEY_LEFT | KEY_CTRL_MOD:
+				case KEY_A    | KEY_CTRL_MOD | KEY_ALT_MOD: {
+					if (caret.index <= 0) break;
 
-				int newIndex = CARET_INVALID;
-				switch(pText[mark.index - 1]){
-					case ' ':  newIndex = TextNegateFindCharBackward(pText, mark.index - 1, ' ');  break;
-					case '\n': newIndex = TextNegateFindCharBackward(pText, mark.index - 1, '\n'); break;
-					default:   newIndex = TextFindCharsBackward(pText, mark.index - 1, " \n");     break;
+					int newIndex = CARET_INVALID;
+					switch(pText[mark.index - 1]){
+						case ' ':  newIndex = TextNegateFindCharBackward(pText, mark.index - 1, ' ');  break;
+						case '\n': newIndex = TextNegateFindCharBackward(pText, mark.index - 1, '\n'); break;
+						default:   newIndex = TextFindCharsBackward(pText, mark.index - 1, " \n");     break;
+					}
+
+					if (newIndex != CARET_INVALID) {
+						CodeSetMarkIndex(pCode, newIndex + 1);
+						CodeSyncCaretToMarkRow(pCode, 0);
+						CodeBoxFocusMark(pCode);
+					}
+
+					break;
 				}
 
-				if (newIndex != CARET_INVALID) {
-					CodeSetMarkIndex(pCode, newIndex + 1);
+				/* Move Right Keys */
+				case KEY_RIGHT: 
+				case KEY_D | KEY_ALT_MOD:
+					if (caret.index >= pCode->textCount) break;
+					CodeSetMarkIndex(pCode, mark.index + 1);
+					CodeSyncCaretToMark(pCode, 0);
+					break;
+
+				case KEY_RIGHT | KEY_CTRL_MOD:
+				case KEY_D     | KEY_CTRL_MOD | KEY_ALT_MOD: {
+					if (caret.index >= pCode->textCount) break;
+
+					int newIndex = CARET_INVALID;
+					switch(pText[mark.index]){
+						case ' ':  newIndex = TextNegateFindCharForward(pText, mark.index, ' ');  break;
+						case '\n': newIndex = TextNegateFindCharForward(pText, mark.index, '\n'); break;
+						default:   newIndex = TextFindCharsForward(pText, mark.index, " \n");     break;
+					}
+
+					if (newIndex != CARET_INVALID) {
+						CodeSetMarkIndex(pCode, newIndex);
+						CodeSyncCaretToMarkRow(pCode, 0);
+						CodeBoxFocusMark(pCode);
+					}
+
+					break;
+				}
+
+				/* Move Up Keys */
+				case KEY_UP: 
+				case KEY_W | KEY_ALT_MOD:{
+					pMark->row--;
 					CodeSyncCaretToMarkRow(pCode, 0);
 					CodeBoxFocusMark(pCode);
+					break;
 				}
 
-				break;
-			}
-
-			/* Move Right Keys */
-			case KEY_RIGHT: 
-			case KEY_D | KEY_ALT_MOD:
-				if (caret.index >= pCode->textCount) break;
-				CodeSetMarkIndex(pCode, mark.index + 1);
-				CodeSyncCaretToMark(pCode, 0);
-				break;
-
-			case KEY_RIGHT | KEY_CTRL_MOD:
-			case KEY_D     | KEY_CTRL_MOD | KEY_ALT_MOD: {
-				if (caret.index >= pCode->textCount) break;
-
-				int newIndex = CARET_INVALID;
-				switch(pText[mark.index]){
-					case ' ':  newIndex = TextNegateFindCharForward(pText, mark.index, ' ');  break;
-					case '\n': newIndex = TextNegateFindCharForward(pText, mark.index, '\n'); break;
-					default:   newIndex = TextFindCharsForward(pText, mark.index, " \n");     break;
-				}
-
-				if (newIndex != CARET_INVALID) {
-					CodeSetMarkIndex(pCode, newIndex);
+				case KEY_UP | KEY_CTRL_MOD:
+				case KEY_W  | KEY_CTRL_MOD | KEY_ALT_MOD: {
+					int startIndex      = pText[mark.index] == '\n' ? mark.index - endCharLength : mark.index;
+					int blockStartIndex = TextFindTextBackward(pText, startIndex, "\n\n");
+					int blockEndIndex   = TextNegateFindCharBackward(pText, blockStartIndex, '\n');  
+					int newCaretIndex   = blockEndIndex + 1;
+					CodeSetMarkIndex(pCode, newCaretIndex);
 					CodeSyncCaretToMarkRow(pCode, 0);
 					CodeBoxFocusMark(pCode);
+					break;
 				}
 
-				break;
+				/* Move Down Keys */
+				case KEY_DOWN: 
+				case KEY_S | KEY_ALT_MOD: {
+					pMark->row++;
+					CodeSyncCaretToMarkRow(pCode, 0);
+					CodeBoxFocusMark(pCode);
+					break;
+				}
+
+				case KEY_DOWN | KEY_CTRL_MOD:
+				case KEY_S    | KEY_CTRL_MOD | KEY_ALT_MOD: {
+					// Search"\n\n" to find where there is a new line gap
+					int blockEndIndex   = TextFindTextForward(pText, mark.index, "\n\n");
+					int blockStartIndex = TextNegateFindCharForward(pText, blockEndIndex, '\n');
+					blockStartIndex = TextNegateFindCharForward(pText, blockStartIndex, ' ');
+					blockStartIndex = TextNegateFindCharForward(pText, blockStartIndex, '\t');
+					int newCaretIndex   = blockStartIndex;
+					CodeSetMarkIndex(pCode, newCaretIndex);
+					CodeSyncCaretToMarkRow(pCode, 0);
+					CodeBoxFocusMark(pCode);
+					break;
+				}
+
+				/* Command Keys */
+				// case KEY_ALT_MOD | KEY_RIGHT_ALT: 
+				// case KEY_ALT_MOD | KEY_LEFT_ALT: 
+				// 	if (!command.enabled) {
+				// 		LOG("Command Begin\n");
+				// 		command.enabled = true;
+				// 		command.scanFoundIndex = pCode->pActiveCaret->index;
+				// 		LOG("%d\n", command.scanFoundIndex);
+				// 		break;
+				// 	} 
+
+				// 	if (command.enabled && command.toggled ) {
+				// 		LOG("Command Toggle Off\n");
+				// 		command.enabled = false;
+				// 		command.toggled = false;
+				// 		break;
+				// 	}
+
+				// 	break;
+
+				// case KEY_ALT_MOD | KEY_CTRL_MOD | KEY_LEFT_CONTROL: 
+				// 	break;
+
+				// case KEY_ALT_MOD | KEY_ENTER: 
+				// 	if (!command.enabled)
+				// 		break;
+
+				// 	LOG("Command Finish\n");
+				// 	CommandFinish(pCode, &command);
+
+				// 	break;
+
+				// case KEY_ALT_MOD | KEY_SHIFT_MOD | KEY_TAB: 
+
+				// 	break;
+
+				// case KEY_ALT_MOD | KEY_TAB: 
+				// 	if (!command.enabled)
+				// 		break;
+
+				// 	LOG("%d %d\n", pCode->pActiveCaret->index, command.scanFoundIndex);
+
+				// 	command.scanFoundIndex = TextFindTextForward(pCode->pText, command.scanFoundIndex + 1, command.pText);
+				// 	if (command.scanFoundIndex > 0) {
+				// 		int scanFoundLine = TextCountCharForward(pCode->pText, pCode->pActiveCaret->index, command.scanFoundIndex, '\n') + pCode->pActiveCaret->row;
+				// 		CodeBoxFocusRow(pCode, scanFoundLine);
+				// 		LOG("%d \n", scanFoundLine);
+				// 	}
+
+				// 	break;
+
+				// case '`'  | KEY_ALT_MOD: 
+				// case '-'  | KEY_ALT_MOD: 
+				// case '='  | KEY_ALT_MOD: 
+				// case '['  | KEY_ALT_MOD: 
+				// case ']'  | KEY_ALT_MOD: 
+				// case '\\' | KEY_ALT_MOD:
+				// case ';'  | KEY_ALT_MOD: 
+				// case '\'' | KEY_ALT_MOD:
+				// case ','  | KEY_ALT_MOD: 
+				// case '.'  | KEY_ALT_MOD: 
+				// case '/'  | KEY_ALT_MOD: 
+
+				// case (KEY_ALT_MOD | '0') ... (KEY_ALT_MOD | '9'): 
+				// 	goto UpdateCommandKey;
+
+				// case '1'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '!'; goto UpdateCommandKey;
+				// case '2'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '@'; goto UpdateCommandKey;
+				// case '3'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '#'; goto UpdateCommandKey;
+				// case '4'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '$'; goto UpdateCommandKey;
+				// case '5'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '%'; goto UpdateCommandKey;
+				// case '6'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '^'; goto UpdateCommandKey;
+				// case '7'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '&'; goto UpdateCommandKey;
+				// case '8'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '*'; goto UpdateCommandKey;
+				// case '9'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '('; goto UpdateCommandKey;
+				// case '0'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = ')'; goto UpdateCommandKey;
+				// case '`'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '~'; goto UpdateCommandKey;
+				// case '-'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '_'; goto UpdateCommandKey;
+				// case '='  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '+'; goto UpdateCommandKey;
+				// case '['  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '{'; goto UpdateCommandKey;
+				// case ']'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '}'; goto UpdateCommandKey;
+				// case '\\' | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '|'; goto UpdateCommandKey;
+				// case ';'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = ':'; goto UpdateCommandKey;
+				// case '\'' | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '"'; goto UpdateCommandKey;
+				// case ','  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '<'; goto UpdateCommandKey;
+				// case '.'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '>'; goto UpdateCommandKey;
+				// case '/'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '?'; goto UpdateCommandKey;
+
+				// case (KEY_ALT_MOD | 'A') ... (KEY_ALT_MOD | 'Z'): 
+				// 	modifiedKey = TO_LOWER_C(currentKey);
+				// 	goto UpdateCommandKey;
+
+				// case (KEY_ALT_MOD | KEY_SHIFT_MOD | 'A') ... (KEY_ALT_MOD | KEY_SHIFT_MOD | 'Z'): 
+				// 	goto UpdateCommandKey;
+
+				// case KEY_ALT_MOD | KEY_BACKSPACE:
+				// case KEY_ALT_MOD | KEY_SHIFT_MOD | KEY_BACKSPACE:
+				// 	command.firstKeyPressed = true; 
+				// 	if (command.bufferCount > 0) command.bufferCount--;
+				// 	goto UpdateCommandScan;
+
+				// case KEY_ALT_MOD | KEY_CTRL_MOD | KEY_BACKSPACE:
+				// case KEY_ALT_MOD | KEY_CTRL_MOD | KEY_SHIFT_MOD | KEY_BACKSPACE:
+				// case KEY_ALT_MOD | KEY_DELETE:
+				// 	command.firstKeyPressed = true;
+				// 	command.bufferCount = 0;
+				// 	command.scanFoundIndex = 0;
+				// 	command.buffer[command.bufferCount] = '\0';
+				// 	break;
+
+				UpdateCommandKey:
+					if (!command.firstKeyPressed) command.firstKeyPressed = true;   
+					command.buffer[command.bufferCount++] = modifiedKey;
+					command.buffer[command.bufferCount] = '\0';
+
+				UpdateCommandScan:
+					LOG("%d\n", command.scanFoundIndex);
+					command.scanFoundIndex = TextFindTextForward(pText, mark.index, command.buffer);
+					break;
+
+				/* Utility Keys */
+				case KEY_CTRL_MOD | KEY_S:
+					LOG("Saving: %s", text.path);
+					SaveFileText(text.path, text.pText);
+					break;
+
+				/* Character Delete Keys */
+				case KEY_BACKSPACE: CodeBoxDeleteChar(pCode); pCode->mark.index--; break;
+				case KEY_DELETE:    CodeBoxDeleteChar(pCode); break;
+
+				/* Character Insert Keys */
+				case KEY_ENTER: CodeBoxInsertChar(pCode, '\n'); break;
+				case KEY_SPACE: CodeBoxInsertChar(pCode, ' '); break;
+				case KEY_TAB:   CodeBoxInsertChar(pCode, '\t'); break;
+
+				case 'A' ... 'Z': CodeBoxInsertChar(pCode, 'a' + (currentKey - KEY_A)); break;
+				case '0' ... '9': CodeBoxInsertChar(pCode, currentKey); break;
+
+				case (KEY_SHIFT_MOD | 'A') ... (KEY_SHIFT_MOD | 'Z'): CodeBoxInsertChar(pCode, currentKey); break;
+				case KEY_KP_0 ... KEY_KP_9: CodeBoxInsertChar(pCode, '0' + (currentKey - KEY_KP_0)); break;
+
+				case '`':  CodeBoxInsertChar(pCode, currentKey); break;
+				case '-':  CodeBoxInsertChar(pCode, currentKey); break;
+				case '=':  CodeBoxInsertChar(pCode, currentKey); break;
+				case '[':  CodeBoxInsertChar(pCode, currentKey); break;
+				case ']':  CodeBoxInsertChar(pCode, currentKey); break;
+				case '\\': CodeBoxInsertChar(pCode, currentKey); break;
+				case ';':  CodeBoxInsertChar(pCode, currentKey); break;
+				case '\'': CodeBoxInsertChar(pCode, currentKey); break;
+				case ',':  CodeBoxInsertChar(pCode, currentKey); break;
+				case '.':  CodeBoxInsertChar(pCode, currentKey); break;
+				case '/':  CodeBoxInsertChar(pCode, currentKey); break;
+
+				case KEY_SHIFT_MOD | '1':  CodeBoxInsertChar(pCode, '!'); break;
+				case KEY_SHIFT_MOD | '2':  CodeBoxInsertChar(pCode, '@'); break;
+				case KEY_SHIFT_MOD | '3':  CodeBoxInsertChar(pCode, '#'); break;
+				case KEY_SHIFT_MOD | '4':  CodeBoxInsertChar(pCode, '$'); break;
+				case KEY_SHIFT_MOD | '5':  CodeBoxInsertChar(pCode, '%'); break;
+				case KEY_SHIFT_MOD | '6':  CodeBoxInsertChar(pCode, '^'); break;
+				case KEY_SHIFT_MOD | '7':  CodeBoxInsertChar(pCode, '&'); break;
+				case KEY_SHIFT_MOD | '8':  CodeBoxInsertChar(pCode, '*'); break;
+				case KEY_SHIFT_MOD | '9':  CodeBoxInsertChar(pCode, '('); break;
+				case KEY_SHIFT_MOD | '0':  CodeBoxInsertChar(pCode, ')'); break;
+				case KEY_SHIFT_MOD | '`':  CodeBoxInsertChar(pCode, '~'); break;
+				case KEY_SHIFT_MOD | '-':  CodeBoxInsertChar(pCode, '_'); break;
+				case KEY_SHIFT_MOD | '=':  CodeBoxInsertChar(pCode, '+'); break;
+				case KEY_SHIFT_MOD | '[':  CodeBoxInsertChar(pCode, '{'); break;
+				case KEY_SHIFT_MOD | ']':  CodeBoxInsertChar(pCode, '}'); break;
+				case KEY_SHIFT_MOD | '\\': CodeBoxInsertChar(pCode, '|'); break;
+				case KEY_SHIFT_MOD | ';':  CodeBoxInsertChar(pCode, ':'); break;
+				case KEY_SHIFT_MOD | '\'': CodeBoxInsertChar(pCode, '"'); break;
+				case KEY_SHIFT_MOD | ',':  CodeBoxInsertChar(pCode, '<'); break;
+				case KEY_SHIFT_MOD | '.':  CodeBoxInsertChar(pCode, '>'); break;
+				case KEY_SHIFT_MOD | '/':  CodeBoxInsertChar(pCode, '?'); break;
+
+				default: break;
 			}
-
-			/* Move Up Keys */
-			case KEY_UP: 
-			case KEY_W | KEY_ALT_MOD:{
-				pMark->row--;
-				CodeSyncCaretToMarkRow(pCode, 0);
-				CodeBoxFocusMark(pCode);
-				break;
-			}
-
-			case KEY_UP | KEY_CTRL_MOD:
-			case KEY_W  | KEY_CTRL_MOD | KEY_ALT_MOD: {
-				int startIndex      = pText[mark.index] == '\n' ? mark.index - endCharLength : mark.index;
-				int blockStartIndex = TextFindTextBackward(pText, startIndex, "\n\n");
-				int blockEndIndex   = TextNegateFindCharBackward(pText, blockStartIndex, '\n');  
-				int newCaretIndex   = blockEndIndex + 1;
-				CodeSetMarkIndex(pCode, newCaretIndex);
-				CodeSyncCaretToMarkRow(pCode, 0);
-				CodeBoxFocusMark(pCode);
-				break;
-			}
-
-			/* Move Down Keys */
-			case KEY_DOWN: 
-			case KEY_S | KEY_ALT_MOD: {
-				pMark->row++;
-				CodeSyncCaretToMarkRow(pCode, 0);
-				CodeBoxFocusMark(pCode);
-				break;
-			}
-
-			case KEY_DOWN | KEY_CTRL_MOD:
-			case KEY_S    | KEY_CTRL_MOD | KEY_ALT_MOD: {
-				// Search"\n\n" to find where there is a new line gap
-				int blockEndIndex   = TextFindTextForward(pText, mark.index, "\n\n");
-				int blockStartIndex = TextNegateFindCharForward(pText, blockEndIndex, '\n');
-				blockStartIndex = TextNegateFindCharForward(pText, blockStartIndex, ' ');
-				blockStartIndex = TextNegateFindCharForward(pText, blockStartIndex, '\t');
-				int newCaretIndex   = blockStartIndex;
-				CodeSetMarkIndex(pCode, newCaretIndex);
-				CodeSyncCaretToMarkRow(pCode, 0);
-				CodeBoxFocusMark(pCode);
-				break;
-			}
-
-			/* Command Keys */
-			// case KEY_ALT_MOD | KEY_RIGHT_ALT: 
-			// case KEY_ALT_MOD | KEY_LEFT_ALT: 
-			// 	if (!command.enabled) {
-			// 		LOG("Command Begin\n");
-			// 		command.enabled = true;
-			// 		command.scanFoundIndex = pCode->pActiveCaret->index;
-			// 		LOG("%d\n", command.scanFoundIndex);
-			// 		break;
-			// 	} 
-
-			// 	if (command.enabled && command.toggled ) {
-			// 		LOG("Command Toggle Off\n");
-			// 		command.enabled = false;
-			// 		command.toggled = false;
-			// 		break;
-			// 	}
-
-			// 	break;
-
-			// case KEY_ALT_MOD | KEY_CTRL_MOD | KEY_LEFT_CONTROL: 
-			// 	break;
-
-			// case KEY_ALT_MOD | KEY_ENTER: 
-			// 	if (!command.enabled)
-			// 		break;
-
-			// 	LOG("Command Finish\n");
-			// 	CommandFinish(pCode, &command);
-
-			// 	break;
-
-			// case KEY_ALT_MOD | KEY_SHIFT_MOD | KEY_TAB: 
-
-			// 	break;
-
-			// case KEY_ALT_MOD | KEY_TAB: 
-			// 	if (!command.enabled)
-			// 		break;
-
-			// 	LOG("%d %d\n", pCode->pActiveCaret->index, command.scanFoundIndex);
-
-			// 	command.scanFoundIndex = TextFindTextForward(pCode->pText, command.scanFoundIndex + 1, command.pText);
-			// 	if (command.scanFoundIndex > 0) {
-			// 		int scanFoundLine = TextCountCharForward(pCode->pText, pCode->pActiveCaret->index, command.scanFoundIndex, '\n') + pCode->pActiveCaret->row;
-			// 		CodeBoxFocusRow(pCode, scanFoundLine);
-			// 		LOG("%d \n", scanFoundLine);
-			// 	}
-
-			// 	break;
-
-			// case '`'  | KEY_ALT_MOD: 
-			// case '-'  | KEY_ALT_MOD: 
-			// case '='  | KEY_ALT_MOD: 
-			// case '['  | KEY_ALT_MOD: 
-			// case ']'  | KEY_ALT_MOD: 
-			// case '\\' | KEY_ALT_MOD:
-			// case ';'  | KEY_ALT_MOD: 
-			// case '\'' | KEY_ALT_MOD:
-			// case ','  | KEY_ALT_MOD: 
-			// case '.'  | KEY_ALT_MOD: 
-			// case '/'  | KEY_ALT_MOD: 
-
-			// case (KEY_ALT_MOD | '0') ... (KEY_ALT_MOD | '9'): 
-			// 	goto UpdateCommandKey;
-
-			// case '1'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '!'; goto UpdateCommandKey;
-			// case '2'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '@'; goto UpdateCommandKey;
-			// case '3'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '#'; goto UpdateCommandKey;
-			// case '4'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '$'; goto UpdateCommandKey;
-			// case '5'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '%'; goto UpdateCommandKey;
-			// case '6'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '^'; goto UpdateCommandKey;
-			// case '7'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '&'; goto UpdateCommandKey;
-			// case '8'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '*'; goto UpdateCommandKey;
-			// case '9'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '('; goto UpdateCommandKey;
-			// case '0'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = ')'; goto UpdateCommandKey;
-			// case '`'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '~'; goto UpdateCommandKey;
-			// case '-'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '_'; goto UpdateCommandKey;
-			// case '='  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '+'; goto UpdateCommandKey;
-			// case '['  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '{'; goto UpdateCommandKey;
-			// case ']'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '}'; goto UpdateCommandKey;
-			// case '\\' | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '|'; goto UpdateCommandKey;
-			// case ';'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = ':'; goto UpdateCommandKey;
-			// case '\'' | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '"'; goto UpdateCommandKey;
-			// case ','  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '<'; goto UpdateCommandKey;
-			// case '.'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '>'; goto UpdateCommandKey;
-			// case '/'  | KEY_ALT_MOD | KEY_SHIFT_MOD: modifiedKey = '?'; goto UpdateCommandKey;
-
-			// case (KEY_ALT_MOD | 'A') ... (KEY_ALT_MOD | 'Z'): 
-			// 	modifiedKey = TO_LOWER_C(currentKey);
-			// 	goto UpdateCommandKey;
-
-			// case (KEY_ALT_MOD | KEY_SHIFT_MOD | 'A') ... (KEY_ALT_MOD | KEY_SHIFT_MOD | 'Z'): 
-			// 	goto UpdateCommandKey;
-
-			// case KEY_ALT_MOD | KEY_BACKSPACE:
-			// case KEY_ALT_MOD | KEY_SHIFT_MOD | KEY_BACKSPACE:
-			// 	command.firstKeyPressed = true; 
-			// 	if (command.bufferCount > 0) command.bufferCount--;
-			// 	goto UpdateCommandScan;
-
-			// case KEY_ALT_MOD | KEY_CTRL_MOD | KEY_BACKSPACE:
-			// case KEY_ALT_MOD | KEY_CTRL_MOD | KEY_SHIFT_MOD | KEY_BACKSPACE:
-			// case KEY_ALT_MOD | KEY_DELETE:
-			// 	command.firstKeyPressed = true;
-			// 	command.bufferCount = 0;
-			// 	command.scanFoundIndex = 0;
-			// 	command.buffer[command.bufferCount] = '\0';
-			// 	break;
-
-			UpdateCommandKey:
-				if (!command.firstKeyPressed) command.firstKeyPressed = true;   
-				command.buffer[command.bufferCount++] = modifiedKey;
-				command.buffer[command.bufferCount] = '\0';
-
-			UpdateCommandScan:
-				LOG("%d\n", command.scanFoundIndex);
-				command.scanFoundIndex = TextFindTextForward(pText, mark.index, command.buffer);
-				break;
-
-			/* Utility Keys */
-			case KEY_CTRL_MOD | KEY_S:
-				LOG("Saving: %s", text.path);
-				SaveFileText(text.path, text.pText);
-				break;
-
-			/* Character Delete Keys */
-			case KEY_BACKSPACE: CodeBoxDeleteChar(pCode); pCode->mark.index--; break;
-			case KEY_DELETE:    CodeBoxDeleteChar(pCode); break;
-
-			/* Character Insert Keys */
-			case KEY_ENTER: CodeBoxInsertChar(pCode, '\n'); break;
-			case KEY_SPACE: CodeBoxInsertChar(pCode, ' '); break;
-			case KEY_TAB:   CodeBoxInsertChar(pCode, '\t'); break;
-
-			case 'A' ... 'Z': CodeBoxInsertChar(pCode, 'a' + (currentKey - KEY_A)); break;
-			case '0' ... '9': CodeBoxInsertChar(pCode, currentKey); break;
-
-			case (KEY_SHIFT_MOD | 'A') ... (KEY_SHIFT_MOD | 'Z'): CodeBoxInsertChar(pCode, currentKey); break;
-			case KEY_KP_0 ... KEY_KP_9: CodeBoxInsertChar(pCode, '0' + (currentKey - KEY_KP_0)); break;
-
-			case '`':  CodeBoxInsertChar(pCode, currentKey); break;
-			case '-':  CodeBoxInsertChar(pCode, currentKey); break;
-			case '=':  CodeBoxInsertChar(pCode, currentKey); break;
-			case '[':  CodeBoxInsertChar(pCode, currentKey); break;
-			case ']':  CodeBoxInsertChar(pCode, currentKey); break;
-			case '\\': CodeBoxInsertChar(pCode, currentKey); break;
-			case ';':  CodeBoxInsertChar(pCode, currentKey); break;
-			case '\'': CodeBoxInsertChar(pCode, currentKey); break;
-			case ',':  CodeBoxInsertChar(pCode, currentKey); break;
-			case '.':  CodeBoxInsertChar(pCode, currentKey); break;
-			case '/':  CodeBoxInsertChar(pCode, currentKey); break;
-
-			case KEY_SHIFT_MOD | '1':  CodeBoxInsertChar(pCode, '!'); break;
-			case KEY_SHIFT_MOD | '2':  CodeBoxInsertChar(pCode, '@'); break;
-			case KEY_SHIFT_MOD | '3':  CodeBoxInsertChar(pCode, '#'); break;
-			case KEY_SHIFT_MOD | '4':  CodeBoxInsertChar(pCode, '$'); break;
-			case KEY_SHIFT_MOD | '5':  CodeBoxInsertChar(pCode, '%'); break;
-			case KEY_SHIFT_MOD | '6':  CodeBoxInsertChar(pCode, '^'); break;
-			case KEY_SHIFT_MOD | '7':  CodeBoxInsertChar(pCode, '&'); break;
-			case KEY_SHIFT_MOD | '8':  CodeBoxInsertChar(pCode, '*'); break;
-			case KEY_SHIFT_MOD | '9':  CodeBoxInsertChar(pCode, '('); break;
-			case KEY_SHIFT_MOD | '0':  CodeBoxInsertChar(pCode, ')'); break;
-			case KEY_SHIFT_MOD | '`':  CodeBoxInsertChar(pCode, '~'); break;
-			case KEY_SHIFT_MOD | '-':  CodeBoxInsertChar(pCode, '_'); break;
-			case KEY_SHIFT_MOD | '=':  CodeBoxInsertChar(pCode, '+'); break;
-			case KEY_SHIFT_MOD | '[':  CodeBoxInsertChar(pCode, '{'); break;
-			case KEY_SHIFT_MOD | ']':  CodeBoxInsertChar(pCode, '}'); break;
-			case KEY_SHIFT_MOD | '\\': CodeBoxInsertChar(pCode, '|'); break;
-			case KEY_SHIFT_MOD | ';':  CodeBoxInsertChar(pCode, ':'); break;
-			case KEY_SHIFT_MOD | '\'': CodeBoxInsertChar(pCode, '"'); break;
-			case KEY_SHIFT_MOD | ',':  CodeBoxInsertChar(pCode, '<'); break;
-			case KEY_SHIFT_MOD | '.':  CodeBoxInsertChar(pCode, '>'); break;
-			case KEY_SHIFT_MOD | '/':  CodeBoxInsertChar(pCode, '?'); break;
-
-			default: break;
+			
+			priorKey = currentKey;
+			currentKey = GetKeyPressed();
 		}
-		
-		priorKey = currentKey;
-		currentKey = GetKeyPressed();
 	}
 
 	/*
@@ -1712,6 +2141,10 @@ LoopBegin:
 		Color textColor = COLOR_TEXT;
 		Color caretColor = BLANK;
 		Vector2 scanFoundPosition = { -1, -1};
+
+		const char* pText = pCode->pText;
+		const TextMeta* pTextMeta  = pCode->pTextMeta;
+		const TOKEN*    pTextToken = pCode->pTextToken;
 		int boxRowCount = pCode->boxRowCount;
 		int boxColCount = pCode->boxColCount;
 		int iChar = pCode->focusStartRowIndex;
@@ -1719,8 +2152,14 @@ LoopBegin:
 		for (int iRow = 0; iRow < boxRowCount; ++iRow) {
 			// int tabCount = 0;
 			// for (int iCol = 0; iCol < boxColCount - (tabCount * tabWidth); ++iCol) {
+			char     currentChar;
+			TextMeta currentMeta;
+			TOKEN    currentToken;
 			for (int iCol = 0; iCol < boxColCount; ++iCol) {
-				
+				currentChar  = pText[iChar];
+				currentMeta  = pTextMeta[iChar];
+				currentToken = pTextToken[iChar];
+
 				Vector2 position = {
 					// textBox.x + (fontXSpacing * iCol) + (tabCount * fontXSpacing * 4), 
 					textBox.x + (fontXSpacing * iCol), 
@@ -1728,13 +2167,10 @@ LoopBegin:
 				};										
 				Rectangle rect = {position.x, position.y, fontXSpacing, fontYSpacing};
 
-				char currentChar = text.pText[iChar];
-				TextMeta m = text.pTextMeta[iChar];
-
 				// if (iChar == text.pActiveCaret->index) {
 				// 	caretColor = COLOR_CARET;
 				// 	caretPosition = position;
-				// 	DEBUG_LOG_ONCE("%s %d %d\n", string_TOKEN(m.token), m.QUOTE, Delimiter(currentChar));
+				// 	DEBUG_LOG_ONCE("%s %d %d\n", string_TOKEN(m.tok), m.QUOTE, Delimiter(currentChar));
 				// }
 
 				if (iChar == command.scanFoundIndex) 
@@ -1746,22 +2182,23 @@ LoopBegin:
 
 				#define COLOR_A(_color, _a) (Color){_color.r, _color.g, _color.b, _a}
 
-				if (m.SCOPE_PAREN > 0) {
-					DrawRectangleRec(rect, COLOR_A(WHITE, m.SCOPE_PAREN * 10));
+				if (currentMeta.SCOPE_PAREN > 0) {
+					DrawRectangleRec(rect, COLOR_A(WHITE, currentMeta.SCOPE_PAREN * 10));
 				}
 
 				// if (m.BLOCK_COMMENT) {
 				// 	DrawRectangleRec(rect, COLOR_A(BLUE, 10));
 				// }
 
-				if (m.PREPROCESS) {
+				if (currentMeta.PREPROCESS) {
 					DrawRectangleRec(rect, COLOR_A(COLOR_PREPROCESS, 20));
 				}
 
-				if (m.QUOTE) {
+				if (currentMeta.QUOTE) {
 					DrawRectangleRec(rect, COLOR_A(COLOR_QUOTE, 50));
 				}
 
+				char displayChar = currentChar;
 				switch (currentChar) 
 				{
 					case '\0':
@@ -1769,14 +2206,14 @@ LoopBegin:
 
 					/* Whitespace */
 					case ' ':
-						currentChar =  '_';
+						displayChar =  '_';
 						goto DrawChar;
 
 					case '\t':
 						// // Step more spaces for tab width
 						// rect.width += (tabCount * fontXSpacing * tabWidth);
 						// tabCount++;
-						currentChar = '-';
+						displayChar = '-';
 						goto DrawChar;
 
 					case '\r':
@@ -1784,19 +2221,22 @@ LoopBegin:
 					case '\f':
 					case '\n':
 						iCol = boxColCount;
-						currentChar =  '\\';
+						displayChar =  '\\';
 						goto DrawChar;
 
 				DrawChar:
 					default:
 						int codePointSize;
-						int codePoint = GetCodepoint(&currentChar, &codePointSize);
-						Color color = TOKEN_COLOR[m.token];
+						int codePoint = GetCodepoint(&displayChar, &codePointSize);
+						Color color = TOKEN_COLOR[currentToken];
 						DrawTextCodepoint(font, codePoint, position, fontSize, color);
 						iChar++;
 						break;
 				}									
 			}
+			
+			// If we are wrapping not on a newline, skip index to next new line so text doesn't wrap
+			if (currentChar != '\n') iChar = TextFindCharForward(pText, iChar, '\n') + 1;
 		}      
 		FinishDrawingText:
 
@@ -1825,8 +2265,9 @@ LoopBegin:
 				CodeSyncCaretToMarkRow(pCode, 0);
 
 				char c = pCode->pText[pCode->pCarets[0].index];
+				TOKEN t = pCode->pTextToken[pCode->pCarets[0].index];
 				TextMeta m = pCode->pTextMeta[pCode->pCarets[0].index];
-				DEBUG_LOG_ONCE("%s %d %d start: %d end: %d\n", string_TOKEN(m.token), m.QUOTE, Delimiter(c), m.iTokenStartOffset, m.iTokenEndOffset);
+				DEBUG_LOG_ONCE("%s %d %d start: %d end: %d\n", string_TOKEN(t), m.QUOTE, Delimiter(c), m.iTokenStartOffset, m.iTokenEndOffset);
 			}
 		}
 
