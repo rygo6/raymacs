@@ -1,10 +1,18 @@
+void T() {
+	int a =!1;
+	int b = 1||0;
+	a--;
+}
+
 static double Test(int input) {
 	const char* str = "Hello\'\n";
 	int output = input;
-	// comment
+	/* comment */
 	char tick = '"';
 	int vala = 10 + 2;
 	int valb = 10 / 2;
+	if (vala-->= 0) 
+		vala >>= 2;
 	return output;
 }
 
@@ -217,6 +225,8 @@ typedef float       f32;
 typedef double      f64;
 typedef unsigned char utf8;
 
+#define typeof __typeof__
+
 #define CACHE_LINE 64
 
 #define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
@@ -235,6 +245,9 @@ typedef unsigned char utf8;
 	_valA > _valB ? _valA : _valB; \
 })
 
+#define FILL(_arr, _value, _count) \
+	for (typeof(_count) i = 0; i < (_count); ++i) { (_arr)[i] = (_value); }
+
 #define UNUSED            __attribute__((unused))
 #define FALLTHROUGH       __attribute__((fallthrough))
 #define CACHE_ALIGN       __attribute__((aligned(CACHE_LINE)))
@@ -250,6 +263,13 @@ typedef unsigned char utf8;
 ({ \
 	void* p = _aligned_malloc(_size, _align); \
 	if (p == NULL) PANIC("XMALLOC_ALIGNED FAIL!"); \
+	p; \
+})
+
+#define XCALLOC(_count, _type) \
+({ \
+	void* p = calloc(_count, sizeof(_type)); \
+	if (p == NULL) PANIC("XCALLOC FAIL!"); \
 	p; \
 })
 
@@ -329,21 +349,21 @@ DEF_ENUM(DIRECTION);
 	DEF(SCOPE_COUNT)
 DEF_ENUM(SCOPE);
 
-#define DEF_TOKEN(DEF) \
-	DEF(TOKEN_NONE) \
-	DEF(TOKEN_TYPE) \
-	DEF(TOKEN_KEYWORD) \
-	DEF(TOKEN_WHITESPACE) \
-	DEF(TOKEN_OPERATOR) \
-	DEF(TOKEN_PREPROCESS) \
-	DEF(TOKEN_CONTINUE) \
-	DEF(TOKEN_SCOPE) \
-	DEF(TOKEN_QUOTE) \
-	DEF(TOKEN_TEXT) \
-	DEF(TOKEN_ESCAPE) \
-	DEF(TOKEN_COMMENT) \
-	DEF(TOKEN_COUNT)
-DEF_ENUM(TOKEN);
+#define DEF_TOK_CATEGORY(DEF) \
+	DEF(TOK_CATEGORY_NONE) \
+	DEF(TOK_CATEGORY_TYPE) \
+	DEF(TOK_CATEGORY_KEYWORD) \
+	DEF(TOK_CATEGORY_WHITESPACE) \
+	DEF(TOK_CATEGORY_OPERATOR) \
+	DEF(TOK_CATEGORY_PREPROCESS) \
+	DEF(TOK_CATEGORY_CONTINUE) \
+	DEF(TOK_CATEGORY_SCOPE) \
+	DEF(TOK_CATEGORY_QUOTE) \
+	DEF(TOK_CATEGORY_TEXT) \
+	DEF(TOK_CATEGORY_ESCAPE) \
+	DEF(TOK_CATEGORY_COMMENT) \
+	DEF(TOK_CATEGORY_COUNT)
+DEF_ENUM(TOK_CATEGORY);
 
 #define FIND_CARET_COLOR     (Color){   0, 255,   0, 255 }
 #define FIND_HIGHLIGHT_COLOR (Color){   0, 255,   0, 64  }
@@ -371,23 +391,23 @@ DEF_ENUM(TOKEN);
 /*
  * C11 Lexer
  */
-static Color TOKEN_COLOR[] = {
-	[TOKEN_NONE]       = COLOR_CODE,
-	[TOKEN_TYPE]       = COLOR_TYPE,
-	[TOKEN_KEYWORD]    = COLOR_KEYWORD,
-	[TOKEN_WHITESPACE] = COLOR_WHITESPACE,
-	[TOKEN_OPERATOR]   = COLOR_OPERATOR,
-	[TOKEN_PREPROCESS] = COLOR_PREPROCESS,
-	[TOKEN_CONTINUE]   = COLOR_CONTINUE,
-	[TOKEN_SCOPE]      = COLOR_SCOPE,
-	[TOKEN_QUOTE]      = COLOR_QUOTE,
-	[TOKEN_TEXT]       = COLOR_TEXT,
-	[TOKEN_ESCAPE]     = COLOR_ESCAPE,
-	[TOKEN_COMMENT]    = COLOR_COMMENT,
+static Color TOK_CATEGORY_COLOR[] = {
+	[TOK_CATEGORY_NONE]       = COLOR_CODE,
+	[TOK_CATEGORY_TYPE]       = COLOR_TYPE,
+	[TOK_CATEGORY_KEYWORD]    = COLOR_KEYWORD,
+	[TOK_CATEGORY_WHITESPACE] = COLOR_WHITESPACE,
+	[TOK_CATEGORY_OPERATOR]   = COLOR_OPERATOR,
+	[TOK_CATEGORY_PREPROCESS] = COLOR_PREPROCESS,
+	[TOK_CATEGORY_CONTINUE]   = COLOR_CONTINUE,
+	[TOK_CATEGORY_SCOPE]      = COLOR_SCOPE,
+	[TOK_CATEGORY_QUOTE]      = COLOR_QUOTE,
+	[TOK_CATEGORY_TEXT]       = COLOR_TEXT,
+	[TOK_CATEGORY_ESCAPE]     = COLOR_ESCAPE,
+	[TOK_CATEGORY_COMMENT]    = COLOR_COMMENT,
 };
-STATIC_ASSERT(COUNT(TOKEN_COLOR) == TOKEN_COUNT);
+STATIC_ASSERT(COUNT(TOK_CATEGORY_COLOR) == TOK_CATEGORY_COUNT);
 
-#define DEF_PREPROCESS_TOKENS(DEF) \
+#define DEF_PREPROCESS_TOKS(DEF) \
 	DEF("#include", TOK_PP_INCLUDE) \
 	DEF("#define",  TOK_PP_DEFINE) \
 	DEF("#ifndef",  TOK_PP_IFNDEF) \
@@ -403,7 +423,7 @@ STATIC_ASSERT(COUNT(TOKEN_COLOR) == TOKEN_COUNT);
 	DEF("##",       TOK_PP_HASH_HASH) \
 	DEF("#",        TOK_PP_HASH)
 
-#define DEF_KEYWORD_TOKENS(DEF) \
+#define DEF_KEYWORD_TOKS(DEF) \
 	DEF("_Static_assert", TOK_STATIC_ASSERT) \
 	DEF("_Thread_local",  TOK_THREAD_LOCAL) \
 	DEF("_Imaginary",     TOK_IMAGINARY) \
@@ -437,7 +457,7 @@ STATIC_ASSERT(COUNT(TOKEN_COLOR) == TOKEN_COUNT);
 	DEF("if",             TOK_IF) \
 	DEF("do",             TOK_DO)
 
-#define DEF_TYPE_TOKENS(DEF) \
+#define DEF_TYPE_TOKS(DEF) \
 	DEF("unsigned", TOK_UNSIGNED) \
 	DEF("struct",   TOK_STRUCT) \
 	DEF("signed",   TOK_SIGNED) \
@@ -452,7 +472,7 @@ STATIC_ASSERT(COUNT(TOKEN_COLOR) == TOKEN_COUNT);
 	DEF("enum",     TOK_ENUM) \
 	DEF("int",      TOK_INT)
 
-#define DEF_STDTYPE_TOKENS(DEF) \
+#define DEF_STDTYPE_TOKS(DEF) \
 	DEF("ptrdiff_t", TOK_PTRDIFF_T) \
 	DEF("uint64_t",  TOK_UINT64_T) \
 	DEF("uint32_t",  TOK_UINT32_T) \
@@ -465,7 +485,7 @@ STATIC_ASSERT(COUNT(TOKEN_COLOR) == TOKEN_COUNT);
 	DEF("size_t",    TOK_SIZE_T) \
 	DEF("int8_t",    TOK_INT8_T)
 
-#define DEF_WHITESPACE_TOKENS(DEF) \
+#define DEF_WHITESPACE_TOKS(DEF) \
 	DEF(" ",  TOK_SPACE) \
 	DEF("\t", TOK_TAB) \
 	DEF("\n", TOK_NEWLINE) \
@@ -473,7 +493,7 @@ STATIC_ASSERT(COUNT(TOKEN_COLOR) == TOKEN_COUNT);
 	DEF("\f", TOK_FORM_FEED) \
 	DEF("\v", TOK_VERTICAL_TAB)
 
-#define DEF_GROUPING_TOKENS(DEF) \
+#define DEF_GROUPING_TOKS(DEF) \
 	DEF("(", TOK_PAREN_OPEN) \
 	DEF(")", TOK_PAREN_CLOSE) \
 	DEF("{", TOK_BRACE_OPEN) \
@@ -481,16 +501,16 @@ STATIC_ASSERT(COUNT(TOKEN_COLOR) == TOKEN_COUNT);
 	DEF("[", TOK_BRACKET_OPEN) \
 	DEF("]", TOK_BRACKET_CLOSE)
 
-#define DEF_ACCESS_TOKENS(DEF) \
+#define DEF_ACCESS_TOKS(DEF) \
 	DEF("->", TOK_ARROW) \
 	DEF(".",  TOK_DOT)
 
-#define DEF_STATEMENT_TOKENS(DEF) \
+#define DEF_STATEMENT_TOKS(DEF) \
 	DEF(";", TOK_SEMICOLON) \
 	DEF(",", TOK_COMMA) \
 	DEF(":", TOK_COLON)
 
-#define DEF_ARITHMETIC_TOKENS(DEF) \
+#define DEF_ARITHMETIC_TOKS(DEF) \
 	DEF("++", TOK_INCREMENT) \
 	DEF("--", TOK_DECREMENT) \
 	DEF("+",  TOK_PLUS) \
@@ -499,7 +519,7 @@ STATIC_ASSERT(COUNT(TOKEN_COLOR) == TOKEN_COUNT);
 	DEF("/",  TOK_SLASH) \
 	DEF("%",  TOK_PERCENT)
 
-#define DEF_BITWISE_TOKENS(DEF) \
+#define DEF_BITWISE_TOKS(DEF) \
 	DEF("<<=", TOK_LEFT_SHIFT_ASSIGN) \
 	DEF(">>=", TOK_RIGHT_SHIFT_ASSIGN) \
 	DEF("<<",  TOK_LEFT_SHIFT) \
@@ -509,12 +529,12 @@ STATIC_ASSERT(COUNT(TOKEN_COLOR) == TOKEN_COUNT);
 	DEF("^",   TOK_CARET) \
 	DEF("~",   TOK_TILDE)
 
-#define DEF_LOGICAL_TOKENS(DEF) \
+#define DEF_LOGICAL_TOKS(DEF) \
 	DEF("&&", TOK_LOGICAL_AND) \
 	DEF("||", TOK_LOGICAL_OR) \
 	DEF("!",  TOK_EXCLAMATION)
 
-#define DEF_COMPARISON_TOKENS(DEF) \
+#define DEF_COMPARISON_TOKS(DEF) \
 	DEF("<=", TOK_LESS_EQUAL) \
 	DEF(">=", TOK_GREATER_EQUAL) \
 	DEF("==", TOK_EQUAL_EQUAL) \
@@ -522,7 +542,7 @@ STATIC_ASSERT(COUNT(TOKEN_COLOR) == TOKEN_COUNT);
 	DEF("<",  TOK_LESS) \
 	DEF(">",  TOK_GREATER)
 
-#define DEF_ASSIGNMENT_TOKENS(DEF) \
+#define DEF_ASSIGNMENT_TOKS(DEF) \
 	DEF("+=",  TOK_PLUS_ASSIGN) \
 	DEF("-=",  TOK_MINUS_ASSIGN) \
 	DEF("*=",  TOK_STAR_ASSIGN) \
@@ -533,59 +553,60 @@ STATIC_ASSERT(COUNT(TOKEN_COLOR) == TOKEN_COUNT);
 	DEF("^=",  TOK_CARET_ASSIGN) \
 	DEF("=",   TOK_ASSIGN)
 
-#define DEF_OTHER_OPERATOR_TOKENS(DEF) \
+#define DEF_OTHER_OPERATOR_TOKS(DEF) \
 	DEF("?",   TOK_QUESTION) \
 	DEF("...", TOK_ELLIPSIS)
 
-#define DEF_STRING_DELIMITER_TOKENS(DEF) \
+#define DEF_STRING_DELIMITER_TOKS(DEF) \
 	DEF("\"", TOK_DOUBLE_QUOTE) \
 	DEF("'",  TOK_SINGLE_QUOTE)
 
-#define DEF_COMMENT_DELIMITER_TOKENS(DEF) \
+#define DEF_COMMENT_DELIMITER_TOKS(DEF) \
 	DEF("/*", TOK_COMMENT_OPEN) \
 	DEF("*/", TOK_COMMENT_CLOSE) \
 	DEF("//", TOK_LINE_COMMENT)
 
-#define DEF_ALL_CATEGORY_TOKENS(DEF) \
-	DEF(PREPROCESS_TOKENS) \
-	DEF(KEYWORD_TOKENS) \
-	DEF(TYPE_TOKENS) \
-	DEF(STDTYPE_TOKENS) \
-	DEF(WHITESPACE_TOKENS) \
-	DEF(GROUPING_TOKENS) \
-	DEF(ACCESS_TOKENS) \
-	DEF(STATEMENT_TOKENS) \
-	DEF(ARITHMETIC_TOKENS) \
-	DEF(BITWISE_TOKENS) \
-	DEF(LOGICAL_TOKENS) \
-	DEF(COMPARISON_TOKENS) \
-	DEF(ASSIGNMENT_TOKENS) \
-	DEF(OTHER_OPERATOR_TOKENS) \
-	DEF(STRING_DELIMITER_TOKENS) \
-	DEF(COMMENT_DELIMITER_TOKENS)
+#define DEF_ALL_CATEGORY_TOKS(DEF) \
+	DEF(PREPROCESS_TOKS) \
+	DEF(KEYWORD_TOKS) \
+	DEF(TYPE_TOKS) \
+	DEF(STDTYPE_TOKS) \
+	DEF(WHITESPACE_TOKS) \
+	DEF(GROUPING_TOKS) \
+	DEF(ACCESS_TOKS) \
+	DEF(STATEMENT_TOKS) \
+	DEF(ARITHMETIC_TOKS) \
+	DEF(BITWISE_TOKS) \
+	DEF(LOGICAL_TOKS) \
+	DEF(COMPARISON_TOKS) \
+	DEF(ASSIGNMENT_TOKS) \
+	DEF(OTHER_OPERATOR_TOKS) \
+	DEF(STRING_DELIMITER_TOKS) \
+	DEF(COMMENT_DELIMITER_TOKS)
 
 /*
  * Lexer
  */ 
-#define DEF_ENUM_TOKEN_DEFINITION(_name, _tok) _tok,
-#define DEF_ALL_ENUM_TOKEN_DEFINITION(_category) DEF_##_category(DEF_ENUM_TOKEN_DEFINITION)
+#define DEF_ENUM_TOK_DEFINITION(_name, _tok) _tok,
+#define DEF_ALL_ENUM_TOK_DEFINITION(_cat) DEF_##_cat(DEF_ENUM_TOK_DEFINITION)
 typedef enum TOK { 
 	TOK_NONE,
-	DEF_ALL_CATEGORY_TOKENS(DEF_ALL_ENUM_TOKEN_DEFINITION) 
+	DEF_ALL_CATEGORY_TOKS(DEF_ALL_ENUM_TOK_DEFINITION) 
 	TOK_COUNT,
 } TOK;
 
-#define DEF_LEN_TOKEN_DEFINITION(_name, _tok) [_tok] = sizeof(_name) - 1,
-#define DEF_ALL_LEN_TOKEN_DEFINITION(_category) DEF_##_category(DEF_LEN_TOKEN_DEFINITION)
+#define DEF_LEN_TOK_DEFINITION(_name, _tok) [_tok] = sizeof(_name) - 1,
+#define DEF_ALL_LEN_TOK_DEFINITION(_cat) DEF_##_cat(DEF_LEN_TOK_DEFINITION)
 static const int TOK_NAME_LEN[] = { 
-	DEF_ALL_CATEGORY_TOKENS(DEF_ALL_LEN_TOKEN_DEFINITION) 
+	DEF_ALL_CATEGORY_TOKS(DEF_ALL_LEN_TOK_DEFINITION) 
 };
 
-#define DEF_STRING_TOKEN_DEFINITION(_name, _tok) case _tok: return #_tok " " #_name;
-#define DEF_ALL_STRING_TOKEN_DEFINITION(_category) DEF_##_category(DEF_STRING_TOKEN_DEFINITION)
+#define DEF_STRING_TOK_DEFINITION(_name, _tok) case _tok: return #_tok " " #_name;
+#define DEF_ALL_STRING_TOK_DEFINITION(_cat) DEF_##_cat(DEF_STRING_TOK_DEFINITION)
 static const char* string_TOK(TOK tok) {
 	switch(tok) {
-		DEF_ALL_CATEGORY_TOKENS(DEF_ALL_STRING_TOKEN_DEFINITION)
+		case TOK_NONE: return "TOK_NONE";
+		DEF_ALL_CATEGORY_TOKS(DEF_ALL_STRING_TOK_DEFINITION)
 		default: return "TOK N/A";
 	}
 }
@@ -594,9 +615,9 @@ typedef struct TokenDefintion {
 	const char* name;
 	TOK tok;
 } TokenDefintion;
-#define DEF_ARRAY_TOKEN_DEFINITION(_name, _token) (TokenDefintion){ _name, _token },
-#define DEF_ALL_ARRAY_TOKEN_DEFINITION(_category)  static const TokenDefintion _category[] = { DEF_##_category(DEF_ARRAY_TOKEN_DEFINITION) };
-DEF_ALL_CATEGORY_TOKENS(DEF_ALL_ARRAY_TOKEN_DEFINITION)
+#define DEF_ARRAY_TOK_DEFINITION(_name, _token) (TokenDefintion){ _name, _token },
+#define DEF_ALL_ARRAY_TOK_DEFINITION(_cat)  static const TokenDefintion _cat[] = { DEF_##_cat(DEF_ARRAY_TOK_DEFINITION) };
+DEF_ALL_CATEGORY_TOKS(DEF_ALL_ARRAY_TOK_DEFINITION)
 
 typedef u32 tok_hash;
 typedef u8  token_hash_prefix;
@@ -608,43 +629,43 @@ typedef struct TokenKey {
 #define MAP_CAPACITY 4096
 #define MAP_PREFIX_CAPACITY 256
 #define MAP_PAGE_CAPACITY 16
-#define TOKEN_MAX_SIZE 16
-#define TOKEN_MAX_END  15
-#define TOKEN_MASK 0x0FFF // 12 bit mask
+#define TOK_MAX_SIZE 16
+#define TOK_MAX_END  15
+#define TOK_MASK 0x0FFF // 12 bit mask
 
-static TOKEN TOKEN_MAP_A[MAP_PAGE_CAPACITY][MAP_CAPACITY];
-static TOKEN TOKEN_MAP_B[MAP_PAGE_CAPACITY][MAP_CAPACITY];
+static TOK TOK_MAP_A[MAP_PAGE_CAPACITY][MAP_CAPACITY];
+static TOK TOK_MAP_B[MAP_PAGE_CAPACITY][MAP_CAPACITY];
 
-#define TOKEN_HASH_SEED 0
-#define TOKEN_HASH_DJB2(_h, _c)  ((((_h) << 5) + (_h) + (_c)) * 33) 
-#define TOKEN_HASH_FNV1A(_h, _c) (((_h) ^ (_c)) * 16777619UL)
+#define TOK_HASH_SEED 0
+#define TOK_HASH_DJB2(_h, _c)  ((((_h) << 5) + (_h) + (_c)) * 33) 
+#define TOK_HASH_FNV1A(_h, _c) (((_h) ^ (_c)) * 16777619UL)
 
 /* Calc token key hashes via range or null termination */
 static TokenKey CalcTokenKey(const char *str, int iStart, int iEnd)
 {
 	int range = iEnd - iStart;
 	str += iStart; char c; u8 len = 0;
-	tok_hash ha = TOKEN_HASH_SEED; 
-	tok_hash hb = TOKEN_HASH_SEED; 
+	tok_hash ha = TOK_HASH_SEED; 
+	tok_hash hb = TOK_HASH_SEED; 
 	while ((c = *str++) && range-->= 0) {
-		ha = TOKEN_HASH_DJB2(ha, c); hb = TOKEN_HASH_FNV1A(hb, c); len++;
+		ha = TOK_HASH_DJB2(ha, c); hb = TOK_HASH_FNV1A(hb, c); len++;
 	}
 	return (TokenKey){ ha, hb, len };
 }
 
-static RESULT ContructTokenMap(TOKEN category, int tokenCount, const TokenDefintion* tokens)
+static RESULT ContructTokenMap(TOK category, int tokenCount, const TokenDefintion* tokens)
 {
 	for (int iTkn = 0; iTkn < tokenCount; iTkn++) {
-		TokenKey k = CalcTokenKey(tokens[iTkn].name, 0, TOKEN_MAX_END);
-		TOKEN tokA = TOKEN_MAP_A[k.len][k.a];
-		TOKEN tokB = TOKEN_MAP_B[k.len][k.b];
-		if (tokA != TOKEN_NONE || tokB != TOKEN_NONE) {
-			LOG_ERR("Type Hash Collision! %s %d %d %d %s\n", tokens[iTkn].name, k.a, k.b, k.len, string_TOKEN(category));
+		TokenKey k = CalcTokenKey(tokens[iTkn].name, 0, TOK_MAX_END);
+		TOK tokA = TOK_MAP_A[k.len][k.a];
+		TOK tokB = TOK_MAP_B[k.len][k.b];
+		if (tokA != TOK_NONE || tokB != TOK_NONE) {
+			LOG_ERR("Type Hash Collision! %s %d %d %d %s\n", tokens[iTkn].name, k.a, k.b, k.len, string_TOK(category));
 			return RESULT_COLLISION;
 		}
-		TOKEN_MAP_A[k.len][k.a] = category;
-		TOKEN_MAP_B[k.len][k.b] = category;
-		LOG("%s %d %d %d %s\n", tokens[iTkn].name, k.a, k.b, k.len, string_TOKEN(category));
+		TOK_MAP_A[k.len][k.a] = category;
+		TOK_MAP_B[k.len][k.b] = category;
+		LOG("%s %d %d %d %s\n", tokens[iTkn].name, k.a, k.b, k.len, string_TOK(category));
 	}
 	return RESULT_SUCCESS;
 }
@@ -655,32 +676,33 @@ typedef struct MapTok {
 } MapTok;
 static MapTok TOK_MAP[MAP_PAGE_CAPACITY][MAP_CAPACITY];
 
+
 static tok_hash CalcTokKey(const char *str, int iStart, int iEnd)
 {
-	str += iStart; 
-	tok_hash h = TOKEN_HASH_SEED; 
+	tok_hash h = str[iStart];  // if len is 1 then hash is ascii code
+	str += iStart + 1;  // do not hash first char
 	int range = iEnd - iStart;
-	char c; while ((c = *str++) && range-->= 0) h = TOKEN_HASH_FNV1A(h, c);
+	char c; while ((c = *str++) && range-->= 0) h = TOK_HASH_DJB2(h, c);
 	return h;
 }
 
 #define TOK_MAP_HASH_MASK 0x0FFF // 12 bit mask = 4096
-#define TOK_MAP_PAGE_MASK 0xF    //  4 bit mask = 16
+#define TOK_MAP_PAGE_MASK 0x000F //  4 bit mask = 16
 static RESULT ContructTokMap(int tokenCount, const TokenDefintion* tokens)
 {
 	for (int iTkn = 0; iTkn < tokenCount; iTkn++) {
-		MapTok mt = {
-			.tok  = tokens[iTkn].tok,
-			.hash = CalcTokKey(tokens[iTkn].name, 0, TOKEN_MAX_END),
-		};
-		u16 h = mt.hash & TOK_MAP_HASH_MASK;
-		u8  p = TOK_NAME_LEN[mt.tok] & TOK_MAP_PAGE_MASK;
-		if (TOK_MAP[p][h].tok != TOK_NONE) {
-			LOG_ERR("Type Hash Collision! %s hash: %d page: %d fullhash: %d\n", tokens[iTkn].name, h, p, mt.hash);
+		TOK tok = tokens[iTkn].tok;
+		int len = TOK_NAME_LEN[tok];
+		tok_hash hash = CalcTokKey(tokens[iTkn].name, 0, len - 1);
+		u16 k = hash & TOK_MAP_HASH_MASK;
+		u8  p = len & TOK_MAP_PAGE_MASK;
+		MapTok* pMapTok = &TOK_MAP[p][k];
+		if (pMapTok->tok != TOK_NONE) {
+			LOG_ERR("Type Hash Collision! %s k: %d p: %d hash: %d\n", tokens[iTkn].name, k, p, hash);
 			return RESULT_COLLISION;
 		}
-		TOK_MAP[p][h] = mt;
-		LOG("%s hash: %d page: %d fullhash: %d\n", string_TOK(mt.tok), h, p, mt.hash);
+		*pMapTok = (MapTok){ tok, hash };
+		LOG("%s=%d k: %d p: %d hash: %d\n", string_TOK(tok), (u16)tok, k, p, hash);
 	}
 	return RESULT_SUCCESS;
 }
@@ -704,9 +726,9 @@ const char availableChars[] = "·¬ abcdefghijklmnopqrstuvwxyzABDCEFGHIJKLMNOPQR
 #define CARET_MAX_CAPACITY 8
 #define CARET_INVALID INT_MIN
 
-#define TOKEN_MAX_INCREMENT 15
+#define TOK_MAX_INCREMENT 15
 typedef struct PACKED TextMeta {
-	TOKEN token : 6;
+	TOK_CATEGORY token : 6;
 
 	u8 BLOCK_COMMENT : 1;
 	u8 LINE_COMMENT  : 1;
@@ -759,7 +781,12 @@ typedef struct CodeBox {
 	int textCount;
 	char*     pText;
 	CodeRow*  pTextRows;
-	TOKEN*    pTextToken;
+
+	TOK* pTextTok;
+	int* pTextTokStart;
+	int* pTextTokLen;
+	TOK_CATEGORY* pTextCategory;
+
 	TextMeta* pTextMeta;
 
 	char* path;
@@ -822,46 +849,103 @@ static inline bool Delimiter(char c)
 
 static RESULT ProcessMeta2(CodeBox* pCode) 
 {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Woverride-init"
+
+#define PROCESS_CHAR_TOK TOK_COUNT // set to TOK_COUNT so it is last entry
+#define PROCESS_COMMENT_TOK TOK_COUNT + 1 // set to TOK_COUNT so it is last entry
 #define DEF_DISPATCH(_name, _tok)  [_tok] = &&_tok,
-#define DEF_ALL_DISPATCH(_category) DEF_##_category(DEF_DISPATCH)
-    static void *dispatch[] = { 
-    	[TOK_NONE] = &&TOK_NONE,
-    	DEF_ALL_CATEGORY_TOKENS(DEF_ALL_DISPATCH) 
-    };
+#define DEF_ALL_DISPATCH(_cat) DEF_##_cat(DEF_DISPATCH)
+	static void *codeDispatch[] = {
+		[TOK_NONE] = &&TOK_NONE,
+		[PROCESS_CHAR_TOK] = &&PROCESS_CHAR,
+		[PROCESS_COMMENT_TOK] = &&PROCESS_COMMENT,
+		DEF_ALL_CATEGORY_TOKS(DEF_ALL_DISPATCH)
+	};
+	static int codeDispatchCount = COUNT(codeDispatch);
 #undef DEF_DISPATCH
 #undef DEF_ALL_DISPATCH
 
-	const int count      = pCode->textCount;
-	char*     pText      = pCode->pText;
-	TextMeta* pTextMeta  = pCode->pTextMeta;
-	TOKEN*    pTextToken = pCode->pTextToken;
+	static void *commentDispatch[] = {
+		[0 ... TOK_COUNT] = &&PROCESS_COMMENT,
+		[TOK_NONE] = &&PROCESS_COMMENT,
+		[TOK_COMMENT_CLOSE] = &&TOK_COMMENT_CLOSE,
+	};
+	static int commentDispatchCount = COUNT(commentDispatch);
 
-#define RESET_HASH() ({ hashLen = 0; hash = TOKEN_HASH_SEED; })
-	tok_hash hash; int hashLen;
-    RESET_HASH();
+#pragma GCC diagnostic pop
 
-    TextMeta prospMeta;
-    bool preprocesing = false;
-    bool maxMunch = false;
-    int iChar = -1;
+	// TODO move in anon struct
+	const int     count      = pCode->textCount;
+	char*         pText      = pCode->pText;
+	TextMeta*     pTextMeta  = pCode->pTextMeta;
+	TOK*          pTextTok   = pCode->pTextTok;
+	TOK_CATEGORY* pTextCategory = pCode->pTextCategory;
 
-processChar:
-	if (iChar == count) return RESULT_SUCCESS;
+	struct {
+		int len;
+		int iStart;
+		TOK tok;
+		TOK_CATEGORY category;
+	} pend;
 
-	iChar++; char c = pText[iChar];
-	if (Delimiter(c)) RESET_HASH();
-	hash = TOKEN_HASH_FNV1A(hash, c); 
+	struct {
+		tok_hash cur;
+		int len;
+	} hash;
 
-	hashLen++; 
-	MapTok mt  = TOK_MAP[hashLen & TOK_MAP_PAGE_MASK][hash & TOK_MAP_HASH_MASK];
-	TOK    tok = mt.hash == hash ? mt.tok : TOK_NONE;
-	// LOG("%d %c %d %d %s\n", iChar, pText[iChar], hashLen, hash & TOKEN_MASK, string_TOK(tok));
-	goto *dispatch[tok];
+	struct {
+		int i;
+		char c;
+		TOK tok;
+		bool preprocess;
+    	bool comment;
+	} step = { .i = -1 };
+
+#define SET_CHAR_TOK(_cat) { pTextTok[step.i] = step.tok; pTextCategory[step.i] = _cat; }
+#define SET_RANGE_TOK(_cat) { \
+	int _len = TOK_NAME_LEN[step.tok]; int _iStart = (step.i - _len) + 1; \
+	FILL(pTextTok + _iStart, step.tok, _len); FILL(pTextCategory + _iStart, _cat, _len); \
+}
+
+#define WRITE_PEND()        { FILL(pTextTok + pend.iStart, pend.tok, pend.len); FILL(pTextCategory + pend.iStart, pend.category, pend.len); }
+#define SET_PEND(_cat) { pend.len = TOK_NAME_LEN[step.tok]; pend.iStart = (step.i - pend.len) + 1; pend.tok = step.tok; pend.category = _cat; }
+#define CLEAR_PEND()        { memset(&pend, 0, sizeof(pend)); }
+
+/* Set hash to start at current step. */
+#define RESTART_HASH()      { hash = (typeof(hash)){ step.c, 1 }; }
+/* Zero hash. */
+#define CLEAR_HASH()        { memset(&hash, 0, sizeof(hash)); }
+
+/* Single Char Delimit. Set known char token. Write any pending token. Clear pending and hash. */
+#define DELIMIT_CHAR(_cat) SET_CHAR_TOK(_cat); WRITE_PEND(); CLEAR_PEND(); CLEAR_HASH(); 
+
+/* Begin Pending Token Range. Write any pending token if new category and restart hash to current. Set pending to current.*/ // TODO I could get rid of if with another jump table
+#define BEGIN_PEND(_cat)   if (pend.category != TOK_CATEGORY_OPERATOR) { WRITE_PEND(); RESTART_HASH(); } SET_PEND(_cat);
+
+/* Delimit Pending Token Range. Set known token range. Clear pending and hash.*/
+#define DELIMIT_PEND(_cat) SET_RANGE_TOK(TOK_CATEGORY_OPERATOR); CLEAR_PEND(); CLEAR_HASH(); 
+
+#define GOTO_NEXT(_dispatch) { \
+	if (step.i == count) return RESULT_SUCCESS; \
+	step.c = pText[++step.i]; \
+	hash.cur = (++hash.len == 1) ? (tok_hash)step.c : TOK_HASH_DJB2(hash.cur, step.c);  \
+	MapTok mt = TOK_MAP[hash.len & TOK_MAP_PAGE_MASK][hash.cur & TOK_MAP_HASH_MASK]; \
+	step.tok = mt.hash == hash.cur ? mt.tok : TOK_NONE; \
+	goto *_dispatch[step.tok]; \
+}
+
+	CLEAR_PEND(); CLEAR_HASH();
+
+PROCESS_CHAR:
+	GOTO_NEXT(codeDispatch);
 
 TOK_NONE:
-	goto processChar;
+	MapTok cmt = TOK_MAP[1][(u8)step.c];
+	step.tok = cmt.tok == TOK_NONE ? PROCESS_CHAR_TOK : cmt.tok;
+	goto *codeDispatch[step.tok];
 
-/* PREPROCESS_TOKENS */
+/* PREPROCESS_TOKS */
 TOK_PP_INCLUDE:
 TOK_PP_DEFINE:
 TOK_PP_IFNDEF:
@@ -874,18 +958,15 @@ TOK_PP_ERROR:
 TOK_PP_PRAGMA:
 TOK_PP_LINE:
 TOK_PP_IF:
-TOK_PP_HASH_HASH: {
-	int tokenLen = TOK_NAME_LEN[tok];
-	memset(pTextToken + (iChar - tokenLen) + 1, TOKEN_PREPROCESS, tokenLen);
-    RESET_HASH();
-	goto processChar;
-}
-TOK_PP_HASH: {
-	preprocesing = true;
-	pTextToken[iChar] = TOKEN_PREPROCESS;
-	goto processChar;
-}
-/* KEYWORD_TOKENS */
+TOK_PP_HASH_HASH:
+	SET_PEND(TOK_CATEGORY_PREPROCESS);
+	GOTO_NEXT(codeDispatch);
+
+TOK_PP_HASH:
+	SET_PEND(TOK_CATEGORY_PREPROCESS);
+	GOTO_NEXT(codeDispatch);
+
+/* KEYWORD_TOKS */
 TOK_STATIC_ASSERT:
 TOK_THREAD_LOCAL:
 TOK_IMAGINARY:
@@ -917,13 +998,11 @@ TOK_CASE:
 TOK_AUTO:
 TOK_FOR:
 TOK_IF:
-TOK_DO: {
-	int tokenLen = TOK_NAME_LEN[tok];
-	memset(pTextToken + (iChar - tokenLen) + 1, TOKEN_KEYWORD, tokenLen);
-    RESET_HASH();
-	goto processChar;
-}
-/* TYPE_TOKENS */
+TOK_DO:
+	SET_PEND(TOK_CATEGORY_KEYWORD);
+	GOTO_NEXT(codeDispatch);
+
+/* TYPE_TOKS */
 TOK_UNSIGNED:
 TOK_STRUCT:
 TOK_SIGNED:
@@ -947,107 +1026,141 @@ TOK_INT16_T:
 TOK_WCHAR_T:
 TOK_UINT8_T:
 TOK_SIZE_T:
-TOK_INT8_T: {
-	int tokenLen = TOK_NAME_LEN[tok];
-	memset(pTextToken + (iChar - tokenLen) + 1, TOKEN_TYPE, tokenLen);
-    RESET_HASH();
-	goto processChar;
-}
-/* WHITESPACE_TOKENS */
+TOK_INT8_T:
+	SET_PEND(TOK_CATEGORY_TYPE);
+	GOTO_NEXT(codeDispatch);
+
+/* WHITESPACE_TOKS */
 TOK_SPACE:
 TOK_TAB:
 TOK_NEWLINE:
 TOK_CARRIAGE_RETURN:
 TOK_FORM_FEED:
 TOK_VERTICAL_TAB:
-	pTextToken[iChar] = TOKEN_WHITESPACE;
-    RESET_HASH();
-	goto processChar;
+	DELIMIT_CHAR(TOK_CATEGORY_WHITESPACE);
+	GOTO_NEXT(codeDispatch);
 
-/* GROUPING_TOKENS */
+/* GROUPING_TOKS */
 TOK_PAREN_OPEN:
 TOK_PAREN_CLOSE:
 TOK_BRACE_OPEN:
 TOK_BRACE_CLOSE:
 TOK_BRACKET_OPEN:
 TOK_BRACKET_CLOSE:
-	pTextToken[iChar] = TOKEN_SCOPE;
-    RESET_HASH();
-	goto processChar;
+	DELIMIT_CHAR(TOK_CATEGORY_SCOPE);
+	GOTO_NEXT(codeDispatch);
 
-/* ACCESS_TOKENS */
+/* ACCESS_TOKS */
 TOK_ARROW:
+	DELIMIT_PEND(TOK_CATEGORY_OPERATOR);
+	GOTO_NEXT(codeDispatch);
 TOK_DOT:
+	BEGIN_PEND(TOK_CATEGORY_OPERATOR);
+	GOTO_NEXT(codeDispatch);
 
-/* STATEMENT_TOKENS */
+/* STATEMENT_TOKS */
 TOK_SEMICOLON:
 TOK_COMMA:
 TOK_COLON:
+	DELIMIT_CHAR(TOK_CATEGORY_OPERATOR);
+	GOTO_NEXT(codeDispatch);	
 
-/* ARITHMETIC_TOKENS */
-TOK_INCREMENT:
-TOK_DECREMENT:
-TOK_PLUS:
-TOK_MINUS:
-TOK_STAR:
-TOK_SLASH:
-TOK_PERCENT:
-	pTextToken[iChar] = TOKEN_OPERATOR;
-    RESET_HASH();
-	goto processChar;
+/* ARITHMETIC_TOKS */
+TOK_INCREMENT: // ++
+TOK_DECREMENT: // --
+	DELIMIT_PEND(TOK_CATEGORY_OPERATOR);
+	GOTO_NEXT(codeDispatch);
 
-/* BITWISE_TOKENS */
-TOK_LEFT_SHIFT_ASSIGN:
-TOK_RIGHT_SHIFT_ASSIGN:
-TOK_LEFT_SHIFT:
-TOK_RIGHT_SHIFT:
-TOK_AMPERSAND:
-TOK_PIPE:
-TOK_CARET:
-TOK_TILDE:
+TOK_PLUS:      // +
+TOK_MINUS:     // -
+TOK_STAR:      // *
+TOK_SLASH:     // /
+TOK_PERCENT:   // %
+	BEGIN_PEND(TOK_CATEGORY_OPERATOR);
+	GOTO_NEXT(codeDispatch);
 
-/* LOGICAL_TOKENS */
-TOK_LOGICAL_AND:
-TOK_LOGICAL_OR:
-TOK_EXCLAMATION:
+/* BITWISE_TOKS */
+TOK_LEFT_SHIFT_ASSIGN:  // <<=
+TOK_RIGHT_SHIFT_ASSIGN: // >>=
+	DELIMIT_PEND(TOK_CATEGORY_OPERATOR);
+	GOTO_NEXT(codeDispatch);
 
-/* COMPARISON_TOKENS */
-TOK_LESS_EQUAL:
-TOK_GREATER_EQUAL:
-TOK_EQUAL_EQUAL:
-TOK_NOT_EQUAL:
-TOK_LESS:
-TOK_GREATER:
+TOK_LEFT_SHIFT:         // <<
+TOK_RIGHT_SHIFT:        // >>
+	SET_PEND(TOK_CATEGORY_OPERATOR);
+	GOTO_NEXT(codeDispatch);
 
-/* ASSIGNMENT_TOKENS */
-TOK_PLUS_ASSIGN:
-TOK_MINUS_ASSIGN:
-TOK_STAR_ASSIGN:
-TOK_SLASH_ASSIGN:
-TOK_PERCENT_ASSIGN:
-TOK_AMPERSAND_ASSIGN:
-TOK_PIPE_ASSIGN:
-TOK_CARET_ASSIGN:
-TOK_ASSIGN:
-	int tokenLen = TOK_NAME_LEN[tok];
-	memset(pTextToken + (iChar - tokenLen) + 1, TOKEN_OPERATOR, tokenLen);
-    RESET_HASH();
-	goto processChar;
+TOK_AMPERSAND:          // &
+TOK_PIPE:               // |
+TOK_CARET:              // ^
+TOK_TILDE:              // ~
+	BEGIN_PEND(TOK_CATEGORY_OPERATOR);
+	GOTO_NEXT(codeDispatch);
 
-/* DEF_OTHER_OPERATOR_TOKENS */
+/* LOGICAL_TOKS */
+TOK_LOGICAL_AND: // &&
+TOK_LOGICAL_OR:  // ||
+	DELIMIT_PEND(TOK_CATEGORY_OPERATOR);
+	GOTO_NEXT(codeDispatch);
+
+TOK_EXCLAMATION: // !
+	DELIMIT_CHAR(TOK_CATEGORY_OPERATOR);
+	GOTO_NEXT(codeDispatch);
+
+/* COMPARISON_TOKS */
+TOK_LESS_EQUAL:    // <=
+TOK_GREATER_EQUAL: // >=
+TOK_EQUAL_EQUAL:   // ==
+TOK_NOT_EQUAL:     // !=
+	DELIMIT_PEND(TOK_CATEGORY_OPERATOR);
+	GOTO_NEXT(codeDispatch);
+TOK_LESS:          // <
+TOK_GREATER:       // >
+	BEGIN_PEND(TOK_CATEGORY_OPERATOR);
+	GOTO_NEXT(codeDispatch);
+
+/* ASSIGNMENT_TOKS */
+TOK_PLUS_ASSIGN:      // +=
+TOK_MINUS_ASSIGN:     // -=
+TOK_STAR_ASSIGN:      // *=
+TOK_SLASH_ASSIGN:     // /=
+TOK_PERCENT_ASSIGN:   // %=
+TOK_AMPERSAND_ASSIGN: // &=
+TOK_PIPE_ASSIGN:      // |=
+TOK_CARET_ASSIGN:     // ^=
+	DELIMIT_PEND(TOK_CATEGORY_OPERATOR);
+	GOTO_NEXT(codeDispatch);
+TOK_ASSIGN: // =
+	BEGIN_PEND(TOK_CATEGORY_OPERATOR);
+	GOTO_NEXT(codeDispatch);
+
+/* DEF_OTHER_OPERATOR_TOKS */
 TOK_QUESTION:
-TOK_ELLIPSIS:
+	DELIMIT_CHAR(TOK_CATEGORY_OPERATOR);
+	GOTO_NEXT(codeDispatch);
 
-/* DEF_STRING_DELIMITER_TOKENS */
+TOK_ELLIPSIS:
+	DELIMIT_PEND(TOK_CATEGORY_OPERATOR);
+	GOTO_NEXT(codeDispatch);
+
+/* DEF_STRING_DELIMITER_TOKS */
 TOK_DOUBLE_QUOTE:
 TOK_SINGLE_QUOTE:
+	DELIMIT_CHAR(TOK_CATEGORY_QUOTE);
+	GOTO_NEXT(codeDispatch);
 
-/* COMMENT_DELIMITER_TOKENS */
-TOK_COMMENT_OPEN:
-TOK_COMMENT_CLOSE:
+/* COMMENT_DELIMITER_TOKS */
 TOK_LINE_COMMENT:
-    RESET_HASH();
-	goto processChar;
+TOK_COMMENT_OPEN:
+	DELIMIT_PEND(TOK_CATEGORY_COMMENT);
+	GOTO_NEXT(commentDispatch);
+
+PROCESS_COMMENT:
+	DELIMIT_CHAR(TOK_CATEGORY_COMMENT);
+	GOTO_NEXT(commentDispatch);
+
+TOK_COMMENT_CLOSE:
+	GOTO_NEXT(codeDispatch);
 
 	return 0;
 }
@@ -1091,24 +1204,24 @@ processChar:
 				case '/':
 					if (pc == '*') {
 						pMeta[iC] = meta;
-						meta.token = TOKEN_NONE;
+						meta.token = TOK_CATEGORY_NONE;
 						meta.BLOCK_COMMENT = 0; 
 						goto next;
 					}	
 					goto metaAndNext;
 
 				case '\n': 
-					meta.token = TOKEN_WHITESPACE;
+					meta.token = TOK_CATEGORY_WHITESPACE;
 					pMeta[iC] = meta;
-					meta.token = TOKEN_COMMENT;
+					meta.token = TOK_CATEGORY_COMMENT;
 					meta.LINE_COMMENT = 0;
 					goto next;
 
 				case ' ': 
 				case '\t': 
-					meta.token = TOKEN_WHITESPACE;
+					meta.token = TOK_CATEGORY_WHITESPACE;
 					pMeta[iC] = meta;
-					meta.token = TOKEN_COMMENT;
+					meta.token = TOK_CATEGORY_COMMENT;
 					goto next;
 
 				default:
@@ -1121,10 +1234,10 @@ processChar:
 			switch (c) 
 			{
 				case '\\':
-					meta.token     = TOKEN_ESCAPE;
+					meta.token     = TOK_CATEGORY_ESCAPE;
 					pMeta[iC]      = meta;
 					pMeta[iC + 1]  = meta;
-					meta.token     = TOKEN_TEXT;
+					meta.token     = TOK_CATEGORY_TEXT;
 					goto skipAndNext;
 
 				case '\'':
@@ -1134,9 +1247,9 @@ processChar:
 						goto metaAndNext;
 
 					default:
-						meta.token = TOKEN_QUOTE;
+						meta.token = TOK_CATEGORY_QUOTE;
 						pMeta[iC]  = meta;
-						meta.token = TOKEN_NONE;
+						meta.token = TOK_CATEGORY_NONE;
 						meta.QUOTE = 0;
 						goto next;
 					}
@@ -1148,9 +1261,9 @@ processChar:
 						goto metaAndNext;
 
 					default:
-						meta.token = TOKEN_QUOTE;
+						meta.token = TOK_CATEGORY_QUOTE;
 						pMeta[iC]  = meta;
-						meta.token = TOKEN_NONE;
+						meta.token = TOK_CATEGORY_NONE;
 						meta.QUOTE = 0;
 						goto next;
 					}
@@ -1181,11 +1294,11 @@ processChar:
 				case false | false << 1 | true  << 2:
 					int iEnd = iC;
 					TokenKey k = CalcTokenKey(pText, iStrt, iEnd);
-					TOKEN tokA = TOKEN_MAP_A[k.len][k.a];
-					TOKEN tokB = TOKEN_MAP_B[k.len][k.b];
-					// TOKEN tok = tokA == tokB ? tokA : TOKEN_NONE;
-					TOKEN tok = tokA;
-					bool isPreprocess = (meta.token == TOKEN_PREPROCESS);
+					TOK tokA = TOK_MAP_A[k.len][k.a];
+					TOK tokB = TOK_MAP_B[k.len][k.b];
+					// TOK tok = tokA == tokB ? tokA : TOK_CATEGORY_NONE;
+					TOK tok = tokA;
+					bool isPreprocess = (meta.token == TOK_CATEGORY_PREPROCESS);
 					meta.token = tokA;
 					meta.PREPROCESS = isPreprocess | meta.PREPROCESS;
 					for (int i = iStrt; i <= iEnd; ++i) {
@@ -1217,7 +1330,7 @@ processChar:
 				/* Increment */
 			#define INCREMENT_CASE(_add, _sub, _scope, _token) \
 				case _add: \
-					meta._scope += (meta._scope < TOKEN_MAX_INCREMENT); \
+					meta._scope += (meta._scope < TOK_MAX_INCREMENT); \
 					meta.token = _token; \
 					goto metaAndNext; \
 				case _sub: \
@@ -1227,21 +1340,21 @@ processChar:
 					goto next;
 
 				/* Scopes */
-				INCREMENT_CASE('[', ']', SCOPE_BRACKET, TOKEN_SCOPE)
-				INCREMENT_CASE('{', '}', SCOPE_CURLY,   TOKEN_SCOPE)
-				INCREMENT_CASE('(', ')', SCOPE_PAREN,   TOKEN_SCOPE)
+				INCREMENT_CASE('[', ']', SCOPE_BRACKET, TOK_CATEGORY_SCOPE)
+				INCREMENT_CASE('{', '}', SCOPE_CURLY,   TOK_CATEGORY_SCOPE)
+				INCREMENT_CASE('(', ')', SCOPE_PAREN,   TOK_CATEGORY_SCOPE)
 
 			#undef INCREMENT_CASE
 
 				/* Whitespace */
 				case '\n':
 					if (meta.PREPROCESS && pc != '\\') {
-						meta.token = TOKEN_WHITESPACE;
+						meta.token = TOK_CATEGORY_WHITESPACE;
 						pMeta[iC]  = meta;
 						meta.PREPROCESS = 0;
 						goto next;
 					}
-					meta.token = TOKEN_WHITESPACE;
+					meta.token = TOK_CATEGORY_WHITESPACE;
 					goto metaAndNext;
 
 				case ' ' :
@@ -1250,7 +1363,7 @@ processChar:
 				case '\r': // Carriage return
 				case '\v': // Vertical tab
 				case '\f': // Form feed
-					meta.token = TOKEN_WHITESPACE;
+					meta.token = TOK_CATEGORY_WHITESPACE;
 					goto metaAndNext;
 
 				/* Comment or Operator */
@@ -1258,14 +1371,14 @@ processChar:
 					switch (nc) 
 					{
 						case '/':
-							meta = (TextMeta){.token = TOKEN_COMMENT, .LINE_COMMENT = 1, .BLOCK_COMMENT = meta.BLOCK_COMMENT};
+							meta = (TextMeta){.token = TOK_CATEGORY_COMMENT, .LINE_COMMENT = 1, .BLOCK_COMMENT = meta.BLOCK_COMMENT};
 							goto metaAndNext;
 						case '*':
-							meta.token = TOKEN_COMMENT;
+							meta.token = TOK_CATEGORY_COMMENT;
 							meta.BLOCK_COMMENT = 1;
 							goto metaAndNext;
 						default:
-							meta.token = TOKEN_OPERATOR;
+							meta.token = TOK_CATEGORY_OPERATOR;
 							goto metaAndNext;
 					}
 	 
@@ -1284,16 +1397,16 @@ processChar:
 				case '^':
 				case '|':
 				case '~':
-					meta.token = TOKEN_OPERATOR;
+					meta.token = TOK_CATEGORY_OPERATOR;
 					goto metaAndNext;
 
 				/* Quotes */
 				case '"':
 				case '\'':
-					meta.token = TOKEN_QUOTE;
+					meta.token = TOK_CATEGORY_QUOTE;
 					meta.QUOTE = true; 
 					pMeta[iC]  = meta; 
-					meta.token = TOKEN_TEXT;
+					meta.token = TOK_CATEGORY_TEXT;
 					goto next;
 
 				/* Preprocess */
@@ -1301,23 +1414,23 @@ processChar:
 					switch (nc) 
 					{
 						case '#':
-							meta.token = TOKEN_PREPROCESS; 
+							meta.token = TOK_CATEGORY_PREPROCESS; 
 							pMeta[iC]   = meta; 
 							pMeta[iC+1] = meta;						
 							goto skipAndNext;
 
 						default:
-							meta.token = TOKEN_PREPROCESS;
+							meta.token = TOK_CATEGORY_PREPROCESS;
 							goto metaAndNext;
 					}
 
 				case '\\':
 					if (meta.PREPROCESS && nc == '\n') {
-						meta.token = TOKEN_CONTINUE;   
+						meta.token = TOK_CATEGORY_CONTINUE;   
 						pMeta[iC] = meta;
-						meta.token = TOKEN_WHITESPACE; 
+						meta.token = TOK_CATEGORY_WHITESPACE; 
 						pMeta[iC+1] = meta;
-						meta.token = TOKEN_PREPROCESS;
+						meta.token = TOK_CATEGORY_PREPROCESS;
 						goto skipAndNext;
 					}
 					goto metaAndNext;
@@ -1632,16 +1745,16 @@ static CodeBox text;
 
 int main(void)
 {
-#define DEF_ALL_CONSTRUCT_TOKEN_MAP(_category) REQUIRE(ContructTokMap(COUNT(_category), _category));
-	DEF_ALL_CATEGORY_TOKENS(DEF_ALL_CONSTRUCT_TOKEN_MAP)
-#undef DEF_ALL_CONSTRUCT_TOKEN_MAP
+#define DEF_ALL_CONSTRUCT_TOK_MAP(_cat) REQUIRE(ContructTokMap(COUNT(_cat), _cat));
+	DEF_ALL_CATEGORY_TOKS(DEF_ALL_CONSTRUCT_TOK_MAP)
+#undef DEF_ALL_CONSTRUCT_TOK_MAP
 
-	// REQUIRE(ContructTokMap(COUNT(PREPROCESS_TOKENS), PREPROCESS_TOKENS));
-	// REQUIRE(ContructTokMap(COUNT(TYPE_TOKENS),       TYPE_TOKENS));
-	// REQUIRE(ContructTokMap(COUNT(KEYWORD_TOKENS),    KEYWORD_TOKENS));	
-	// REQUIRE(ContructTokMap(COUNT(WHITESPACE_TOKENS), WHITESPACE_TOKENS));	
-	// REQUIRE(ContructTokMap(COUNT(GROUPING_TOKENS),   GROUPING_TOKENS));	
-	// REQUIRE(ContructTokMap(COUNT(ASSIGNMENT_TOKENS), ASSIGNMENT_TOKENS));	
+	// REQUIRE(ContructTokMap(COUNT(PREPROCESS_TOKS), PREPROCESS_TOKS));
+	// REQUIRE(ContructTokMap(COUNT(TYPE_TOKS),       TYPE_TOKS));
+	// REQUIRE(ContructTokMap(COUNT(KEYWORD_TOKS),    KEYWORD_TOKS));	
+	// REQUIRE(ContructTokMap(COUNT(WHITESPACE_TOKS), WHITESPACE_TOKS));	
+	// REQUIRE(ContructTokMap(COUNT(GROUPING_TOKS),   GROUPING_TOKS));	
+	// REQUIRE(ContructTokMap(COUNT(ASSIGNMENT_TOKS), ASSIGNMENT_TOKS));	
 
 	/* Config */
 	SetTraceLogLevel(LOG_ALL);
@@ -1686,24 +1799,19 @@ int main(void)
 	// TODO dynamically update
 	pCode->boxColCount = (int)(textBox.width  / fontXSpacing);
 	pCode->boxRowCount = (int)(textBox.height / fontYSpacing);
-	pCode->pBoxRows    = XMALLOC_ALIGNED(CACHE_LINE, text.boxRowCount * sizeof(CodeRow));
-	memset(pCode->pBoxRows, 0, text.boxRowCount * sizeof(CodeRow));
-
-	pCode->pCarets = XMALLOC_ALIGNED(CACHE_LINE, CARET_MAX_CAPACITY * sizeof(CodePos));
-	memset(pCode->pBoxRows, 0, CARET_MAX_CAPACITY * sizeof(CodePos));
+	pCode->pBoxRows    = XCALLOC(text.boxRowCount, CodeRow);
+	pCode->pCarets     = XCALLOC(text.boxRowCount, CodePos); 
 	pCode->caretCount = 1;
 
 	/* File Load */
 	{
-		pCode->pText      = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(char));
-		pCode->pTextRows  = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(CodeRow));
-		pCode->pTextToken = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(TOKEN));
-		pCode->pTextMeta  = XMALLOC_ALIGNED(CACHE_LINE, TEXT_BUFFER_CAPACITY * sizeof(TextMeta));
-
-		memset(pCode->pText,      0, TEXT_BUFFER_CAPACITY * sizeof(char));
-		memset(pCode->pTextRows,  0, TEXT_BUFFER_CAPACITY * sizeof(CodeRow));
-		memset(pCode->pTextToken, 0, TEXT_BUFFER_CAPACITY * sizeof(TOKEN));
-		memset(pCode->pTextMeta,  0, TEXT_BUFFER_CAPACITY * sizeof(TextMeta));
+		pCode->pText = XCALLOC(TEXT_BUFFER_CAPACITY, char);
+		pCode->pTextRows = XCALLOC(TEXT_BUFFER_CAPACITY, CodeRow);
+		pCode->pTextTok = XCALLOC(TEXT_BUFFER_CAPACITY, TOK);
+		pCode->pTextTokStart = XCALLOC(TEXT_BUFFER_CAPACITY, int);
+		pCode->pTextTokLen = XCALLOC(TEXT_BUFFER_CAPACITY, int);
+		pCode->pTextCategory = XCALLOC(TEXT_BUFFER_CAPACITY, TOK_CATEGORY);
+		pCode->pTextMeta = XCALLOC(TEXT_BUFFER_CAPACITY, TextMeta);
 
 		pCode->path = "./src/main.c";
 		char* loadedFile = LoadFileText(pCode->path);
@@ -2144,7 +2252,7 @@ LoopBegin:
 
 		const char* pText = pCode->pText;
 		const TextMeta* pTextMeta  = pCode->pTextMeta;
-		const TOKEN*    pTextToken = pCode->pTextToken;
+		const TOK_CATEGORY* pTextCategory = pCode->pTextCategory;
 		int boxRowCount = pCode->boxRowCount;
 		int boxColCount = pCode->boxColCount;
 		int iChar = pCode->focusStartRowIndex;
@@ -2154,11 +2262,11 @@ LoopBegin:
 			// for (int iCol = 0; iCol < boxColCount - (tabCount * tabWidth); ++iCol) {
 			char     currentChar;
 			TextMeta currentMeta;
-			TOKEN    currentToken;
+			TOK_CATEGORY currentToken;
 			for (int iCol = 0; iCol < boxColCount; ++iCol) {
 				currentChar  = pText[iChar];
 				currentMeta  = pTextMeta[iChar];
-				currentToken = pTextToken[iChar];
+				currentToken = pTextCategory[iChar];
 
 				Vector2 position = {
 					// textBox.x + (fontXSpacing * iCol) + (tabCount * fontXSpacing * 4), 
@@ -2170,7 +2278,7 @@ LoopBegin:
 				// if (iChar == text.pActiveCaret->index) {
 				// 	caretColor = COLOR_CARET;
 				// 	caretPosition = position;
-				// 	DEBUG_LOG_ONCE("%s %d %d\n", string_TOKEN(m.tok), m.QUOTE, Delimiter(currentChar));
+				// 	DEBUG_LOG_ONCE("%s %d %d\n", string_TOK(m.tok), m.QUOTE, Delimiter(currentChar));
 				// }
 
 				if (iChar == command.scanFoundIndex) 
@@ -2228,7 +2336,7 @@ LoopBegin:
 					default:
 						int codePointSize;
 						int codePoint = GetCodepoint(&displayChar, &codePointSize);
-						Color color = TOKEN_COLOR[currentToken];
+						Color color = TOK_CATEGORY_COLOR[currentToken];
 						DrawTextCodepoint(font, codePoint, position, fontSize, color);
 						iChar++;
 						break;
@@ -2265,9 +2373,10 @@ LoopBegin:
 				CodeSyncCaretToMarkRow(pCode, 0);
 
 				char c = pCode->pText[pCode->pCarets[0].index];
-				TOKEN t = pCode->pTextToken[pCode->pCarets[0].index];
+				TOK tok = pCode->pTextTok[pCode->pCarets[0].index];
+				TOK_CATEGORY tc = pCode->pTextCategory[pCode->pCarets[0].index];
 				TextMeta m = pCode->pTextMeta[pCode->pCarets[0].index];
-				DEBUG_LOG_ONCE("%s %d %d start: %d end: %d\n", string_TOKEN(t), m.QUOTE, Delimiter(c), m.iTokenStartOffset, m.iTokenEndOffset);
+				DEBUG_LOG_ONCE("%s %s %d %d start: %d end: %d\n", string_TOK(tok), string_TOK_CATEGORY(tc), m.QUOTE, Delimiter(c), m.iTokenStartOffset, m.iTokenEndOffset);
 			}
 		}
 
