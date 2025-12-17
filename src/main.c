@@ -4,11 +4,14 @@ void T() {
 	a--;
 }
 
+#define CONCAT(_a, _b, define) hello _a## _b #_a  #_a #define \
+ hello
+
 static double Test(int input) {
-	const char* str = "Hello\'\n";
+	static const int  x;
+	const char* str = "Hello";
+	char tick = 'a';
 	int output = input;
-	/* comment */
-	char tick = '"';
 	int vala = 10 + 2;
 	int valb = 10 / 2;
 	if (vala-->= 0) 
@@ -16,11 +19,9 @@ static double Test(int input) {
 	return output;
 }
 
-#define CONCAT(a, b) a  ##  b #a
-
 #define HELLO { \
-	int i = 0; /* Test */ \
 	int o = 1; \
+	int i = 0; /* Test */ \
 }
 
 /*
@@ -225,23 +226,21 @@ typedef float       f32;
 typedef double      f64;
 typedef unsigned char utf8;
 
-#define typeof __typeof__
-
 #define CACHE_LINE 64
 
 #define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
 
 #define MIN(_a, _b) \
 ({ \
-	__auto_type _valA = (_a); \
-	__auto_type _valB = (_b); \
+	typeof(_a) _valA = (_a); \
+	typeof(_b) _valB = (_b); \
 	_valA < _valB ? _valA : _valB; \
 })
 
 #define MAX(_a, _b) \
 ({ \
-	__auto_type _valA = (_a); \
-	__auto_type _valB = (_b); \
+	typeof(_a) _valA = (_a); \
+	typeof(_b) _valB = (_b); \
 	_valA > _valB ? _valA : _valB; \
 })
 
@@ -296,10 +295,13 @@ typedef unsigned char utf8;
 	__builtin_trap(); \
 })
 
-// TODO
+/* Check will assert on fail. */
 #define CHECK(_command)
+
+/* Try will goto error label on fail. */
 #define TRY(_command)
 
+/* Require will panic on fail. */
 #define REQUIRE(_command) \
 ({ \
 	RESULT _result = _command; \
@@ -312,58 +314,42 @@ typedef unsigned char utf8;
 #define DEF_ARRAY_ITEM(_item, ...)  _item,
 #define DEF_ENUM_ITEM(_item, ...)   _item __VA_OPT__(=) __VA_ARGS__,
 #define DEF_STRING_ITEM(_item, ...) case _item: return #_item;
-#define DEF_ENUM(_enum) \
-	typedef enum PACKED _enum { \
-		DEF_##_enum(DEF_ENUM_ITEM) \
+#define DEF_ENUM(_enum)\
+	typedef enum PACKED _enum {\
+		DEF_##_enum(DEF_ENUM_ITEM)\
 	} _enum; \
-	static const char* string_##_enum(_enum _item) { \
-		switch(_item) { \
-			DEF_##_enum(DEF_STRING_ITEM) \
-			default: return #_enum " N/A"; \
-		} \
+	static const char* string_##_enum(_enum _item) {\
+		switch(_item) {\
+			DEF_##_enum(DEF_STRING_ITEM)\
+			default: return #_enum " N/A";\
+		}\
 	}
 
-#define DEF_RESULT(DEF) \
-	DEF(RESULT_ERROR,      -1) \
-	DEF(RESULT_SUCCESS,     0) \
-	DEF(RESULT_COLLISION,   1) \
+#define DEF_RESULT(DEF)\
+	DEF(RESULT_ERROR,      -1)\
+	DEF(RESULT_SUCCESS,     0)\
+	DEF(RESULT_COLLISION,   1)\
 	DEF(RESULT_PARSE_ERROR, 2)
 DEF_ENUM(RESULT);
 
-#define DEF_DIRECTION(DEF) \
-	DEF(DIRECTION_NONE) \
-	DEF(DIRECTION_FORWARD) \
-	DEF(DIRECTION_BACKWARD) \
+#define DEF_DIRECTION(DEF)\
+	DEF(DIRECTION_NONE)\
+	DEF(DIRECTION_FORWARD)\
+	DEF(DIRECTION_BACKWARD)\
 	DEF(DIRECTION_COUNT)
 DEF_ENUM(DIRECTION);
 
-#define DEF_SCOPE(DEF) \
-	DEF(SCOPE_TAB) \
-	DEF(SCOPE_DEFINE) \
-	DEF(SCOPE_CURLY) \
-	DEF(SCOPE_PAREN) \
-	DEF(SCOPE_BRACKET) \
-	DEF(SCOPE_QUOTE) \
-	DEF(SCOPE_BLOCK_COMMENT) \
-	DEF(SCOPE_LINE_COMMENT) \
+#define DEF_SCOPE(DEF)\
+	DEF(SCOPE_TAB)\
+	DEF(SCOPE_DEFINE)\
+	DEF(SCOPE_CURLY)\
+	DEF(SCOPE_PAREN)\
+	DEF(SCOPE_BRACKET)\
+	DEF(SCOPE_QUOTE)\
+	DEF(SCOPE_BLOCK_COMMENT)\
+	DEF(SCOPE_LINE_COMMENT)\
 	DEF(SCOPE_COUNT)
 DEF_ENUM(SCOPE);
-
-#define DEF_TOK_CATEGORY(DEF) \
-	DEF(TOK_CATEGORY_NONE) \
-	DEF(TOK_CATEGORY_TYPE) \
-	DEF(TOK_CATEGORY_KEYWORD) \
-	DEF(TOK_CATEGORY_WHITESPACE) \
-	DEF(TOK_CATEGORY_OPERATOR) \
-	DEF(TOK_CATEGORY_PREPROCESS) \
-	DEF(TOK_CATEGORY_CONTINUE) \
-	DEF(TOK_CATEGORY_SCOPE) \
-	DEF(TOK_CATEGORY_QUOTE) \
-	DEF(TOK_CATEGORY_TEXT) \
-	DEF(TOK_CATEGORY_ESCAPE) \
-	DEF(TOK_CATEGORY_COMMENT) \
-	DEF(TOK_CATEGORY_COUNT)
-DEF_ENUM(TOK_CATEGORY);
 
 #define FIND_CARET_COLOR     (Color){   0, 255,   0, 255 }
 #define FIND_HIGHLIGHT_COLOR (Color){   0, 255,   0, 64  }
@@ -371,13 +357,14 @@ DEF_ENUM(TOK_CATEGORY);
 #define COLOR_TEXT_BOX       (Color){  37,  37,  38, 255 }
 #define COLOR_CARET       ORANGE
 #define COLOR_HOVER       (Color){   0, 255,   0, 64  }
+
 #define COLOR_CODE        (Color){ 216, 222, 233, 255 }
-#define COLOR_PREPROCESS  (Color){ 182, 160, 191, 255 }
+#define COLOR_ERROR       (Color){ 255,   0,   0, 255 }
+#define COLOR_PREPROCESS  (Color){ 135, 132, 219, 255 }
 #define COLOR_CONTINUE    (Color){ 148,  99, 148, 255 }
 #define COLOR_NUMBER      (Color){ 249, 174,  87, 255 }
 #define COLOR_STRING      (Color){ 153, 199, 148, 255 } 
 #define COLOR_COMMENT     (Color){ 166, 172, 185, 255 }  
-#define COLOR_MACRO_NAME  (Color){ 249, 174,  87, 255 }
 #define COLOR_OPERATOR    (Color){ 249, 123,  87, 255 }
 #define COLOR_BACKGROUND  (Color){  48,  56,  65, 255 } 
 #define COLOR_WHITESPACE  (Color){  68,  76,  85, 255 } 
@@ -391,318 +378,330 @@ DEF_ENUM(TOK_CATEGORY);
 /*
  * C11 Lexer
  */
-static Color TOK_CATEGORY_COLOR[] = {
-	[TOK_CATEGORY_NONE]       = COLOR_CODE,
-	[TOK_CATEGORY_TYPE]       = COLOR_TYPE,
-	[TOK_CATEGORY_KEYWORD]    = COLOR_KEYWORD,
-	[TOK_CATEGORY_WHITESPACE] = COLOR_WHITESPACE,
-	[TOK_CATEGORY_OPERATOR]   = COLOR_OPERATOR,
-	[TOK_CATEGORY_PREPROCESS] = COLOR_PREPROCESS,
-	[TOK_CATEGORY_CONTINUE]   = COLOR_CONTINUE,
-	[TOK_CATEGORY_SCOPE]      = COLOR_SCOPE,
-	[TOK_CATEGORY_QUOTE]      = COLOR_QUOTE,
-	[TOK_CATEGORY_TEXT]       = COLOR_TEXT,
-	[TOK_CATEGORY_ESCAPE]     = COLOR_ESCAPE,
-	[TOK_CATEGORY_COMMENT]    = COLOR_COMMENT,
+#define DEF_TOK_CAT(DEF) \
+	DEF(TOK_CAT_NONE) \
+	DEF(TOK_CAT_ERROR) \
+	DEF(TOK_CAT_ALPHA) \
+	DEF(TOK_CAT_DIGIT) \
+	DEF(TOK_CAT_TYPE) \
+	DEF(TOK_CAT_KEYWORD) \
+	DEF(TOK_CAT_WHITESPACE) \
+	DEF(TOK_CAT_OPERATOR) \
+	DEF(TOK_CAT_PP) \
+	DEF(TOK_CAT_PP_OPERATOR) \
+	DEF(TOK_CAT_CONTINUE) \
+	DEF(TOK_CAT_SCOPE) \
+	DEF(TOK_CAT_QUOTE) \
+	DEF(TOK_CAT_TEXT) \
+	DEF(TOK_CAT_ESCAPE) \
+	DEF(TOK_CAT_COMMENT) \
+	DEF(TOK_CAT_COUNT)
+DEF_ENUM(TOK_CAT);
+
+static Color TOK_CAT_COLOR[] = {
+	[TOK_CAT_NONE]       = COLOR_ERROR,
+	[TOK_CAT_ERROR]      = COLOR_ERROR,
+	[TOK_CAT_ALPHA]      = COLOR_CODE,
+	[TOK_CAT_DIGIT]      = COLOR_NUMBER,
+	[TOK_CAT_TYPE]       = COLOR_TYPE,
+	[TOK_CAT_KEYWORD]    = COLOR_KEYWORD,
+	[TOK_CAT_WHITESPACE] = COLOR_WHITESPACE,
+	[TOK_CAT_OPERATOR]   = COLOR_OPERATOR,
+	[TOK_CAT_PP]         = COLOR_PREPROCESS,
+	[TOK_CAT_PP_OPERATOR]= COLOR_PREPROCESS,
+	[TOK_CAT_CONTINUE]   = COLOR_CONTINUE,
+	[TOK_CAT_SCOPE]      = COLOR_SCOPE,
+	[TOK_CAT_QUOTE]      = COLOR_QUOTE,
+	[TOK_CAT_TEXT]       = COLOR_TEXT,
+	[TOK_CAT_ESCAPE]     = COLOR_ESCAPE,
+	[TOK_CAT_COMMENT]    = COLOR_COMMENT,
 };
-STATIC_ASSERT(COUNT(TOK_CATEGORY_COLOR) == TOK_CATEGORY_COUNT);
+STATIC_ASSERT(COUNT(TOK_CAT_COLOR) == TOK_CAT_COUNT);
 
-#define DEF_PREPROCESS_TOKS(DEF) \
-	DEF("#include", TOK_PP_INCLUDE) \
-	DEF("#define",  TOK_PP_DEFINE) \
-	DEF("#ifndef",  TOK_PP_IFNDEF) \
-	DEF("#ifdef",   TOK_PP_IFDEF) \
-	DEF("#endif",   TOK_PP_ENDIF) \
-	DEF("#undef",   TOK_PP_UNDEF) \
-	DEF("#elif",    TOK_PP_ELIF) \
-	DEF("#else",    TOK_PP_ELSE) \
-	DEF("#error",   TOK_PP_ERROR) \
-	DEF("#pragma",  TOK_PP_PRAGMA) \
-	DEF("#line",    TOK_PP_LINE) \
-	DEF("#if",      TOK_PP_IF) \
-	DEF("##",       TOK_PP_HASH_HASH) \
-	DEF("#",        TOK_PP_HASH)
+#define SKIP     "$skip"
+#define RANGE    "$range"
+#define OVERRIDE "$override"
 
-#define DEF_KEYWORD_TOKS(DEF) \
-	DEF("_Static_assert", TOK_STATIC_ASSERT) \
-	DEF("_Thread_local",  TOK_THREAD_LOCAL) \
-	DEF("_Imaginary",     TOK_IMAGINARY) \
-	DEF("_Noreturn",      TOK_NORETURN) \
-	DEF("_Complex",       TOK_COMPLEX) \
-	DEF("_Generic",       TOK_GENERIC) \
-	DEF("_Alignof",       TOK_ALIGNOF) \
-	DEF("_Alignas",       TOK_ALIGNAS) \
-	DEF("_Atomic",        TOK_ATOMIC) \
-	DEF("continue",       TOK_CONTINUE) \
-	DEF("volatile",       TOK_VOLATILE) \
-	DEF("register",       TOK_REGISTER) \
-	DEF("restrict",       TOK_RESTRICT) \
-	DEF("typedef",        TOK_TYPEDEF) \
-	DEF("default",        TOK_DEFAULT) \
-	DEF("typeof",         TOK_TYPEOF) \
-	DEF("switch",         TOK_SWITCH) \
-	DEF("static",         TOK_STATIC) \
-	DEF("sizeof",         TOK_SIZEOF) \
-	DEF("return",         TOK_RETURN) \
-	DEF("inline",         TOK_INLINE) \
-	DEF("extern",         TOK_EXTERN) \
-	DEF("while",          TOK_WHILE) \
-	DEF("const",          TOK_CONST) \
-	DEF("break",          TOK_BREAK) \
-	DEF("goto",           TOK_GOTO) \
-	DEF("else",           TOK_ELSE) \
-	DEF("case",           TOK_CASE) \
-	DEF("auto",           TOK_AUTO) \
-	DEF("for",            TOK_FOR) \
-	DEF("if",             TOK_IF) \
-	DEF("do",             TOK_DO)
+#define DEF_TOK(DEF) \
+	DEF(SKIP"\0"   ,TOK_NONE  ,TOK_CAT_NONE)\
+	DEF(SKIP"\x15" ,TOK_ERROR ,TOK_CAT_NONE)\
+	DEF(RANGE"A-Z,a-z,_" ,TOK_ALPHA_CHAR ,TOK_CAT_ALPHA)\
+	DEF(RANGE"0-9"       ,TOK_DIGIT_CHAR ,TOK_CAT_DIGIT)\
+	DEF("#include" ,TOK_PP_INCLUDE   ,TOK_CAT_PP)\
+	DEF("#define"  ,TOK_PP_DEFINE    ,TOK_CAT_PP)\
+	DEF("#ifndef"  ,TOK_PP_IFNDEF    ,TOK_CAT_PP)\
+	DEF("#ifdef"   ,TOK_PP_IFDEF     ,TOK_CAT_PP)\
+	DEF("#endif"   ,TOK_PP_ENDIF     ,TOK_CAT_PP)\
+	DEF("#undef"   ,TOK_PP_UNDEF     ,TOK_CAT_PP)\
+	DEF("#elif"    ,TOK_PP_ELIF      ,TOK_CAT_PP)\
+	DEF("#else"    ,TOK_PP_ELSE      ,TOK_CAT_PP)\
+	DEF("#error"   ,TOK_PP_ERROR     ,TOK_CAT_PP)\
+	DEF("#pragma"  ,TOK_PP_PRAGMA    ,TOK_CAT_PP)\
+	DEF("#line"    ,TOK_PP_LINE      ,TOK_CAT_PP)\
+	DEF("#if"      ,TOK_PP_IF        ,TOK_CAT_PP)\
+	DEF("##"       ,TOK_PP_HASH_HASH ,TOK_CAT_PP_OPERATOR)\
+	DEF("#"        ,TOK_PP_HASH      ,TOK_CAT_PP_OPERATOR)\
+	DEF("\\\n"     ,TOK_PP_CONTINUE  ,TOK_CAT_PP_OPERATOR)\
+	DEF("\\"       ,TOK_ESCAPE       ,TOK_CAT_PP_OPERATOR)\
+	DEF("_Static_assert" ,TOK_STATIC_ASSERT ,TOK_CAT_KEYWORD)\
+	DEF("_Thread_local"  ,TOK_THREAD_LOCAL  ,TOK_CAT_KEYWORD)\
+	DEF("_Imaginary"     ,TOK_IMAGINARY     ,TOK_CAT_KEYWORD)\
+	DEF("_Noreturn"      ,TOK_NORETURN      ,TOK_CAT_KEYWORD)\
+	DEF("_Complex"       ,TOK_COMPLEX       ,TOK_CAT_KEYWORD)\
+	DEF("_Generic"       ,TOK_GENERIC       ,TOK_CAT_KEYWORD)\
+	DEF("_Alignof"       ,TOK_ALIGNOF       ,TOK_CAT_KEYWORD)\
+	DEF("_Alignas"       ,TOK_ALIGNAS       ,TOK_CAT_KEYWORD)\
+	DEF("_Atomic"        ,TOK_ATOMIC        ,TOK_CAT_KEYWORD)\
+	DEF("continue"       ,TOK_CONTINUE      ,TOK_CAT_KEYWORD)\
+	DEF("volatile"       ,TOK_VOLATILE      ,TOK_CAT_KEYWORD)\
+	DEF("register"       ,TOK_REGISTER      ,TOK_CAT_KEYWORD)\
+	DEF("restrict"       ,TOK_RESTRICT      ,TOK_CAT_KEYWORD)\
+	DEF("typedef"        ,TOK_TYPEDEF       ,TOK_CAT_KEYWORD)\
+	DEF("default"        ,TOK_DEFAULT       ,TOK_CAT_KEYWORD)\
+	DEF("typeof"         ,TOK_TYPEOF        ,TOK_CAT_KEYWORD)\
+	DEF("switch"         ,TOK_SWITCH        ,TOK_CAT_KEYWORD)\
+	DEF("static"         ,TOK_STATIC        ,TOK_CAT_KEYWORD)\
+	DEF("sizeof"         ,TOK_SIZEOF        ,TOK_CAT_KEYWORD)\
+	DEF("return"         ,TOK_RETURN        ,TOK_CAT_KEYWORD)\
+	DEF("inline"         ,TOK_INLINE        ,TOK_CAT_KEYWORD)\
+	DEF("extern"         ,TOK_EXTERN        ,TOK_CAT_KEYWORD)\
+	DEF("while"          ,TOK_WHILE         ,TOK_CAT_KEYWORD)\
+	DEF("const"          ,TOK_CONST         ,TOK_CAT_KEYWORD)\
+	DEF("break"          ,TOK_BREAK         ,TOK_CAT_KEYWORD)\
+	DEF("goto"           ,TOK_GOTO          ,TOK_CAT_KEYWORD)\
+	DEF("else"           ,TOK_ELSE          ,TOK_CAT_KEYWORD)\
+	DEF("case"           ,TOK_CASE          ,TOK_CAT_KEYWORD)\
+	DEF("auto"           ,TOK_AUTO          ,TOK_CAT_KEYWORD)\
+	DEF("for"            ,TOK_FOR           ,TOK_CAT_KEYWORD)\
+	DEF("if"             ,TOK_IF            ,TOK_CAT_KEYWORD)\
+	DEF("do"             ,TOK_DO            ,TOK_CAT_KEYWORD)\
+	DEF("unsigned"  ,TOK_UNSIGNED  ,TOK_CAT_TYPE)\
+	DEF("struct"    ,TOK_STRUCT    ,TOK_CAT_TYPE)\
+	DEF("signed"    ,TOK_SIGNED    ,TOK_CAT_TYPE)\
+	DEF("double"    ,TOK_DOUBLE    ,TOK_CAT_TYPE)\
+	DEF("float"     ,TOK_FLOAT     ,TOK_CAT_TYPE)\
+	DEF("short"     ,TOK_SHORT     ,TOK_CAT_TYPE)\
+	DEF("_Bool"     ,TOK_BOOL      ,TOK_CAT_TYPE)\
+	DEF("union"     ,TOK_UNION     ,TOK_CAT_TYPE)\
+	DEF("void"      ,TOK_VOID      ,TOK_CAT_TYPE)\
+	DEF("long"      ,TOK_LONG      ,TOK_CAT_TYPE)\
+	DEF("char"      ,TOK_CHAR      ,TOK_CAT_TYPE)\
+	DEF("enum"      ,TOK_ENUM      ,TOK_CAT_TYPE)\
+	DEF("int"       ,TOK_INT       ,TOK_CAT_TYPE)\
+	DEF("ptrdiff_t" ,TOK_PTRDIFF_T ,TOK_CAT_TYPE)\
+	DEF("uint64_t"  ,TOK_UINT64_T  ,TOK_CAT_TYPE)\
+	DEF("uint32_t"  ,TOK_UINT32_T  ,TOK_CAT_TYPE)\
+	DEF("uint16_t"  ,TOK_UINT16_T  ,TOK_CAT_TYPE)\
+	DEF("int64_t"   ,TOK_INT64_T   ,TOK_CAT_TYPE)\
+	DEF("int32_t"   ,TOK_INT32_T   ,TOK_CAT_TYPE)\
+	DEF("int16_t"   ,TOK_INT16_T   ,TOK_CAT_TYPE)\
+	DEF("wchar_t"   ,TOK_WCHAR_T   ,TOK_CAT_TYPE)\
+	DEF("uint8_t"   ,TOK_UINT8_T   ,TOK_CAT_TYPE)\
+	DEF("size_t"    ,TOK_SIZE_T    ,TOK_CAT_TYPE)\
+	DEF("int8_t"    ,TOK_INT8_T    ,TOK_CAT_TYPE)\
+	DEF(" "  ,TOK_SPACE           ,TOK_CAT_WHITESPACE)\
+	DEF("\t" ,TOK_TAB             ,TOK_CAT_WHITESPACE)\
+	DEF("\n" ,TOK_NEWLINE         ,TOK_CAT_WHITESPACE)\
+	DEF("\r" ,TOK_CARRIAGE_RETURN ,TOK_CAT_WHITESPACE)\
+	DEF("\f" ,TOK_FORM_FEED       ,TOK_CAT_WHITESPACE)\
+	DEF("\v" ,TOK_VERTICAL_TAB    ,TOK_CAT_WHITESPACE)\
+	DEF("(" ,TOK_PAREN_OPEN    ,TOK_CAT_SCOPE)\
+	DEF(")" ,TOK_PAREN_CLOSE   ,TOK_CAT_SCOPE)\
+	DEF("{" ,TOK_BRACE_OPEN    ,TOK_CAT_SCOPE)\
+	DEF("}" ,TOK_BRACE_CLOSE   ,TOK_CAT_SCOPE)\
+	DEF("[" ,TOK_BRACKET_OPEN  ,TOK_CAT_SCOPE)\
+	DEF("]" ,TOK_BRACKET_CLOSE ,TOK_CAT_SCOPE)\
+	DEF("->"  ,TOK_ARROW              ,TOK_CAT_OPERATOR)\
+	DEF("."   ,TOK_DOT                ,TOK_CAT_OPERATOR)\
+	DEF(";"   ,TOK_SEMICOLON          ,TOK_CAT_OPERATOR)\
+	DEF(","   ,TOK_COMMA              ,TOK_CAT_OPERATOR)\
+	DEF(":"   ,TOK_COLON              ,TOK_CAT_OPERATOR)\
+	DEF("++"  ,TOK_INCREMENT          ,TOK_CAT_OPERATOR)\
+	DEF("--"  ,TOK_DECREMENT          ,TOK_CAT_OPERATOR)\
+	DEF("+"   ,TOK_PLUS               ,TOK_CAT_OPERATOR)\
+	DEF("-"   ,TOK_MINUS              ,TOK_CAT_OPERATOR)\
+	DEF("*"   ,TOK_STAR               ,TOK_CAT_OPERATOR)\
+	DEF("/"   ,TOK_SLASH              ,TOK_CAT_OPERATOR)\
+	DEF("%"   ,TOK_PERCENT            ,TOK_CAT_OPERATOR)\
+	DEF("<<=" ,TOK_LEFT_SHIFT_ASSIGN  ,TOK_CAT_OPERATOR)\
+	DEF(">>=" ,TOK_RIGHT_SHIFT_ASSIGN ,TOK_CAT_OPERATOR)\
+	DEF("<<"  ,TOK_LEFT_SHIFT         ,TOK_CAT_OPERATOR)\
+	DEF(">>"  ,TOK_RIGHT_SHIFT        ,TOK_CAT_OPERATOR)\
+	DEF("&"   ,TOK_AMPERSAND          ,TOK_CAT_OPERATOR)\
+	DEF("|"   ,TOK_PIPE               ,TOK_CAT_OPERATOR)\
+	DEF("^"   ,TOK_CARET              ,TOK_CAT_OPERATOR)\
+	DEF("~"   ,TOK_TILDE              ,TOK_CAT_OPERATOR)\
+	DEF("&&"  ,TOK_LOGICAL_AND        ,TOK_CAT_OPERATOR)\
+	DEF("||"  ,TOK_LOGICAL_OR         ,TOK_CAT_OPERATOR)\
+	DEF("!"   ,TOK_EXCLAMATION        ,TOK_CAT_OPERATOR)\
+	DEF("<="  ,TOK_LESS_EQUAL         ,TOK_CAT_OPERATOR)\
+	DEF(">="  ,TOK_GREATER_EQUAL      ,TOK_CAT_OPERATOR)\
+	DEF("=="  ,TOK_EQUAL_EQUAL        ,TOK_CAT_OPERATOR)\
+	DEF("!="  ,TOK_NOT_EQUAL          ,TOK_CAT_OPERATOR)\
+	DEF("<"   ,TOK_LESS               ,TOK_CAT_OPERATOR)\
+	DEF(">"   ,TOK_GREATER            ,TOK_CAT_OPERATOR)\
+	DEF("?"   ,TOK_QUESTION           ,TOK_CAT_OPERATOR)\
+	DEF("..." ,TOK_ELLIPSIS           ,TOK_CAT_OPERATOR)\
+	DEF("+="  ,TOK_PLUS_ASSIGN        ,TOK_CAT_OPERATOR)\
+	DEF("-="  ,TOK_MINUS_ASSIGN       ,TOK_CAT_OPERATOR)\
+	DEF("*="  ,TOK_STAR_ASSIGN        ,TOK_CAT_OPERATOR)\
+	DEF("/="  ,TOK_SLASH_ASSIGN       ,TOK_CAT_OPERATOR)\
+	DEF("%="  ,TOK_PERCENT_ASSIGN     ,TOK_CAT_OPERATOR)\
+	DEF("&="  ,TOK_AMPERSAND_ASSIGN   ,TOK_CAT_OPERATOR)\
+	DEF("|="  ,TOK_PIPE_ASSIGN        ,TOK_CAT_OPERATOR)\
+	DEF("^="  ,TOK_CARET_ASSIGN       ,TOK_CAT_OPERATOR)\
+	DEF("="   ,TOK_ASSIGN             ,TOK_CAT_OPERATOR)\
+	DEF("\"" ,TOK_DOUBLE_QUOTE ,TOK_CAT_QUOTE)\
+	DEF("'"  ,TOK_SINGLE_QUOTE ,TOK_CAT_QUOTE)\
+	DEF("/*" ,TOK_COMMENT_OPEN ,TOK_CAT_COMMENT)\
+	DEF("//" ,TOK_LINE_COMMENT ,TOK_CAT_COMMENT)
 
-#define DEF_TYPE_TOKS(DEF) \
-	DEF("unsigned", TOK_UNSIGNED) \
-	DEF("struct",   TOK_STRUCT) \
-	DEF("signed",   TOK_SIGNED) \
-	DEF("double",   TOK_DOUBLE) \
-	DEF("float",    TOK_FLOAT) \
-	DEF("short",    TOK_SHORT) \
-	DEF("_Bool",    TOK_BOOL) \
-	DEF("union",    TOK_UNION) \
-	DEF("void",     TOK_VOID) \
-	DEF("long",     TOK_LONG) \
-	DEF("char",     TOK_CHAR) \
-	DEF("enum",     TOK_ENUM) \
-	DEF("int",      TOK_INT)
+#define DEF_TOK_COMMENT(DEF)\
+	DEF(SKIP"\0"   ,TOK_COMMENT_NONE  ,TOK_CAT_NONE)\
+	DEF(SKIP"\x15" ,TOK_COMMENT_ERROR ,TOK_CAT_NONE)\
+	DEF(RANGE" ,\t" ,TOK_COMMENT_WITESPACE ,TOK_CAT_WHITESPACE)\
+	DEF(RANGE"!-~"  ,TOK_COMMENT_CHAR ,TOK_CAT_COMMENT)\
+	DEF(OVERRIDE"*" ,TOK_COMMENT_STAR ,TOK_CAT_COMMENT)\
+	DEF("*/"        ,TOK_COMMENT_CLOSE     ,TOK_CAT_COMMENT)\
+	DEF("\n"        ,TOK_COMMENT_NEWLINE   ,TOK_CAT_WHITESPACE)
 
-#define DEF_STDTYPE_TOKS(DEF) \
-	DEF("ptrdiff_t", TOK_PTRDIFF_T) \
-	DEF("uint64_t",  TOK_UINT64_T) \
-	DEF("uint32_t",  TOK_UINT32_T) \
-	DEF("uint16_t",  TOK_UINT16_T) \
-	DEF("int64_t",   TOK_INT64_T) \
-	DEF("int32_t",   TOK_INT32_T) \
-	DEF("int16_t",   TOK_INT16_T) \
-	DEF("wchar_t",   TOK_WCHAR_T) \
-	DEF("uint8_t",   TOK_UINT8_T) \
-	DEF("size_t",    TOK_SIZE_T) \
-	DEF("int8_t",    TOK_INT8_T)
+#define DEF_TOK_QUOTE(DEF)\
+	DEF(SKIP"\0"   ,TOK_QUOTE_NONE  ,TOK_CAT_NONE)\
+	DEF(SKIP"\x15" ,TOK_QUOTE_ERROR ,TOK_CAT_ERROR)\
+	DEF(RANGE" -~,\t" ,TOK_QUOTE_CHAR ,TOK_CAT_TEXT)\
+	DEF(OVERRIDE"\"" ,TOK_QUOTE_DOUBLE_CLOSE ,TOK_CAT_QUOTE)\
+	DEF(OVERRIDE"\'" ,TOK_QUOTE_SINGLE_CLOSE ,TOK_CAT_QUOTE)\
+	DEF("\\'"  ,TOK_ESCAPE_SINGLE_QUOTE ,TOK_CAT_ESCAPE)\
+	DEF("\\\"" ,TOK_ESCAPE_DOUBLE_QUOTE ,TOK_CAT_ESCAPE)\
+	DEF("\\?"  ,TOK_ESCAPE_QUESTION     ,TOK_CAT_ESCAPE)\
+	DEF("\\\\" ,TOK_ESCAPE_BACKSLASH    ,TOK_CAT_ESCAPE)\
+	DEF("\\a"  ,TOK_ESCAPE_ALERT        ,TOK_CAT_ESCAPE)\
+	DEF("\\b"  ,TOK_ESCAPE_BACKSPACE    ,TOK_CAT_ESCAPE)\
+	DEF("\\f"  ,TOK_ESCAPE_FORMFEED     ,TOK_CAT_ESCAPE)\
+	DEF("\\n"  ,TOK_ESCAPE_NEWLINE      ,TOK_CAT_ESCAPE)\
+	DEF("\\r"  ,TOK_ESCAPE_CARRIAGE     ,TOK_CAT_ESCAPE)\
+	DEF("\\t"  ,TOK_ESCAPE_TAB          ,TOK_CAT_ESCAPE)\
+	DEF("\\v"  ,TOK_ESCAPE_VTAB         ,TOK_CAT_ESCAPE)\
+	DEF("\\x"  ,TOK_ESCAPE_HEX_START    ,TOK_CAT_ESCAPE)\
+	DEF("\\u"  ,TOK_ESCAPE_UNICODE_4    ,TOK_CAT_ESCAPE)\
+	DEF("\\U"  ,TOK_ESCAPE_UNICODE_8    ,TOK_CAT_ESCAPE)\
+	DEF("\n" ,TOK_QUOTE_NEWLINE ,TOK_CAT_ERROR)
 
-#define DEF_WHITESPACE_TOKS(DEF) \
-	DEF(" ",  TOK_SPACE) \
-	DEF("\t", TOK_TAB) \
-	DEF("\n", TOK_NEWLINE) \
-	DEF("\r", TOK_CARRIAGE_RETURN) \
-	DEF("\f", TOK_FORM_FEED) \
-	DEF("\v", TOK_VERTICAL_TAB)
-
-#define DEF_GROUPING_TOKS(DEF) \
-	DEF("(", TOK_PAREN_OPEN) \
-	DEF(")", TOK_PAREN_CLOSE) \
-	DEF("{", TOK_BRACE_OPEN) \
-	DEF("}", TOK_BRACE_CLOSE) \
-	DEF("[", TOK_BRACKET_OPEN) \
-	DEF("]", TOK_BRACKET_CLOSE)
-
-#define DEF_ACCESS_TOKS(DEF) \
-	DEF("->", TOK_ARROW) \
-	DEF(".",  TOK_DOT)
-
-#define DEF_STATEMENT_TOKS(DEF) \
-	DEF(";", TOK_SEMICOLON) \
-	DEF(",", TOK_COMMA) \
-	DEF(":", TOK_COLON)
-
-#define DEF_ARITHMETIC_TOKS(DEF) \
-	DEF("++", TOK_INCREMENT) \
-	DEF("--", TOK_DECREMENT) \
-	DEF("+",  TOK_PLUS) \
-	DEF("-",  TOK_MINUS) \
-	DEF("*",  TOK_STAR) \
-	DEF("/",  TOK_SLASH) \
-	DEF("%",  TOK_PERCENT)
-
-#define DEF_BITWISE_TOKS(DEF) \
-	DEF("<<=", TOK_LEFT_SHIFT_ASSIGN) \
-	DEF(">>=", TOK_RIGHT_SHIFT_ASSIGN) \
-	DEF("<<",  TOK_LEFT_SHIFT) \
-	DEF(">>",  TOK_RIGHT_SHIFT) \
-	DEF("&",   TOK_AMPERSAND) \
-	DEF("|",   TOK_PIPE) \
-	DEF("^",   TOK_CARET) \
-	DEF("~",   TOK_TILDE)
-
-#define DEF_LOGICAL_TOKS(DEF) \
-	DEF("&&", TOK_LOGICAL_AND) \
-	DEF("||", TOK_LOGICAL_OR) \
-	DEF("!",  TOK_EXCLAMATION)
-
-#define DEF_COMPARISON_TOKS(DEF) \
-	DEF("<=", TOK_LESS_EQUAL) \
-	DEF(">=", TOK_GREATER_EQUAL) \
-	DEF("==", TOK_EQUAL_EQUAL) \
-	DEF("!=", TOK_NOT_EQUAL) \
-	DEF("<",  TOK_LESS) \
-	DEF(">",  TOK_GREATER)
-
-#define DEF_ASSIGNMENT_TOKS(DEF) \
-	DEF("+=",  TOK_PLUS_ASSIGN) \
-	DEF("-=",  TOK_MINUS_ASSIGN) \
-	DEF("*=",  TOK_STAR_ASSIGN) \
-	DEF("/=",  TOK_SLASH_ASSIGN) \
-	DEF("%=",  TOK_PERCENT_ASSIGN) \
-	DEF("&=",  TOK_AMPERSAND_ASSIGN) \
-	DEF("|=",  TOK_PIPE_ASSIGN) \
-	DEF("^=",  TOK_CARET_ASSIGN) \
-	DEF("=",   TOK_ASSIGN)
-
-#define DEF_OTHER_OPERATOR_TOKS(DEF) \
-	DEF("?",   TOK_QUESTION) \
-	DEF("...", TOK_ELLIPSIS)
-
-#define DEF_STRING_DELIMITER_TOKS(DEF) \
-	DEF("\"", TOK_DOUBLE_QUOTE) \
-	DEF("'",  TOK_SINGLE_QUOTE)
-
-#define DEF_COMMENT_DELIMITER_TOKS(DEF) \
-	DEF("/*", TOK_COMMENT_OPEN) \
-	DEF("*/", TOK_COMMENT_CLOSE) \
-	DEF("//", TOK_LINE_COMMENT)
-
-#define DEF_ALL_CATEGORY_TOKS(DEF) \
-	DEF(PREPROCESS_TOKS) \
-	DEF(KEYWORD_TOKS) \
-	DEF(TYPE_TOKS) \
-	DEF(STDTYPE_TOKS) \
-	DEF(WHITESPACE_TOKS) \
-	DEF(GROUPING_TOKS) \
-	DEF(ACCESS_TOKS) \
-	DEF(STATEMENT_TOKS) \
-	DEF(ARITHMETIC_TOKS) \
-	DEF(BITWISE_TOKS) \
-	DEF(LOGICAL_TOKS) \
-	DEF(COMPARISON_TOKS) \
-	DEF(ASSIGNMENT_TOKS) \
-	DEF(OTHER_OPERATOR_TOKS) \
-	DEF(STRING_DELIMITER_TOKS) \
-	DEF(COMMENT_DELIMITER_TOKS)
-
-/*
- * Lexer
- */ 
-#define DEF_ENUM_TOK_DEFINITION(_name, _tok) _tok,
-#define DEF_ALL_ENUM_TOK_DEFINITION(_cat) DEF_##_cat(DEF_ENUM_TOK_DEFINITION)
-typedef enum TOK { 
-	TOK_NONE,
-	DEF_ALL_CATEGORY_TOKS(DEF_ALL_ENUM_TOK_DEFINITION) 
-	TOK_COUNT,
-} TOK;
-
-#define DEF_LEN_TOK_DEFINITION(_name, _tok) [_tok] = sizeof(_name) - 1,
-#define DEF_ALL_LEN_TOK_DEFINITION(_cat) DEF_##_cat(DEF_LEN_TOK_DEFINITION)
-static const int TOK_NAME_LEN[] = { 
-	DEF_ALL_CATEGORY_TOKS(DEF_ALL_LEN_TOK_DEFINITION) 
-};
-
-#define DEF_STRING_TOK_DEFINITION(_name, _tok) case _tok: return #_tok " " #_name;
-#define DEF_ALL_STRING_TOK_DEFINITION(_cat) DEF_##_cat(DEF_STRING_TOK_DEFINITION)
-static const char* string_TOK(TOK tok) {
-	switch(tok) {
-		case TOK_NONE: return "TOK_NONE";
-		DEF_ALL_CATEGORY_TOKS(DEF_ALL_STRING_TOK_DEFINITION)
-		default: return "TOK N/A";
-	}
-}
-
-typedef struct TokenDefintion {
+typedef struct TokDefinition {
 	const char* name;
-	TOK tok;
-} TokenDefintion;
-#define DEF_ARRAY_TOK_DEFINITION(_name, _token) (TokenDefintion){ _name, _token },
-#define DEF_ALL_ARRAY_TOK_DEFINITION(_cat)  static const TokenDefintion _cat[] = { DEF_##_cat(DEF_ARRAY_TOK_DEFINITION) };
-DEF_ALL_CATEGORY_TOKS(DEF_ALL_ARRAY_TOK_DEFINITION)
+	int len;
+	int tok;
+	int cat;
+} TokDefinition;
 
-typedef u32 tok_hash;
-typedef u8  token_hash_prefix;
-typedef struct TokenKey {
-	tok_hash a : 12;
-	tok_hash b : 12;
-	u8 len       : 4;
-} TokenKey;
-#define MAP_CAPACITY 4096
-#define MAP_PREFIX_CAPACITY 256
-#define MAP_PAGE_CAPACITY 16
-#define TOK_MAX_SIZE 16
-#define TOK_MAX_END  15
-#define TOK_MASK 0x0FFF // 12 bit mask
+#define STR_LEN(_str) (sizeof(_str) - 1)
+#define DEF_TOK_ENUM_ITEM(_name, _tok, _cat) _tok,
+#define DEF_TOK_STRING_ITEM(_name, _tok, _cat) case _tok: return #_tok"("_name")";
+#define DEF_TOK_DEFINITION_ITEM(_name, _tok, _cat) (TokDefinition){ _name, (int)STR_LEN(_name), (int)_tok, (int)_cat },
+#define DEF_TOK_METHODS(_tokdef) \
+	typedef enum PACKED _tokdef { \
+		DEF_##_tokdef(DEF_TOK_ENUM_ITEM) \
+		_tokdef##_COUNT, \
+	} _tokdef; \
+	static const char* string_##_tokdef(_tokdef _item) { \
+		switch(_item) { \
+			DEF_##_tokdef(DEF_TOK_STRING_ITEM) \
+			default: return #_tokdef "_N/A"; \
+		} \
+	} \
+	static const TokDefinition _tokdef##_DEFINITIONS[] = { \
+		DEF_##_tokdef(DEF_TOK_DEFINITION_ITEM) \
+	};
 
-static TOK TOK_MAP_A[MAP_PAGE_CAPACITY][MAP_CAPACITY];
-static TOK TOK_MAP_B[MAP_PAGE_CAPACITY][MAP_CAPACITY];
+DEF_TOK_METHODS(TOK)
+DEF_TOK_METHODS(TOK_COMMENT)
+DEF_TOK_METHODS(TOK_QUOTE)
 
-#define TOK_HASH_SEED 0
+typedef u16 tok_hash;
+#define MAP_HASH_CAPACITY 1024
+#define MAP_PAGE_CAPACITY 8
+typedef struct MapTok {
+	u8  tok  : 8;
+	u8  cat  : 8;
+	u8  len  : 8;
+	tok_hash hash : 16;
+} MapTok;
+STATIC_ASSERT(sizeof(MapTok) == 6);
+
+static MapTok TOK_MAP[MAP_PAGE_CAPACITY][MAP_HASH_CAPACITY] = { { [0 ... MAP_HASH_CAPACITY-1] = { .tok = (int)TOK_ERROR } } };
+static MapTok TOK_COMMENT_MAP[MAP_PAGE_CAPACITY][MAP_HASH_CAPACITY]  = { { [0 ... MAP_HASH_CAPACITY-1] = { .tok = (int)TOK_COMMENT_ERROR } } };
+static MapTok TOK_QUOTE_MAP[MAP_PAGE_CAPACITY][MAP_HASH_CAPACITY]  = { { [0 ... MAP_HASH_CAPACITY-1] = { .tok = (int)TOK_QUOTE_ERROR } } };
+
+//                        0x4444333322221111
+#define TOK_MAP_HASH_MASK 0b0000001111111111 // 10 bit mask = 1024
+#define KEY_FROM_HASH(_hash) (_hash & TOK_MAP_HASH_MASK)
+#define PAGE_FROM_LEN(_len) MIN(_len-1, MAP_PAGE_CAPACITY-1)
 #define TOK_HASH_DJB2(_h, _c)  ((((_h) << 5) + (_h) + (_c)) * 33) 
 #define TOK_HASH_FNV1A(_h, _c) (((_h) ^ (_c)) * 16777619UL)
 
-/* Calc token key hashes via range or null termination */
-static TokenKey CalcTokenKey(const char *str, int iStart, int iEnd)
-{
-	int range = iEnd - iStart;
-	str += iStart; char c; u8 len = 0;
-	tok_hash ha = TOK_HASH_SEED; 
-	tok_hash hb = TOK_HASH_SEED; 
-	while ((c = *str++) && range-->= 0) {
-		ha = TOK_HASH_DJB2(ha, c); hb = TOK_HASH_FNV1A(hb, c); len++;
-	}
-	return (TokenKey){ ha, hb, len };
-}
-
-static RESULT ContructTokenMap(TOK category, int tokenCount, const TokenDefintion* tokens)
-{
-	for (int iTkn = 0; iTkn < tokenCount; iTkn++) {
-		TokenKey k = CalcTokenKey(tokens[iTkn].name, 0, TOK_MAX_END);
-		TOK tokA = TOK_MAP_A[k.len][k.a];
-		TOK tokB = TOK_MAP_B[k.len][k.b];
-		if (tokA != TOK_NONE || tokB != TOK_NONE) {
-			LOG_ERR("Type Hash Collision! %s %d %d %d %s\n", tokens[iTkn].name, k.a, k.b, k.len, string_TOK(category));
-			return RESULT_COLLISION;
-		}
-		TOK_MAP_A[k.len][k.a] = category;
-		TOK_MAP_B[k.len][k.b] = category;
-		LOG("%s %d %d %d %s\n", tokens[iTkn].name, k.a, k.b, k.len, string_TOK(category));
-	}
-	return RESULT_SUCCESS;
-}
-
-typedef struct MapTok {
-	TOK      tok;
-	tok_hash hash; // full hash
-} MapTok;
-static MapTok TOK_MAP[MAP_PAGE_CAPACITY][MAP_CAPACITY];
-
-
 static tok_hash CalcTokKey(const char *str, int iStart, int iEnd)
 {
-	tok_hash h = str[iStart];  // if len is 1 then hash is ascii code
-	str += iStart + 1;  // do not hash first char
+	if (iEnd == 0) return str[iStart]; // if len is 1 then hash is ascii code
+	tok_hash h = str[iStart];  
+	str += iStart + 1;
 	int range = iEnd - iStart;
 	char c; while ((c = *str++) && range-->= 0) h = TOK_HASH_DJB2(h, c);
 	return h;
 }
 
-#define TOK_MAP_HASH_MASK 0x0FFF // 12 bit mask = 4096
-#define TOK_MAP_PAGE_MASK 0x000F //  4 bit mask = 16
-static RESULT ContructTokMap(int tokenCount, const TokenDefintion* tokens)
+static RESULT AddTokenToMap(MapTok (*tokMap)[MAP_HASH_CAPACITY], const char*(*string_OUT)(u8), const char* name, int len, TOK tok, TOK_CAT cat, bool override) 
+{
+	tok_hash hash = CalcTokKey(name, 0, len - 1);
+	u8 p = PAGE_FROM_LEN(len); u16 k = KEY_FROM_HASH(hash);
+	LOG("%.*s(%d) = %s(%d) len:%d p: %d hash: %d\n", len, name, k, string_OUT(tok), (u16)tok, len, p, hash);
+	MapTok* pMapTok = &tokMap[p][k];
+	if (!override && pMapTok->tok != 0 && pMapTok->tok != (int)TOK_COMMENT_ERROR && pMapTok->tok != (int)TOK_ERROR) 
+		return RESULT_COLLISION;
+
+	*pMapTok = (MapTok){ tok, cat, len, hash };
+	return RESULT_SUCCESS;
+}
+
+static RESULT ContructTokMap(MapTok (*tokMap)[MAP_HASH_CAPACITY], const char*(*string_OUT)(u8), int tokenCount, const TokDefinition* tokDefs)
 {
 	for (int iTkn = 0; iTkn < tokenCount; iTkn++) {
-		TOK tok = tokens[iTkn].tok;
-		int len = TOK_NAME_LEN[tok];
-		tok_hash hash = CalcTokKey(tokens[iTkn].name, 0, len - 1);
-		u16 k = hash & TOK_MAP_HASH_MASK;
-		u8  p = len & TOK_MAP_PAGE_MASK;
-		MapTok* pMapTok = &TOK_MAP[p][k];
-		if (pMapTok->tok != TOK_NONE) {
-			LOG_ERR("Type Hash Collision! %s k: %d p: %d hash: %d\n", tokens[iTkn].name, k, p, hash);
-			return RESULT_COLLISION;
+		TokDefinition td = tokDefs[iTkn];
+		if (td.name[0] != '$') goto ProcessHash;
+		if (memcmp(td.name, SKIP, STR_LEN(SKIP)) == 0) goto ProcessSkip;
+		if (memcmp(td.name, RANGE, STR_LEN(RANGE)) == 0) goto ProcessHashRange;
+		if (memcmp(td.name, OVERRIDE, STR_LEN(OVERRIDE)) == 0) goto ProcessOverride;
+		continue;
+
+	ProcessSkip:
+		LOG("Processing Skip Expression: %s\n", td.name);
+		continue;
+
+	ProcessHashRange:
+		LOG("Processing Range Expression: %s\n", td.name);
+		char buffer[64]; strcpy(buffer, td.name + sizeof(RANGE) - 1);
+		char* range = strtok(buffer, ",");
+		while (range != NULL) {
+			LOG("Range: %s\n", range);
+			switch (range[1])
+			{
+				case '-':
+					for (char c = range[0]; c < range[2]+1; ++c)
+						REQUIRE(AddTokenToMap(tokMap, string_OUT, &c, 1, td.tok, td.cat, false));
+					break;
+				case '\0': REQUIRE(AddTokenToMap(tokMap, string_OUT, range, 1, td.tok, td.cat, false)); break;
+				default:   PANIC("Malformed range expression!");
+			}
+		    range = strtok(NULL, ",");
 		}
-		*pMapTok = (MapTok){ tok, hash };
-		LOG("%s=%d k: %d p: %d hash: %d\n", string_TOK(tok), (u16)tok, k, p, hash);
+		continue;
+
+	ProcessOverride:
+		REQUIRE(AddTokenToMap(tokMap, string_OUT, td.name + STR_LEN(OVERRIDE), td.len -STR_LEN(OVERRIDE), td.tok, td.cat, true));
+		continue;
+
+	ProcessHash:
+		REQUIRE(AddTokenToMap(tokMap, string_OUT, td.name, td.len, td.tok, td.cat, false));
+		continue;
 	}
 	return RESULT_SUCCESS;
 }
@@ -728,7 +727,7 @@ const char availableChars[] = "·¬ abcdefghijklmnopqrstuvwxyzABDCEFGHIJKLMNOPQR
 
 #define TOK_MAX_INCREMENT 15
 typedef struct PACKED TextMeta {
-	TOK_CATEGORY token : 6;
+	TOK_CAT token : 6;
 
 	u8 BLOCK_COMMENT : 1;
 	u8 LINE_COMMENT  : 1;
@@ -785,7 +784,7 @@ typedef struct CodeBox {
 	TOK* pTextTok;
 	int* pTextTokStart;
 	int* pTextTokLen;
-	TOK_CATEGORY* pTextCategory;
+	TOK_CAT* pTextCat;
 
 	TextMeta* pTextMeta;
 
@@ -805,88 +804,79 @@ typedef struct Command {
 	char buffer[32];
 } Command;
 
-static inline Vector2 GetWorldToBoxLocal(Vector2 point, Rectangle rect)
-{
+static inline Vector2 GetWorldToBoxLocal(Vector2 point, Rectangle rect) {
     return (Vector2){ point.x - rect.x, point.y - rect.y };
 }
 
-static inline Vector2 GetBoxLocalToWorld(Vector2 point, Rectangle rect)
-{
+static inline Vector2 GetBoxLocalToWorld(Vector2 point, Rectangle rect) {
     return (Vector2){ point.x + rect.x, point.y + rect.y };
 }
 
 /*
- * CodeBox Parse
+ * CodeBox Lex
  */
-static inline bool Delimiter(char c) 
-{
-	switch (c) 
-	{
-		case '\0':
-
-		/* Whitespace */
-		case ' ': case '\t': case '\n':
-		case '\r': // Carriage return
-		case '\v': // Vertical tab
-		case '\f': // Form feed
-
-		/* Operators */
-		case '!': case '%': case '&': case '*': case '+': case '-': case '/': case ':': case '<': case '=': case '>': case '?': case '^': case '|': case '~': 	
-
-		/* Quotes */
-		case '"': case '\'': case '`':
-
-		/* Scopes */
-		case '(': case ')': case '{': case '}':	case '[': case ']':
-
-		case ',': case '.': case ';':	case '@': case '\\':
-			return true;
-
-		default:
-			return false;
-	}
-}
 
 static RESULT ProcessMeta2(CodeBox* pCode) 
 {
+	/*
+	 * Dispatch Tables
+	 */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Woverride-init"
+#define DEF_DISPATCH(_name, _tok, _cat)  [_tok] = &&_tok,
 
-#define PROCESS_CHAR_TOK TOK_COUNT // set to TOK_COUNT so it is last entry
-#define PROCESS_COMMENT_TOK TOK_COUNT + 1 // set to TOK_COUNT so it is last entry
-#define DEF_DISPATCH(_name, _tok)  [_tok] = &&_tok,
-#define DEF_ALL_DISPATCH(_cat) DEF_##_cat(DEF_DISPATCH)
-	static void *codeDispatch[] = {
-		[TOK_NONE] = &&TOK_NONE,
-		[PROCESS_CHAR_TOK] = &&PROCESS_CHAR,
-		[PROCESS_COMMENT_TOK] = &&PROCESS_COMMENT,
-		DEF_ALL_CATEGORY_TOKS(DEF_ALL_DISPATCH)
+	static void *codeDispatch[] = {	
+		DEF_TOK(DEF_DISPATCH)
+		[TOK_PP_HASH_HASH] = &&TOK_ERROR,
+		[TOK_PP_CONTINUE]  = &&TOK_ERROR,
+		[TOK_ESCAPE]       = &&TOK_ERROR,
+		[TOK_PP_INCLUDE]   = &&TOK_ERROR,
+		[TOK_PP_DEFINE]    = &&TOK_ERROR,
+		[TOK_PP_IFNDEF]    = &&TOK_ERROR,
+		[TOK_PP_IFDEF]     = &&TOK_ERROR,
+		[TOK_PP_ENDIF]     = &&TOK_ERROR,
+		[TOK_PP_UNDEF]     = &&TOK_ERROR,
+		[TOK_PP_ELIF]      = &&TOK_ERROR,
+		[TOK_PP_ELSE]      = &&TOK_ERROR,
+		[TOK_PP_ERROR]     = &&TOK_ERROR,
+		[TOK_PP_PRAGMA]    = &&TOK_ERROR,
+		[TOK_PP_LINE]      = &&TOK_ERROR,
+		[TOK_PP_IF]        = &&TOK_ERROR,
 	};
-	static int codeDispatchCount = COUNT(codeDispatch);
-#undef DEF_DISPATCH
-#undef DEF_ALL_DISPATCH
+
+	static void *defineDispatch[] = {
+		DEF_TOK(DEF_DISPATCH)	
+		[TOK_NEWLINE] = &&TOK_PP_NEWLINE,
+		[TOK_ESCAPE]  = &&TOK_ESCAPE,
+	};
+
+	static void *quoteDispatch[] = {
+		DEF_TOK_QUOTE(DEF_DISPATCH)
+	};
 
 	static void *commentDispatch[] = {
-		[0 ... TOK_COUNT] = &&PROCESS_COMMENT,
-		[TOK_NONE] = &&PROCESS_COMMENT,
-		[TOK_COMMENT_CLOSE] = &&TOK_COMMENT_CLOSE,
+		DEF_TOK_COMMENT(DEF_DISPATCH)
 	};
-	static int commentDispatchCount = COUNT(commentDispatch);
 
+#undef DEF_DISPATCH
 #pragma GCC diagnostic pop
 
 	// TODO move in anon struct
-	const int     count      = pCode->textCount;
-	char*         pText      = pCode->pText;
-	TextMeta*     pTextMeta  = pCode->pTextMeta;
-	TOK*          pTextTok   = pCode->pTextTok;
-	TOK_CATEGORY* pTextCategory = pCode->pTextCategory;
+	const int count     = pCode->textCount;
+	char *pText         = pCode->pText;
+	TextMeta *pTextMeta = pCode->pTextMeta;
+	TOK *pTextTok       = pCode->pTextTok;
+	TOK_CAT *pTextCat   = pCode->pTextCat;
+	void **pdisp = codeDispatch;
+	void **disp  = codeDispatch;
+	MapTok (*ptokmap)[MAP_HASH_CAPACITY] = TOK_MAP;
+	MapTok (*tokmap)[MAP_HASH_CAPACITY]  = TOK_MAP;
 
 	struct {
 		int len;
 		int iStart;
 		TOK tok;
-		TOK_CATEGORY category;
+		TOK_CAT cat;
 	} pend;
 
 	struct {
@@ -897,54 +887,74 @@ static RESULT ProcessMeta2(CodeBox* pCode)
 	struct {
 		int i;
 		char c;
-		TOK tok;
-		bool preprocess;
-    	bool comment;
+		int tok;
+		MapTok mt;
+		bool blockComment;
+		bool doubleQuote;
+		bool preprocessing;
 	} step = { .i = -1 };
 
-#define SET_CHAR_TOK(_cat) { pTextTok[step.i] = step.tok; pTextCategory[step.i] = _cat; }
-#define SET_RANGE_TOK(_cat) { \
-	int _len = TOK_NAME_LEN[step.tok]; int _iStart = (step.i - _len) + 1; \
-	FILL(pTextTok + _iStart, step.tok, _len); FILL(pTextCategory + _iStart, _cat, _len); \
-}
+	LOG("%d, %s\n", '"', string_TOK_QUOTE(TOK_QUOTE_MAP[0]['"'].tok));
 
-#define WRITE_PEND()        { FILL(pTextTok + pend.iStart, pend.tok, pend.len); FILL(pTextCategory + pend.iStart, pend.category, pend.len); }
-#define SET_PEND(_cat) { pend.len = TOK_NAME_LEN[step.tok]; pend.iStart = (step.i - pend.len) + 1; pend.tok = step.tok; pend.category = _cat; }
-#define CLEAR_PEND()        { memset(&pend, 0, sizeof(pend)); }
+#define SET_CHAR_TOK()  { pTextTok[step.i] = step.tok; pTextCat[step.i] = step.mt.cat; }
+#define SET_RANGE_TOK() { int len = step.mt.len; int _iStart = (step.i - len) + 1; FILL(pTextTok + _iStart, step.tok, len); FILL(pTextCat + _iStart, step.mt.cat, len); }
 
 /* Set hash to start at current step. */
-#define RESTART_HASH()      { hash = (typeof(hash)){ step.c, 1 }; }
+#define RESTART_HASH() { hash = (typeof(hash)){ step.c, 1 }; }
 /* Zero hash. */
-#define CLEAR_HASH()        { memset(&hash, 0, sizeof(hash)); }
+#define CLEAR_HASH()   { memset(&hash, 0, sizeof(hash)); }
 
 /* Single Char Delimit. Set known char token. Write any pending token. Clear pending and hash. */
-#define DELIMIT_CHAR(_cat) SET_CHAR_TOK(_cat); WRITE_PEND(); CLEAR_PEND(); CLEAR_HASH(); 
+#define DELIMIT_CHAR() { SET_CHAR_TOK(); WRITE_PEND(); CLEAR_PEND(); CLEAR_HASH(); }
 
-/* Begin Pending Token Range. Write any pending token if new category and restart hash to current. Set pending to current.*/ // TODO I could get rid of if with another jump table
-#define BEGIN_PEND(_cat)   if (pend.category != TOK_CATEGORY_OPERATOR) { WRITE_PEND(); RESTART_HASH(); } SET_PEND(_cat);
+#define WRITE_PEND() { FILL(pTextTok + pend.iStart, pend.tok, pend.len); FILL(pTextCat + pend.iStart, pend.cat, pend.len); }
+#define CLEAR_PEND() { memset(&pend, 0, sizeof(pend)); }
 
-/* Delimit Pending Token Range. Set known token range. Clear pending and hash.*/
-#define DELIMIT_PEND(_cat) SET_RANGE_TOK(TOK_CATEGORY_OPERATOR); CLEAR_PEND(); CLEAR_HASH(); 
+/* Set Pending Token. Tokens which start or end with a delimiter can use this. When it reaches the delimiter it to write the token. i.e. keywords */
+#define SET_PEND() { pend.len = hash.len; pend.iStart = (step.i - hash.len) + 1; pend.tok = step.tok; pend.cat = step.mt.cat; }
 
-#define GOTO_NEXT(_dispatch) { \
+/* Begin Pending Token Range. Tokens which may not start with a delimiter use this to explicitly delimit on first token. i.e #define */ // TODO I could get rid of if with another jump table???
+#define DELIMIT_BEGIN_PEND() if (pend.cat != step.mt.cat) { WRITE_PEND(); RESTART_HASH(); } SET_PEND();
+/* Delimit Pending Token Range. Set known token range. Clear pending and hash. Tokens which cannot rely on a following delimiter need to use this. i.e. operators */
+#define DELIMIT_END_PEND()   SET_RANGE_TOK(); CLEAR_PEND(); CLEAR_HASH(); 
+
+#define GOTO_NEXT() { \
 	if (step.i == count) return RESULT_SUCCESS; \
-	step.c = pText[++step.i]; \
+	step.c   = pText[++step.i]; \
 	hash.cur = (++hash.len == 1) ? (tok_hash)step.c : TOK_HASH_DJB2(hash.cur, step.c);  \
-	MapTok mt = TOK_MAP[hash.len & TOK_MAP_PAGE_MASK][hash.cur & TOK_MAP_HASH_MASK]; \
-	step.tok = mt.hash == hash.cur ? mt.tok : TOK_NONE; \
-	goto *_dispatch[step.tok]; \
+	step.mt  = tokmap[PAGE_FROM_LEN(hash.len)][KEY_FROM_HASH(hash.cur)]; \
+	step.tok = step.mt.hash == hash.cur ? step.mt.tok : 0; \
+	goto *disp[step.tok]; \
 }
 
-	CLEAR_PEND(); CLEAR_HASH();
+	/* Begin */
+	CLEAR_PEND(); 
+	CLEAR_HASH();
+	GOTO_NEXT();
 
-PROCESS_CHAR:
-	GOTO_NEXT(codeDispatch);
+/* If no token jump to single char. */
+TOK_QUOTE_NONE:
+TOK_COMMENT_NONE:
+TOK_NONE: 
+	step.mt  = tokmap[0][(u8)step.c]; 
+	step.tok = step.mt.tok;
+	goto *disp[step.tok];
 
-TOK_NONE:
-	MapTok cmt = TOK_MAP[1][(u8)step.c];
-	step.tok = cmt.tok == TOK_NONE ? PROCESS_CHAR_TOK : cmt.tok;
-	goto *codeDispatch[step.tok];
+TOK_COMMENT_ERROR:
+TOK_QUOTE_ERROR:
+TOK_ERROR:
+	pTextTok[step.i] = TOK_ERROR; 
+	pTextCat[step.i] = TOK_CAT_ERROR;
+	DELIMIT_END_PEND();
+	GOTO_NEXT();
 
+TOK_QUOTE_CHAR:
+TOK_ALPHA_CHAR:
+TOK_DIGIT_CHAR:
+
+/*
+ * Range Delimiter Terminated
+ */
 /* PREPROCESS_TOKS */
 TOK_PP_INCLUDE:
 TOK_PP_DEFINE:
@@ -958,13 +968,6 @@ TOK_PP_ERROR:
 TOK_PP_PRAGMA:
 TOK_PP_LINE:
 TOK_PP_IF:
-TOK_PP_HASH_HASH:
-	SET_PEND(TOK_CATEGORY_PREPROCESS);
-	GOTO_NEXT(codeDispatch);
-
-TOK_PP_HASH:
-	SET_PEND(TOK_CATEGORY_PREPROCESS);
-	GOTO_NEXT(codeDispatch);
 
 /* KEYWORD_TOKS */
 TOK_STATIC_ASSERT:
@@ -999,8 +1002,6 @@ TOK_AUTO:
 TOK_FOR:
 TOK_IF:
 TOK_DO:
-	SET_PEND(TOK_CATEGORY_KEYWORD);
-	GOTO_NEXT(codeDispatch);
 
 /* TYPE_TOKS */
 TOK_UNSIGNED:
@@ -1027,432 +1028,163 @@ TOK_WCHAR_T:
 TOK_UINT8_T:
 TOK_SIZE_T:
 TOK_INT8_T:
-	SET_PEND(TOK_CATEGORY_TYPE);
-	GOTO_NEXT(codeDispatch);
+/* BITWISE_TOKS */
+TOK_LEFT_SHIFT:  // <<
+TOK_RIGHT_SHIFT: // >>
+	SET_PEND();
+	GOTO_NEXT();
 
-/* WHITESPACE_TOKS */
+/*
+ * Single Char Delimiter
+ */
+TOK_PP_NEWLINE:	
+	step.preprocessing = false;
+	disp = codeDispatch;
+TOK_NEWLINE:
 TOK_SPACE:
 TOK_TAB:
-TOK_NEWLINE:
 TOK_CARRIAGE_RETURN:
 TOK_FORM_FEED:
 TOK_VERTICAL_TAB:
-	DELIMIT_CHAR(TOK_CATEGORY_WHITESPACE);
-	GOTO_NEXT(codeDispatch);
-
-/* GROUPING_TOKS */
+TOK_SEMICOLON:
+TOK_COMMA:
+TOK_COLON:
+TOK_DOT:
 TOK_PAREN_OPEN:
 TOK_PAREN_CLOSE:
 TOK_BRACE_OPEN:
 TOK_BRACE_CLOSE:
 TOK_BRACKET_OPEN:
 TOK_BRACKET_CLOSE:
-	DELIMIT_CHAR(TOK_CATEGORY_SCOPE);
-	GOTO_NEXT(codeDispatch);
+TOK_EXCLAMATION:
+TOK_QUESTION:
+TOK_COMMENT_WITESPACE:
+TOK_COMMENT_CHAR:
+	DELIMIT_CHAR();
+	GOTO_NEXT();
 
-/* ACCESS_TOKS */
-TOK_ARROW:
-	DELIMIT_PEND(TOK_CATEGORY_OPERATOR);
-	GOTO_NEXT(codeDispatch);
-TOK_DOT:
-	BEGIN_PEND(TOK_CATEGORY_OPERATOR);
-	GOTO_NEXT(codeDispatch);
+/*
+ *  Range Begin Explicit Delimiter
+ */
+TOK_PP_HASH: 
+	disp = defineDispatch; 
+	DELIMIT_BEGIN_PEND();
+	GOTO_NEXT();
 
-/* STATEMENT_TOKS */
-TOK_SEMICOLON:
-TOK_COMMA:
-TOK_COLON:
-	DELIMIT_CHAR(TOK_CATEGORY_OPERATOR);
-	GOTO_NEXT(codeDispatch);	
-
-/* ARITHMETIC_TOKS */
-TOK_INCREMENT: // ++
-TOK_DECREMENT: // --
-	DELIMIT_PEND(TOK_CATEGORY_OPERATOR);
-	GOTO_NEXT(codeDispatch);
-
-TOK_PLUS:      // +
-TOK_MINUS:     // -
-TOK_STAR:      // *
-TOK_SLASH:     // /
-TOK_PERCENT:   // %
-	BEGIN_PEND(TOK_CATEGORY_OPERATOR);
-	GOTO_NEXT(codeDispatch);
-
-/* BITWISE_TOKS */
-TOK_LEFT_SHIFT_ASSIGN:  // <<=
-TOK_RIGHT_SHIFT_ASSIGN: // >>=
-	DELIMIT_PEND(TOK_CATEGORY_OPERATOR);
-	GOTO_NEXT(codeDispatch);
-
-TOK_LEFT_SHIFT:         // <<
-TOK_RIGHT_SHIFT:        // >>
-	SET_PEND(TOK_CATEGORY_OPERATOR);
-	GOTO_NEXT(codeDispatch);
-
+TOK_QUOTE_ESCAPE:
+TOK_ESCAPE: // shouldnt have?
+TOK_PLUS:               // +
+TOK_MINUS:              // -
+TOK_STAR:               // *
+TOK_SLASH:              // /
+TOK_PERCENT:            // %
 TOK_AMPERSAND:          // &
 TOK_PIPE:               // |
 TOK_CARET:              // ^
 TOK_TILDE:              // ~
-	BEGIN_PEND(TOK_CATEGORY_OPERATOR);
-	GOTO_NEXT(codeDispatch);
+TOK_LESS:               // <
+TOK_GREATER:            // >
+TOK_ASSIGN:             // =
+	DELIMIT_BEGIN_PEND();
+	GOTO_NEXT();
 
-/* LOGICAL_TOKS */
-TOK_LOGICAL_AND: // &&
-TOK_LOGICAL_OR:  // ||
-	DELIMIT_PEND(TOK_CATEGORY_OPERATOR);
-	GOTO_NEXT(codeDispatch);
+/*
+ *  Range End Explicit Delimiter
+ */
+TOK_PP_HASH_HASH:       // ##
+TOK_PP_CONTINUE:        // \\n
+TOK_ARROW:              // ->
+TOK_INCREMENT:          // ++
+TOK_DECREMENT:          // --
+TOK_LEFT_SHIFT_ASSIGN:  // <<=
+TOK_RIGHT_SHIFT_ASSIGN: // >>=
+TOK_LOGICAL_AND:        // &&
+TOK_LOGICAL_OR:         // ||
+TOK_LESS_EQUAL:         // <=
+TOK_GREATER_EQUAL:      // >=
+TOK_EQUAL_EQUAL:        // ==
+TOK_NOT_EQUAL:          // !=
+TOK_PLUS_ASSIGN:        // +=
+TOK_MINUS_ASSIGN:       // -=
+TOK_STAR_ASSIGN:        // *=
+TOK_SLASH_ASSIGN:       // /=
+TOK_PERCENT_ASSIGN:     // %=
+TOK_AMPERSAND_ASSIGN:   // &=
+TOK_PIPE_ASSIGN:        // |=
+TOK_CARET_ASSIGN:       // ^=
+TOK_ELLIPSIS:           // ...
+TOK_ESCAPE_SINGLE_QUOTE:
+TOK_ESCAPE_DOUBLE_QUOTE:
+TOK_ESCAPE_QUESTION:
+TOK_ESCAPE_BACKSLASH:
+TOK_ESCAPE_ALERT:
+TOK_ESCAPE_BACKSPACE:
+TOK_ESCAPE_FORMFEED:
+TOK_ESCAPE_NEWLINE:
+TOK_ESCAPE_CARRIAGE:
+TOK_ESCAPE_TAB:
+TOK_ESCAPE_VTAB:
+TOK_ESCAPE_HEX_START:
+TOK_ESCAPE_UNICODE_4:
+TOK_ESCAPE_UNICODE_8:
+	DELIMIT_END_PEND();
+	GOTO_NEXT();
 
-TOK_EXCLAMATION: // !
-	DELIMIT_CHAR(TOK_CATEGORY_OPERATOR);
-	GOTO_NEXT(codeDispatch);
+/*
+ *  Comment Lex
+ */
+TOK_COMMENT_OPEN: // /*
+	step.blockComment = true;
+TOK_LINE_COMMENT: // //
+    pdisp = disp;
+    ptokmap = tokmap;
+    disp = commentDispatch;
+    tokmap = TOK_COMMENT_MAP;
+	DELIMIT_END_PEND();
+	GOTO_NEXT();
 
-/* COMPARISON_TOKS */
-TOK_LESS_EQUAL:    // <=
-TOK_GREATER_EQUAL: // >=
-TOK_EQUAL_EQUAL:   // ==
-TOK_NOT_EQUAL:     // !=
-	DELIMIT_PEND(TOK_CATEGORY_OPERATOR);
-	GOTO_NEXT(codeDispatch);
-TOK_LESS:          // <
-TOK_GREATER:       // >
-	BEGIN_PEND(TOK_CATEGORY_OPERATOR);
-	GOTO_NEXT(codeDispatch);
+TOK_COMMENT_STAR:
+	if (!step.blockComment) goto TOK_COMMENT_WITESPACE;	
+	DELIMIT_BEGIN_PEND();
+	GOTO_NEXT();
 
-/* ASSIGNMENT_TOKS */
-TOK_PLUS_ASSIGN:      // +=
-TOK_MINUS_ASSIGN:     // -=
-TOK_STAR_ASSIGN:      // *=
-TOK_SLASH_ASSIGN:     // /=
-TOK_PERCENT_ASSIGN:   // %=
-TOK_AMPERSAND_ASSIGN: // &=
-TOK_PIPE_ASSIGN:      // |=
-TOK_CARET_ASSIGN:     // ^=
-	DELIMIT_PEND(TOK_CATEGORY_OPERATOR);
-	GOTO_NEXT(codeDispatch);
-TOK_ASSIGN: // =
-	BEGIN_PEND(TOK_CATEGORY_OPERATOR);
-	GOTO_NEXT(codeDispatch);
+TOK_COMMENT_NEWLINE: // */
+	if (step.blockComment) goto TOK_COMMENT_WITESPACE;	
+TOK_COMMENT_CLOSE:   // */
+	step.blockComment = false;
+    disp = pdisp;
+    tokmap = ptokmap;
+	DELIMIT_END_PEND();
+	GOTO_NEXT();
 
-/* DEF_OTHER_OPERATOR_TOKS */
-TOK_QUESTION:
-	DELIMIT_CHAR(TOK_CATEGORY_OPERATOR);
-	GOTO_NEXT(codeDispatch);
-
-TOK_ELLIPSIS:
-	DELIMIT_PEND(TOK_CATEGORY_OPERATOR);
-	GOTO_NEXT(codeDispatch);
-
-/* DEF_STRING_DELIMITER_TOKS */
+/*
+ *  Quote Lex
+ */
+/* STRING_TOKS */
 TOK_DOUBLE_QUOTE:
+	step.doubleQuote = true;
 TOK_SINGLE_QUOTE:
-	DELIMIT_CHAR(TOK_CATEGORY_QUOTE);
-	GOTO_NEXT(codeDispatch);
+    pdisp = disp;
+    ptokmap = tokmap;
+    disp = quoteDispatch;
+    tokmap = TOK_QUOTE_MAP;
+	DELIMIT_CHAR();
+	GOTO_NEXT();
 
-/* COMMENT_DELIMITER_TOKS */
-TOK_LINE_COMMENT:
-TOK_COMMENT_OPEN:
-	DELIMIT_PEND(TOK_CATEGORY_COMMENT);
-	GOTO_NEXT(commentDispatch);
+TOK_QUOTE_NEWLINE:
+	DELIMIT_CHAR();
+	GOTO_NEXT();
 
-PROCESS_COMMENT:
-	DELIMIT_CHAR(TOK_CATEGORY_COMMENT);
-	GOTO_NEXT(commentDispatch);
-
-TOK_COMMENT_CLOSE:
-	GOTO_NEXT(codeDispatch);
+TOK_QUOTE_SINGLE_CLOSE:
+	if (step.doubleQuote) goto TOK_QUOTE_CHAR;	
+TOK_QUOTE_DOUBLE_CLOSE:
+	step.doubleQuote = false;
+    disp = pdisp;
+    tokmap = ptokmap;
+	DELIMIT_CHAR();
+	GOTO_NEXT();
 
 	return 0;
-}
-
-
-static RESULT ProcessMeta(CodeBox* pCode) 
-{
-	const int   count = pCode->textCount;
-	const char* pText = pCode->pText; 
-	TextMeta*   pMeta = pCode->pTextMeta;
-
-	int iC    = 0;
-	int iStrt = 0;
-
-	// Prev Char, Current Char, Next Char
-	char pc = '\0';
-	char c  = '\0';
-	char nc = pText[0];
-
-	// Prev Delim, Current Delim, Next Delim
-	bool pd = true;
-	bool d  = true;
-	bool nd = Delimiter(nc);
-
-	TextMeta meta; ZERO_P(&meta);
-
-processChar:
-	bool comment    = meta.BLOCK_COMMENT || meta.LINE_COMMENT;
-	bool quote      = meta.QUOTE;
-	bool preprocess = meta.PREPROCESS;
-
-	pc = c;	c  = nc; nc = pText[iC + 1];
-	pd = d;	d  = nd; nd = Delimiter(nc);
-
-	switch (comment | quote << 1) 
-	{
-		/* Parse Comment */
-		case (true): {
-			switch (c) 
-			{
-				case '/':
-					if (pc == '*') {
-						pMeta[iC] = meta;
-						meta.token = TOK_CATEGORY_NONE;
-						meta.BLOCK_COMMENT = 0; 
-						goto next;
-					}	
-					goto metaAndNext;
-
-				case '\n': 
-					meta.token = TOK_CATEGORY_WHITESPACE;
-					pMeta[iC] = meta;
-					meta.token = TOK_CATEGORY_COMMENT;
-					meta.LINE_COMMENT = 0;
-					goto next;
-
-				case ' ': 
-				case '\t': 
-					meta.token = TOK_CATEGORY_WHITESPACE;
-					pMeta[iC] = meta;
-					meta.token = TOK_CATEGORY_COMMENT;
-					goto next;
-
-				default:
-					goto metaAndNext;
-			}
-		}
-
-		/* Parse Quote */
-		case (true << 1): {
-			switch (c) 
-			{
-				case '\\':
-					meta.token     = TOK_CATEGORY_ESCAPE;
-					pMeta[iC]      = meta;
-					pMeta[iC + 1]  = meta;
-					meta.token     = TOK_CATEGORY_TEXT;
-					goto skipAndNext;
-
-				case '\'':
-					switch (pc) 
-					{
-					case '\'':
-						goto metaAndNext;
-
-					default:
-						meta.token = TOK_CATEGORY_QUOTE;
-						pMeta[iC]  = meta;
-						meta.token = TOK_CATEGORY_NONE;
-						meta.QUOTE = 0;
-						goto next;
-					}
-
-				case '"':
-					switch (pc) 
-					{
-					case '\'':
-						goto metaAndNext;
-
-					default:
-						meta.token = TOK_CATEGORY_QUOTE;
-						pMeta[iC]  = meta;
-						meta.token = TOK_CATEGORY_NONE;
-						meta.QUOTE = 0;
-						goto next;
-					}
-
-				default:
-					goto metaAndNext;
-			}
-		}
-
-		/* Parse Text */
-		default:
-			
-			/* Test Delimit and Token Lookup*/
-			u8 delimitTransition = pd | d << 1 | nd << 2;
-			switch (delimitTransition) 
-			{
-				/* Start Token */
-				case true  | false << 1 | false << 2:
-					iStrt = iC;
-					goto metaAndNext;
-
-				/* Start Single Char Token */
-				case true  | false << 1 | true  << 2:
-					iStrt = iC;
-					FALLTHROUGH;
-
-				/* End Token */
-				case false | false << 1 | true  << 2:
-					int iEnd = iC;
-					TokenKey k = CalcTokenKey(pText, iStrt, iEnd);
-					TOK tokA = TOK_MAP_A[k.len][k.a];
-					TOK tokB = TOK_MAP_B[k.len][k.b];
-					// TOK tok = tokA == tokB ? tokA : TOK_CATEGORY_NONE;
-					TOK tok = tokA;
-					bool isPreprocess = (meta.token == TOK_CATEGORY_PREPROCESS);
-					meta.token = tokA;
-					meta.PREPROCESS = isPreprocess | meta.PREPROCESS;
-					for (int i = iStrt; i <= iEnd; ++i) {
-						pMeta[i].token      = meta.token;
-						pMeta[i].PREPROCESS = meta.PREPROCESS;
-						pMeta[i].iTokenStartOffset = i - iStrt;
-						pMeta[i].iTokenEndOffset   = iEnd - i;
-					}
-					goto next;
-				// Put all tokens operators etc in hash lists and look up purely based on that with computed gotos for differing logic
-				// This needs a mechanism to determine << ++ etc.
-			}
-
-			/* Test Char */
-			switch (c) 
-			{
-				/* Token Chars */
-				// case ',':
-				// case '.':
-				// case ';':
-				// case '@':
-				// case '_':
-				// case '`':
-				// case 'a'...'z':
-				// case 'A'...'Z':
-				// case '0'...'9':
-				default: goto metaAndNext;
-
-				/* Increment */
-			#define INCREMENT_CASE(_add, _sub, _scope, _token) \
-				case _add: \
-					meta._scope += (meta._scope < TOK_MAX_INCREMENT); \
-					meta.token = _token; \
-					goto metaAndNext; \
-				case _sub: \
-					meta.token = _token; \
-					pMeta[iC]  = meta; \
-					meta._scope -= (meta._scope > 0);  \
-					goto next;
-
-				/* Scopes */
-				INCREMENT_CASE('[', ']', SCOPE_BRACKET, TOK_CATEGORY_SCOPE)
-				INCREMENT_CASE('{', '}', SCOPE_CURLY,   TOK_CATEGORY_SCOPE)
-				INCREMENT_CASE('(', ')', SCOPE_PAREN,   TOK_CATEGORY_SCOPE)
-
-			#undef INCREMENT_CASE
-
-				/* Whitespace */
-				case '\n':
-					if (meta.PREPROCESS && pc != '\\') {
-						meta.token = TOK_CATEGORY_WHITESPACE;
-						pMeta[iC]  = meta;
-						meta.PREPROCESS = 0;
-						goto next;
-					}
-					meta.token = TOK_CATEGORY_WHITESPACE;
-					goto metaAndNext;
-
-				case ' ' :
-				case '\0':
-				case '\t':
-				case '\r': // Carriage return
-				case '\v': // Vertical tab
-				case '\f': // Form feed
-					meta.token = TOK_CATEGORY_WHITESPACE;
-					goto metaAndNext;
-
-				/* Comment or Operator */
-				case '/':
-					switch (nc) 
-					{
-						case '/':
-							meta = (TextMeta){.token = TOK_CATEGORY_COMMENT, .LINE_COMMENT = 1, .BLOCK_COMMENT = meta.BLOCK_COMMENT};
-							goto metaAndNext;
-						case '*':
-							meta.token = TOK_CATEGORY_COMMENT;
-							meta.BLOCK_COMMENT = 1;
-							goto metaAndNext;
-						default:
-							meta.token = TOK_CATEGORY_OPERATOR;
-							goto metaAndNext;
-					}
-	 
-				/* Operators */
-				case '!':
-				case '%':
-				case '&':
-				case '+':
-				case '-':
-				case '*':
-				case ':':
-				case '<':
-				case '=':
-				case '>':
-				case '?':
-				case '^':
-				case '|':
-				case '~':
-					meta.token = TOK_CATEGORY_OPERATOR;
-					goto metaAndNext;
-
-				/* Quotes */
-				case '"':
-				case '\'':
-					meta.token = TOK_CATEGORY_QUOTE;
-					meta.QUOTE = true; 
-					pMeta[iC]  = meta; 
-					meta.token = TOK_CATEGORY_TEXT;
-					goto next;
-
-				/* Preprocess */
-				case '#':
-					switch (nc) 
-					{
-						case '#':
-							meta.token = TOK_CATEGORY_PREPROCESS; 
-							pMeta[iC]   = meta; 
-							pMeta[iC+1] = meta;						
-							goto skipAndNext;
-
-						default:
-							meta.token = TOK_CATEGORY_PREPROCESS;
-							goto metaAndNext;
-					}
-
-				case '\\':
-					if (meta.PREPROCESS && nc == '\n') {
-						meta.token = TOK_CATEGORY_CONTINUE;   
-						pMeta[iC] = meta;
-						meta.token = TOK_CATEGORY_WHITESPACE; 
-						pMeta[iC+1] = meta;
-						meta.token = TOK_CATEGORY_PREPROCESS;
-						goto skipAndNext;
-					}
-					goto metaAndNext;
-			}
-	} // switch (parseComment | parseQuote << 1) 
-
-skipAndNext: // Skip char and go to next
-	++iC;
-	pc = c;	c  = nc; nc = pText[iC + 1];
-	pd = d;	d  = nd; nd = Delimiter(nc);
-	goto next;
-
-metaAndNext: // Set meta and go to next
-	pMeta[iC] = meta;
-
-next: // Go to next char
-	if (UNLIKELY(++iC == count)) return RESULT_SUCCESS; 
-	goto processChar;
-
-error:
-	LOG_ERR("Unexpected Parse Char! %c%c%c\n", pc, c, nc);
-	return RESULT_PARSE_ERROR;
 }
 
 /*
@@ -1727,7 +1459,6 @@ static void CommandFinish(CodeBox* pCode, Command* pCommand)
 	pCommand->firstKeyPressed = false;
 }
 
-
 void PrintU16Binary(u16 value) {
 	for (int i = 15; i >= 0; i--) {
 		putchar((value & (1 << i)) ? '1' : '0');
@@ -1745,16 +1476,9 @@ static CodeBox text;
 
 int main(void)
 {
-#define DEF_ALL_CONSTRUCT_TOK_MAP(_cat) REQUIRE(ContructTokMap(COUNT(_cat), _cat));
-	DEF_ALL_CATEGORY_TOKS(DEF_ALL_CONSTRUCT_TOK_MAP)
-#undef DEF_ALL_CONSTRUCT_TOK_MAP
-
-	// REQUIRE(ContructTokMap(COUNT(PREPROCESS_TOKS), PREPROCESS_TOKS));
-	// REQUIRE(ContructTokMap(COUNT(TYPE_TOKS),       TYPE_TOKS));
-	// REQUIRE(ContructTokMap(COUNT(KEYWORD_TOKS),    KEYWORD_TOKS));	
-	// REQUIRE(ContructTokMap(COUNT(WHITESPACE_TOKS), WHITESPACE_TOKS));	
-	// REQUIRE(ContructTokMap(COUNT(GROUPING_TOKS),   GROUPING_TOKS));	
-	// REQUIRE(ContructTokMap(COUNT(ASSIGNMENT_TOKS), ASSIGNMENT_TOKS));	
+	REQUIRE(ContructTokMap(TOK_MAP,         (const char*(*)(u8))string_TOK,         COUNT(TOK_DEFINITIONS),         TOK_DEFINITIONS));
+	REQUIRE(ContructTokMap(TOK_COMMENT_MAP, (const char*(*)(u8))string_TOK_COMMENT, COUNT(TOK_COMMENT_DEFINITIONS), TOK_COMMENT_DEFINITIONS));
+	REQUIRE(ContructTokMap(TOK_QUOTE_MAP,   (const char*(*)(u8))string_TOK_QUOTE,   COUNT(TOK_QUOTE_DEFINITIONS),   TOK_QUOTE_DEFINITIONS));
 
 	/* Config */
 	SetTraceLogLevel(LOG_ALL);
@@ -1810,7 +1534,7 @@ int main(void)
 		pCode->pTextTok = XCALLOC(TEXT_BUFFER_CAPACITY, TOK);
 		pCode->pTextTokStart = XCALLOC(TEXT_BUFFER_CAPACITY, int);
 		pCode->pTextTokLen = XCALLOC(TEXT_BUFFER_CAPACITY, int);
-		pCode->pTextCategory = XCALLOC(TEXT_BUFFER_CAPACITY, TOK_CATEGORY);
+		pCode->pTextCat = XCALLOC(TEXT_BUFFER_CAPACITY, TOK_CAT);
 		pCode->pTextMeta = XCALLOC(TEXT_BUFFER_CAPACITY, TextMeta);
 
 		pCode->path = "./src/main.c";
@@ -2252,7 +1976,7 @@ LoopBegin:
 
 		const char* pText = pCode->pText;
 		const TextMeta* pTextMeta  = pCode->pTextMeta;
-		const TOK_CATEGORY* pTextCategory = pCode->pTextCategory;
+		const TOK_CAT* pTextCat = pCode->pTextCat;
 		int boxRowCount = pCode->boxRowCount;
 		int boxColCount = pCode->boxColCount;
 		int iChar = pCode->focusStartRowIndex;
@@ -2262,11 +1986,11 @@ LoopBegin:
 			// for (int iCol = 0; iCol < boxColCount - (tabCount * tabWidth); ++iCol) {
 			char     currentChar;
 			TextMeta currentMeta;
-			TOK_CATEGORY currentToken;
+			TOK_CAT currentToken;
 			for (int iCol = 0; iCol < boxColCount; ++iCol) {
 				currentChar  = pText[iChar];
 				currentMeta  = pTextMeta[iChar];
-				currentToken = pTextCategory[iChar];
+				currentToken = pTextCat[iChar];
 
 				Vector2 position = {
 					// textBox.x + (fontXSpacing * iCol) + (tabCount * fontXSpacing * 4), 
@@ -2336,7 +2060,7 @@ LoopBegin:
 					default:
 						int codePointSize;
 						int codePoint = GetCodepoint(&displayChar, &codePointSize);
-						Color color = TOK_CATEGORY_COLOR[currentToken];
+						Color color = TOK_CAT_COLOR[currentToken];
 						DrawTextCodepoint(font, codePoint, position, fontSize, color);
 						iChar++;
 						break;
@@ -2374,9 +2098,9 @@ LoopBegin:
 
 				char c = pCode->pText[pCode->pCarets[0].index];
 				TOK tok = pCode->pTextTok[pCode->pCarets[0].index];
-				TOK_CATEGORY tc = pCode->pTextCategory[pCode->pCarets[0].index];
+				TOK_CAT tc = pCode->pTextCat[pCode->pCarets[0].index];
 				TextMeta m = pCode->pTextMeta[pCode->pCarets[0].index];
-				DEBUG_LOG_ONCE("%s %s %d %d start: %d end: %d\n", string_TOK(tok), string_TOK_CATEGORY(tc), m.QUOTE, Delimiter(c), m.iTokenStartOffset, m.iTokenEndOffset);
+				DEBUG_LOG_ONCE("%s %s %d start: %d end: %d\n", string_TOK(tok), string_TOK_CAT(tc), m.QUOTE, m.iTokenStartOffset, m.iTokenEndOffset);
 			}
 		}
 

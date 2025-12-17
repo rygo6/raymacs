@@ -7,6 +7,6 @@ SET RAYLIB_PATH=../raylib/
 
 if exist bin\rayDE.exe del bin\rayDE.exe
 
-gcc -o bin/rayDE.exe src/main.c -I"%RAYLIB_PATH%/src" -L"%RAYLIB_PATH%/src" -march=native -mtune=native -lraylib -lopengl32 -lgdi32 -lwinmm -std=c11 -Wall -Wextra -Werror -Wshadow -Wformat=2 -Wno-unused-variable -Wno-unused-function -Wno-unused-label -Wno-unused-but-set-variable
+gcc -o bin/rayDE.exe src/main.c -std=gnu11 -I"%RAYLIB_PATH%/src" -L"%RAYLIB_PATH%/src" -march=native -mtune=native -lraylib -lopengl32 -lgdi32 -lwinmm -Wall -Wextra -Werror -Wshadow -Wformat=2 -Wno-unused-variable -Wno-unused-function -Wno-unused-label -Wno-unused-but-set-variable
 
 bin\rayDE.exe
