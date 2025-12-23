@@ -296,14 +296,14 @@ typedef unsigned char utf8;
 })
 
 /* Check will goto RESULT_ERROR label on fail. */
-#define TRY(_condition, _errorResult)\
+#define CHECK(_condition, _errorResult)\
 	if (UNLIKELY(!(_condition))) {\
 		fprintf(stderr, "\n" ANSI_YELLOW __FILE__ ":%d TRY! " #_condition " == false! %s\n" ANSI_RESET, __LINE__, string_RESULT(_errorResult));\
 		goto _errorResult;\
 	}
 
 /* Check will goto RESULT_ERROR label on fail. */
-#define TRYMSG(_condition, _errorResult, _format, ...)\
+#define CHECKMSG(_condition, _errorResult, _format, ...)\
 	if (UNLIKELY(!(_condition))) {\
 		fprintf(stderr, "\n" ANSI_YELLOW __FILE__ ":%d TRY! " #_condition " == false! %s " _format "\n" ANSI_RESET, __LINE__, string_RESULT(_errorResult), ##__VA_ARGS__);\
 		goto _errorResult;\
@@ -334,11 +334,13 @@ typedef unsigned char utf8;
 	}
 
 #define DEF_RESULT(DEF)\
+	DEF(RESULT_CAPACITY_ERROR, -6)\
+	DEF(RESULT_DUPLICATE_ERROR, -5)\
+	DEF(RESULT_MAX_OFFSET_ERROR,-4)\
+	DEF(RESULT_PARSE_ERROR,     -3)\
+	DEF(RESULT_COLLISION_ERROR, -2)\
 	DEF(RESULT_ERROR,           -1)\
-	DEF(RESULT_SUCCESS,          0)\
-	DEF(RESULT_COLLISION_ERROR,  1)\
-	DEF(RESULT_PARSE_ERROR,      2)\
-	DEF(RESULT_MAX_OFFSET_ERROR, 3)
+	DEF(RESULT_SUCCESS,          0)
 DEF_ENUM(RESULT);
 
 #define DEF_DIRECTION(DEF)\
@@ -872,140 +874,121 @@ STATIC_ASSERT(sizeof(TrieNode) == 4);
 
 static TrieNode TOK_TRIE[1024];
 
-typedef enum TOKTEST {
-	TOKTEST_ASCII = 128,
-	TOKTEST_PREPROCESS_INCLUDE,
-	TOKTEST_PREPROCESS_DEFINE,
-	TOKTEST_PREPROCESS_IFNDEF,
-	TOKTEST_PREPROCESS_IFDEF,
-	TOKTEST_PREPROCESS_ENDIF,
-	TOKTEST_PREPROCESS_UNDEF,
-	TOKTEST_PREPROCESS_ELIF,
-	TOKTEST_PREPROCESS_ELSE,
-	TOKTEST_PREPROCESS_ERROR,
-	TOKTEST_PREPROCESS_PRAGMA,
-	TOKTEST_PREPROCESS_LINE,
-	TOKTEST_PREPROCESS_IF,
-} TOKTEST;
+static void LogTrie(TrieNode* trie)
+{
+	LOG("Flatrie:\n");
+	int iNode = 0; TrieNode node = trie[iNode]; 
+	while (node.c.no || node.c.val != '\0') {
+		if (node.tok.yes) fprintf(stderr, ANSI_DIM ANSI_YELLOW "%d" ANSI_RESET ANSI_WHITE "%s" ANSI_DIM ANSI_BRIGHT_BLACK "%c" ANSI_RESET, iNode, string_TK(node.tok.val), node.tok.val == TK_ERR ? '\n' : '|');
+		else  			  fprintf(stderr, ANSI_DIM ANSI_YELLOW "%d" ANSI_RESET ANSI_WHITE "%c" ANSI_DIM ANSI_GREEN "%d" ANSI_RED "%d" ANSI_BRIGHT_BLACK "|" ANSI_RESET, iNode, node.c.val, node.c.succ + iNode, node.c.fail + iNode);
+		node = trie[++iNode];
+	}
+	fprintf(stderr, "\n");
+}
 
-// const char* string_TOKTEST[] = {
-// 	[0 ... 128] = "CHAR",
-// 	[TOK_PREPROCESS_INCLUDE] = "#include",
-// 	[TOK_PREPROCESS_DEFINE] = "#define",
-// 	[TOK_PREPROCESS_IFNDEF] = "#ifndef",
-// 	[TOK_PREPROCESS_IFDEF] = "#ifdef",
-// 	[TOK_PREPROCESS_ENDIF] = "#endif",
-// 	[TOK_PREPROCESS_UNDEF] = "#undef",
-// 	[TOK_PREPROCESS_ELIF] = "#elif",
-// 	[TOK_PREPROCESS_ELSE] = "#else",
-// 	[TOK_PREPROCESS_ERROR] = "#error",
-// 	[TOK_PREPROCESS_PRAGMA] = "#pragma",
-// 	[TOK_PREPROCESS_LINE] = "#line",
-// 	[TOK_PREPROCESS_IF] = "#if",
-// };
+static RESULT ConstructTrie(int tokCount, const TokDefinition* tokDefs, int trieCapacity, TrieNode* pTrie) 
+{
+// #define TRIE_DEBUG
+#ifdef TRIE_DEBUG
+	#define TRIE_LOG(...) LOG(__VA_ARGS__)
+#else
+	#define TRIE_LOG(...)
+#endif
 
-static RESULT ConstructTrie(int tokCount, const TokDefinition* tokDefs) {
+	int iEndNode = 0; int iTok = 0;
+
 	// Start with NONE and ERR!
-	int iEndNode = 0;
-	TOK_TRIE[iEndNode++] = (TrieNode){ .tok.yes = true, .tok.val = TK_NONE };
-	TOK_TRIE[iEndNode++] = (TrieNode){ .tok.yes = true, .tok.val = TK_ERR };
+	CHECK(trieCapacity > 2, RESULT_CAPACITY_ERROR);
+	pTrie[iEndNode++] = (TrieNode){ .tok.yes = true, .tok.val = TK_NONE }; 
+	pTrie[iEndNode++] = (TrieNode){ .tok.yes = true, .tok.val = TK_ERR  }; 
 
-	for (int iTok = 0; iTok < tokCount; ++iTok) {
-		int iNodeFirstFail = 0;
-		int iNode = 0; 
-		int iName = 0; 
-		TokDefinition def = tokDefs[iTok];
+NextTok: 
+	if (iTok == tokCount) goto RESULT_SUCCESS;
+	TokDefinition def = tokDefs[iTok];
+	int iNode = 0; int iName = 0; int iNodeFirstFail = 0; 
 
 NextNameChar: 
-		char     cName = def.name[iName];
-		TrieNode node  = TOK_TRIE[iNode];
+	char     cName = def.name[iName];
+	TrieNode node  = pTrie[iNode];
 
-		if (node.tok.yes) {
-			if (node.tok.val == TK_ERR || node.tok.val == TK_NONE) {
-				LOG("Insert Tok i%d firstfail%d end%d %s\n", iNode, iNodeFirstFail, iEndNode, def.name);
-				iNode = iNodeFirstFail;
+	if (node.tok.yes) {
+		CHECK(node.tok.val == TK_ERR || node.tok.val == TK_NONE, RESULT_DUPLICATE_ERROR);
 
-				// Shift all to right.
-				LOG("Shift dst:%d src:%d len:%d\n", iNode+1, iNode, iEndNode - iNode);
-				memmove(TOK_TRIE + iNode + 1, TOK_TRIE + iNode, (iEndNode - iNode) * sizeof(TrieNode));
-				iEndNode++;
+		TRIE_LOG("Insert Tok i%d firstfail%d end%d %s\n", iNode, iNodeFirstFail, iEndNode, def.name);
+		iNode = iNodeFirstFail;
 
-				// Increment all fail values in prior trie step.
-				int iNodePrev = iNode - 1; TrieNode prevNode = TOK_TRIE[iNodePrev];
-				while (!prevNode.c.no && iNodePrev >= 0) {
-					if (prevNode.tok.yes && prevNode.tok.val == TK_ERR) break;
-					if (prevNode.tok.yes && prevNode.tok.val != TK_ERR) PANIC("This can't happen?");
-					TOK_TRIE[iNodePrev].c.fail++;
-					LOG("Increment Fail i%d %c fail%d\n", iNodePrev, TOK_TRIE[iNodePrev].c.val, TOK_TRIE[iNodePrev].c.fail);
-					prevNode = TOK_TRIE[--iNodePrev];
-				}
+		// Shift all to right.
+		TRIE_LOG("Shift dst:%d src:%d len:%d\n", iNode+1, iNode, iEndNode - iNode);
+		memmove(pTrie + iNode + 1, pTrie + iNode, (iEndNode - iNode) * sizeof(TrieNode));
 
-				// Set new char with succes jump to end.
-				TOK_TRIE[iNode] = (TrieNode){ 
-					.c.no    = false, 
-					.c.val   = cName, 
-					.c.succ  = iEndNode - iNode, 
-					.c.fail  = 1 
-				};
-				LOG("Insert Char i%d %c end%d %s\n", iNode, cName, iEndNode, def.name);
-				iName++; iNode = iEndNode;
-				goto NextNameChar;
-			}
-			LOG_ERR("Seem to be trying insert the same token twice? %d %s\n", iNode, def.name);
-			goto Print;
+		// Increment all fail values in prior trie step.
+		int iNodePrev = iNode - 1; TrieNode prevNode = pTrie[iNodePrev];
+		while (!prevNode.c.no && iNodePrev >= 0) {
+			if (prevNode.tok.yes && prevNode.tok.val == TK_ERR) break;
+			if (prevNode.tok.yes && prevNode.tok.val != TK_ERR) PANIC("This can't happen?");
+			pTrie[iNodePrev].c.fail++;
+			TRIE_LOG("Increment Fail i%d %c fail%d\n", iNodePrev, pTrie[iNodePrev].c.val, pTrie[iNodePrev].c.fail);
+			prevNode = pTrie[--iNodePrev];
 		}
 
-		if (cName == '\0') {
-			LOG("Finish Token %d %d %s %s\n", iNode, iEndNode, def.name, string_TK(def.tok));
-			TOK_TRIE[iNode++] = (TrieNode){ .tok.yes = true, .tok.val = def.tok };
-			TOK_TRIE[iNode++] = (TrieNode){ .tok.yes = true, .tok.val = TK_ERR };
-			iEndNode = iNode;
-			goto NextTok;
-		}
-
-		if (cName == node.c.val) {
-			LOG("Char Succ i%d jump%d end%d %s %c==%c\n", iNode, node.c.succ, iEndNode, def.name, cName, node.c.val);
-			iNode += node.c.succ;
-			iName++;
-			goto NextNameChar;
-		} 
-
-		if (iNode < iEndNode) {
-			LOG("Char Fail i%d jump%d end%d %s %c==%c\n", iNode, node.c.fail, iEndNode, def.name, cName, node.c.val);
-			if (iNodeFirstFail == 0) iNodeFirstFail = iNode;
-			iNode += node.c.fail;
-			goto NextNameChar;
-		}
-
-		u16 succ = (def.len - iName) + 1;
-		TRY(succ < TRIE_MAX_OFFSET, RESULT_MAX_OFFSET_ERROR);
-		LOG("Add Char i%d succ%d end%d %s %c\n", iNode, succ, iEndNode, def.name, cName);
-		TOK_TRIE[iNode] = (TrieNode){ 
-			.c.no    = false, 
-			.c.val   = cName, 
-			.c.succ  = 1, 
-			.c.fail  = succ, // +1 as tok comes after err 
-		};
-		iNode++; iEndNode++; iName++;
+		// Set new char with succes jump to end.
+		iEndNode++; CHECK(iEndNode < trieCapacity, RESULT_CAPACITY_ERROR);
+		TRIE_LOG("Insert Char i%d %c end%d %s\n", iNode, cName, iEndNode, def.name);
+		pTrie[iNode] = (TrieNode){ .c.val = cName, .c.succ = iEndNode - iNode, .c.fail = 1 };
+		iName++; iNode = iEndNode;
 		goto NextNameChar;
-
-NextTok:;
 	}
 
-Print:
-
-	LOG("Trie Constructed: ");
-	for (int iNode = 0; iNode < iEndNode; ++iNode) {
-		TrieNode node = TOK_TRIE[iNode];
-		if (node.tok.yes) printf(ANSI_DIM ANSI_YELLOW "%d" ANSI_RESET ANSI_WHITE "%s" ANSI_DIM ANSI_BRIGHT_BLACK "|" ANSI_RESET, iNode, string_TK(node.tok.val));
-		else printf(ANSI_DIM ANSI_YELLOW "%d" ANSI_RESET ANSI_WHITE "%c" ANSI_DIM ANSI_GREEN "%d" ANSI_RED "%d" ANSI_BRIGHT_BLACK "|" ANSI_RESET, iNode, node.c.val, node.c.succ + iNode, node.c.fail + iNode);
+	if (cName == '\0') {
+		TRIE_LOG("Finish Token %d %d %s %s\n", iNode, iEndNode, def.name, string_TK(def.tok));
+		pTrie[iNode++] = (TrieNode){ .tok.yes = true, .tok.val = def.tok };
+		pTrie[iNode++] = (TrieNode){ .tok.yes = true, .tok.val = TK_ERR };
+		iTok++;	iEndNode = iNode;
+		goto NextTok;
 	}
-	printf("\n");
 
-RESULT_MAX_OFFSET_ERROR:
+	if (cName == node.c.val) {
+		TRIE_LOG("Char Succ i%d jump%d end%d %s %c==%c\n", iNode, node.c.succ, iEndNode, def.name, cName, node.c.val);
+		iNode += node.c.succ; iName++;
+		goto NextNameChar;
+	} 
+
+	if (iNode < iEndNode) {
+		TRIE_LOG("Char Fail i%d jump%d end%d %s %c==%c\n", iNode, node.c.fail, iEndNode, def.name, cName, node.c.val);
+		if (iNodeFirstFail == 0) iNodeFirstFail = iNode;
+		iNode += node.c.fail;
+		goto NextNameChar;
+	}
+
+	u16 succ = (def.len - iName) + 1;
+	CHECK(succ < TRIE_MAX_OFFSET, RESULT_MAX_OFFSET_ERROR);
+	TRIE_LOG("Add Char i%d succ%d end%d %s %c\n", iNode, succ, iEndNode, def.name, cName);
+	pTrie[iNode] = (TrieNode){ 
+		.c.no    = false, 
+		.c.val   = cName, 
+		.c.succ  = 1, 
+		.c.fail  = succ, // +1 as tok comes after err 
+	};
+	iNode++; iEndNode++; iName++;
+	goto NextNameChar;
+
+RESULT_CAPACITY_ERROR:
+	LOG_ERR("Trie capacity reached! %d %s\n", iNode, def.name);
+	LogTrie(pTrie);
 	return RESULT_MAX_OFFSET_ERROR;
 
-Out:
+RESULT_DUPLICATE_ERROR:
+	LOG_ERR("Trying insert the same token twice! %d %s\n", iNode, def.name);
+	LogTrie(pTrie);
+	return RESULT_MAX_OFFSET_ERROR;
+
+RESULT_MAX_OFFSET_ERROR:
+	LOG_ERR("Trying to add offset greater than TRIE_MAX_OFFSET. %d %s\n", iNode, def.name);
+	LogTrie(pTrie);
+	return RESULT_MAX_OFFSET_ERROR;
+
+RESULT_SUCCESS:
+	LogTrie(pTrie);
 	return RESULT_SUCCESS;
 }
 
@@ -1904,7 +1887,7 @@ int main(void)
 	// REQUIRE(ContructTokMap(TOK_COMMENT_MAP, (const char*(*)(u16))string_TOK_COMMENT, COUNT(TOK_COMMENT_DEFINITIONS), TOK_COMMENT_DEFINITIONS));
 	// REQUIRE(ContructTokMap(TOK_QUOTE_MAP,   (const char*(*)(u16))string_TOK_QUOTE,   COUNT(TOK_QUOTE_DEFINITIONS),   TOK_QUOTE_DEFINITIONS));
 
-	ConstructTrie(COUNT(TK_PP_DEFINITIONS), TK_PP_DEFINITIONS);
+	ConstructTrie(COUNT(TK_PP_DEFINITIONS), TK_PP_DEFINITIONS, COUNT(TOK_TRIE), TOK_TRIE);
 	return 0;
 
 	/* Config */
