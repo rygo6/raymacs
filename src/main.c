@@ -1,3 +1,5 @@
+#define TEST_NUM 0
+
 void T() {
 	int a0 = 1;
 	int b = a0+a0;
@@ -211,24 +213,24 @@ static char _logOnceNewBuffer[128];
 	} \
 })
 
+#define STATIC_ASSERT(...) _Static_assert(__VA_ARGS__)
+
 /*
  * Utility
  */
-typedef uint8_t     u8;
-typedef uint16_t    u16;
-typedef uint32_t    u32;
-typedef uint64_t    u64;
-typedef int8_t      i8;
-typedef int16_t     i16;
-typedef int32_t     i32;
-typedef int64_t     i64;
-typedef float       f32;
-typedef double      f64;
+typedef uint8_t       u8;
+typedef uint16_t      u16;
+typedef uint32_t      u32;
+typedef uint64_t      u64;
+typedef int8_t        i8;
+typedef int16_t       i16;
+typedef int32_t       i32;
+typedef int64_t       i64;
+typedef float         f32;
+typedef double        f64;
 typedef unsigned char utf8;
 
 #define CACHE_LINE 64
-
-#define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
 
 #define MIN(_a, _b) \
 ({ \
@@ -258,6 +260,19 @@ typedef unsigned char utf8;
 #define LIKELY(x)         __builtin_expect(!!(x), 1)
 #define UNLIKELY(x)       __builtin_expect(!!(x), 0)
 
+#define NBYTES(_v)     (sizeof(_v))
+#define NBITS(_v)      (sizeof(_v) * CHAR_BIT)
+#define NARRAY(_array) (sizeof((_array)) / sizeof((_array)[0]))
+
+#define UMAX(_t) (1 << NBITS(_t))
+#define UMIN(_t) ((_t)0)
+#define SMAX(_t) ((1 << (NBITS(_t)-1)) - 1)
+#define SMIN(_t) (-(1 << (NBITS(_t)-1)))
+STATIC_ASSERT(UMAX(u8) == 256);
+STATIC_ASSERT(UMIN(u8) == 0);
+STATIC_ASSERT(SMAX(i8) == 127);
+STATIC_ASSERT(SMIN(i8) == -128);
+
 #define XMALLOC_ALIGNED(_align, _size)\
 ({\
 	void* _p = _aligned_malloc(_size, _align);\
@@ -272,13 +287,11 @@ typedef unsigned char utf8;
 	_p;\
 })
 
-#define ZERO_P(_p) memset((void*)(_p), 0, sizeof(*_p))
+#define ZERO(_p) memset((void*)(_p), 0, sizeof(*_p))
 
 /*
  * Validation
  */
-#define STATIC_ASSERT(...) _Static_assert(__VA_ARGS__)
-
 #ifdef NDEBUG
 	#define ASSERT(_condition, _format, ...)
 #else
@@ -430,7 +443,7 @@ static Color TOK_CAT_COLOR[] = {
 	[TOK_CAT_ESCAPE]     = COLOR_ESCAPE,
 	[TOK_CAT_COMMENT]    = COLOR_COMMENT,
 };
-STATIC_ASSERT(COUNT(TOK_CAT_COLOR) == TOK_CAT_COUNT);
+STATIC_ASSERT(NARRAY(TOK_CAT_COLOR) == TOK_CAT_COUNT);
 
 #define SKIP     "$skip"
 #define RANGE    "$range"
@@ -704,10 +717,10 @@ DEF_ENUM(TK);
 
 #define DEF_TK_PP(DEF)\
 	DEF("#include " ,TK_PP_INCLUDE       ,TOK_CAT_PP)\
-	DEF("#if "      ,TK_PP_IF            ,TOK_CAT_PP)\
-	DEF("#ifndef "  ,TK_PP_IFNDEF        ,TOK_CAT_PP)\
 	DEF("#ifdef "   ,TK_PP_IFDEF         ,TOK_CAT_PP)\
+	DEF("#ifndef "  ,TK_PP_IFNDEF        ,TOK_CAT_PP)\
 	DEF("#define "  ,TK_PP_DEFINE        ,TOK_CAT_PP)\
+	DEF("#if "      ,TK_PP_IF            ,TOK_CAT_PP)\
 	DEF("#endif "   ,TK_PP_ENDIF         ,TOK_CAT_PP)\
 	DEF("#undef "   ,TK_PP_UNDEF         ,TOK_CAT_PP)\
 	DEF("#elif "    ,TK_PP_ELIF          ,TOK_CAT_PP)\
@@ -716,9 +729,9 @@ DEF_ENUM(TK);
 	DEF("#pragma "  ,TK_PP_PRAGMA        ,TOK_CAT_PP)\
 	DEF("#line "    ,TK_PP_LINE          ,TOK_CAT_PP)
 
-	/*
+
 	// DEF("\\\n"      ,TOK_PREPROCESS_CONTINUE      ,TOK_CAT_PP_OPERATOR)
-	*/
+
 
 typedef struct TokDef {
 	const char* name;
@@ -856,35 +869,9 @@ fail  6   1   1   0   0   0   0
 	DEF("\\\n"      ,TOK_PREPROCESS_CONTINUE      ,TOK_CAT_PP_OPERATOR)
 */
 
-#define TRIE_MAX_OFFSET 16
-#define MAX_TOKEN_SIZE 16
-typedef union FlatrieNode {
-	struct {
-		bool no   : 1; // no == false = isChar. no == true = isTok.
-		u8   val  : 7; // char value.
-		u8   succ : 4; // offset to jump on success.
-		u8   fail : 4; // offset to jump on fail.
-	} c;
-	struct {
-		bool yes : 1;  // yes == false = isChar. yes == true = isTok.
-		u16  val : 15; // token value.
-	} tok;
-} FlatrieNode;
-STATIC_ASSERT(sizeof(FlatrieNode) == 4);
-
-static FlatrieNode TOK_TRIE[1024];
-
-static void LogTrie(FlatrieNode* trie)
-{
-	LOG("Flatrie:\n");
-	int iNode = 0; FlatrieNode node = trie[iNode]; 
-	while (node.c.no || node.c.val != '\0') {
-		if (node.tok.yes) fprintf(stderr, ANSI_DIM ANSI_YELLOW "%d" ANSI_RESET ANSI_WHITE "%s" ANSI_DIM ANSI_BRIGHT_BLACK "%c" ANSI_RESET, iNode, string_TK(node.tok.val), node.tok.val == TK_ERR ? '\n' : '|');
-		else  			  fprintf(stderr, ANSI_DIM ANSI_YELLOW "%d" ANSI_RESET ANSI_WHITE "%c" ANSI_DIM ANSI_GREEN "%d" ANSI_RED "%d" ANSI_BRIGHT_BLACK "|" ANSI_RESET, iNode, node.c.val, node.c.succ + iNode, node.c.fail + iNode);
-		node = trie[++iNode];
-	}
-	fprintf(stderr, "\n");
-}
+/*
+ * Flat Trie
+ */
 
 // #define TRIE_DEBUG
 #ifdef TRIE_DEBUG
@@ -893,52 +880,100 @@ static void LogTrie(FlatrieNode* trie)
 	#define TRIE_LOG(...)
 #endif
 
+#define TRIE_MAX_OFFSET ((u8)-1)
+#define MAX_TOKEN_SIZE 16
+typedef union FlatrieNode {
+	struct {
+		bool no   : 1; // no == false = isChar. no == true = isTok.
+		u8   val  : 7; // char value.
+		// TODO I want to make these 4 with 'JUMP' tokens
+		u8   succ : 8; // offset to jump on success.
+		u8   fail : 8; // offset to jump on fail.
+	} c;
+	struct {
+		bool yes : 1;  // yes == false = isChar. yes == true = isTok.
+		u16  val : 15; // token value.
+	} tok;
+} FlatrieNode;
+// STATIC_ASSERT(sizeof(FlatrieNode) == 4);
+
+static FlatrieNode TOK_TRIE[1024];
+
+static void LogTrie(FlatrieNode* trie)
+{
+	LOG("Flatrie:\n");
+	int iNode = 0; FlatrieNode node = trie[iNode]; 
+	while (node.c.no || node.c.val != '\0') {
+		if (node.tok.yes) fprintf(stderr, ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "%d" ANSI_RESET ANSI_WHITE "%s" ANSI_DIM ANSI_BRIGHT_BLACK "%c" ANSI_RESET, iNode, string_TK(node.tok.val), node.tok.val == TK_ERR ? '\n' : '|');
+		else  			  fprintf(stderr, ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "%d" ANSI_RESET ANSI_WHITE "%c" ANSI_DIM ANSI_GREEN "%d" ANSI_ITALIC ANSI_YELLOW "%d" ANSI_RESET ANSI_DIM ANSI_RED "%d" ANSI_RESET ANSI_ITALIC ANSI_DIM ANSI_YELLOW "%d" ANSI_BRIGHT_BLACK "|" ANSI_RESET, iNode, node.c.val, node.c.succ, node.c.succ+iNode, node.c.fail, node.c.fail+iNode);
+		node = trie[++iNode];
+	}
+	fprintf(stderr, "\n");
+}
+
 static RESULT ConstructFlatrie(int tokCount, const TokDef* tokDefs, int trieCapacity, FlatrieNode* pTrie) 
 {
 	int iEndNode = 0; int iTok = 0;
 
-	// Start with NONE and ERR!
-	CHECK(trieCapacity > 2, RESULT_CAPACITY_ERROR);
+	// Start with NONE
 	pTrie[iEndNode++] = (FlatrieNode){ .tok.yes = true, .tok.val = TK_NONE }; 
-	pTrie[iEndNode++] = (FlatrieNode){ .tok.yes = true, .tok.val = TK_ERR  }; 
+	CHECK(iEndNode < trieCapacity, RESULT_CAPACITY_ERROR);
 
 NextTok: 
+#ifdef TRIE_DEBUG
+	LogTrie(pTrie);
+#endif
+
 	if (iTok == tokCount) goto RESULT_SUCCESS;
 	TokDef def = tokDefs[iTok];
-	int iNode = 0; int iName = 0; int iNodeFirstFail = 0; 
+	int iNode = 0; int iName = 0; int iNodeFirstFail = 0;
 
 NextNameChar: 
-	char     cName = def.name[iName];
+	char        cName = def.name[iName];
 	FlatrieNode node  = pTrie[iNode];
 
+	// If we encountered a tok
 	if (node.tok.yes) {
-		CHECK(node.tok.val == TK_ERR || node.tok.val == TK_NONE, RESULT_DUPLICATE_ERROR);
+		CHECKMSG(node.tok.val == TK_ERR || node.tok.val == TK_NONE, RESULT_DUPLICATE_ERROR, "Trying to write token in non-empty node!");
 
 		TRIE_LOG("Insert Tok i%d firstfail%d end%d %s\n", iNode, iNodeFirstFail, iEndNode, def.name);
 		iNode = iNodeFirstFail;
 
-		// Shift all to right.
-		TRIE_LOG("Shift dst:%d src:%d len:%d\n", iNode+1, iNode, iEndNode - iNode);
+		bool nextIsTok = pTrie[iNode+1].tok.yes;
+		// Shift all to right by 1 to make room for new char condition.
+		TRIE_LOG("Shift 1 dst:%d src:%d len:%d\n", iNode+1, iNode, iEndNode - iNode);
 		memmove(pTrie + iNode + 1, pTrie + iNode, (iEndNode - iNode) * sizeof(FlatrieNode));
 
 		// Increment all fail values in prior trie step.
-		int iNodePrev = iNode - 1; FlatrieNode prevNode = pTrie[iNodePrev];
-		while (!prevNode.c.no && iNodePrev >= 0) {
-			if (prevNode.tok.yes && prevNode.tok.val == TK_ERR) break;
-			if (prevNode.tok.yes && prevNode.tok.val != TK_ERR) PANIC("This can't happen?");
-			pTrie[iNodePrev].c.fail++;
-			TRIE_LOG("Increment Fail i%d %c fail%d\n", iNodePrev, pTrie[iNodePrev].c.val, pTrie[iNodePrev].c.fail);
-			prevNode = pTrie[--iNodePrev];
+		int iNodePrev;
+		for (iNodePrev = iNode - 1; iNodePrev >= 0; --iNodePrev) {
+			FlatrieNode *pPrevNode = pTrie + iNodePrev;
+			if (pPrevNode->tok.yes) break;
+			pPrevNode->c.fail++;
+			TRIE_LOG("Increment Fail i%d %c fail%d\n", iNodePrev, pPrevNode->c.val, pPrevNode->c.fail);
+		}
+
+		// Increment all succ values before shift that went past the shift.
+		for (; iNodePrev >= 0; --iNodePrev) {
+			FlatrieNode *pPrevNode = pTrie + iNodePrev;
+			int diff = iNode - iNodePrev;
+			if (pPrevNode->c.succ > diff) { 
+				pPrevNode->c.succ++;
+				TRIE_LOG("Increment Succ i%d %c diff%d succ%d\n", iNodePrev, pPrevNode->c.val, diff, pPrevNode->c.succ);
+			}
 		}
 
 		// Set new char with succes jump to end.
 		iEndNode++; CHECK(iEndNode < trieCapacity, RESULT_CAPACITY_ERROR);
 		TRIE_LOG("Insert Char i%d %c end%d %s\n", iNode, cName, iEndNode, def.name);
-		pTrie[iNode] = (FlatrieNode){ .c.val = cName, .c.succ = iEndNode - iNode, .c.fail = 1 };
+		u16 succ = iEndNode - iNode;
+		CHECKMSG(succ < TRIE_MAX_OFFSET, RESULT_MAX_OFFSET_ERROR, "succ offset:%d", succ);
+		pTrie[iNode] = (FlatrieNode){ .c.val = cName, .c.succ = succ, .c.fail = 1 };
 		iName++; iNode = iEndNode;
 		goto NextNameChar;
 	}
 
+	// End of Token Name. Write token go to next token!
 	if (cName == '\0') {
 		TRIE_LOG("Finish Token %d %d %s %s\n", iNode, iEndNode, def.name, string_TK(def.tok));
 		pTrie[iNode++] = (FlatrieNode){ .tok.yes = true, .tok.val = def.tok };
@@ -947,12 +982,15 @@ NextNameChar:
 		goto NextTok;
 	}
 
+	// Token char succesfully match with existing trie char
 	if (cName == node.c.val) {
 		TRIE_LOG("Char Succ i%d jump%d end%d %s %c==%c\n", iNode, node.c.succ, iEndNode, def.name, cName, node.c.val);
+		iNodeFirstFail = 0;
 		iNode += node.c.succ; iName++;
 		goto NextNameChar;
 	} 
 
+	// Token char fail to match with existing trie char
 	if (iNode < iEndNode) {
 		TRIE_LOG("Char Fail i%d jump%d end%d %s %c==%c\n", iNode, node.c.fail, iEndNode, def.name, cName, node.c.val);
 		if (iNodeFirstFail == 0) iNodeFirstFail = iNode;
@@ -960,14 +998,14 @@ NextNameChar:
 		goto NextNameChar;
 	}
 
-	u16 succ = (def.len - iName) + 1;
-	CHECK(succ < TRIE_MAX_OFFSET, RESULT_MAX_OFFSET_ERROR);
-	TRIE_LOG("Add Char i%d succ%d end%d %s %c\n", iNode, succ, iEndNode, def.name, cName);
+	u16 fail = (def.len - iName) + 1; // +1 as err comes after tok
+	CHECKMSG(fail < TRIE_MAX_OFFSET, RESULT_MAX_OFFSET_ERROR, "fail offset:%d", fail);
+	TRIE_LOG("Add Char i%d fail%d end%d %s %c\n", iNode, fail, iEndNode, def.name, cName);
 	pTrie[iNode] = (FlatrieNode){ 
 		.c.no    = false, 
 		.c.val   = cName, 
 		.c.succ  = 1, 
-		.c.fail  = succ, // +1 as tok comes after err 
+		.c.fail  = fail,
 	};
 	iNode++; iEndNode++; iName++;
 	goto NextNameChar;
@@ -1191,14 +1229,96 @@ static inline Vector2 GetBoxLocalToWorld(Vector2 point, Rectangle rect) {
  * CodeBox Lex
  */
 
-static RESULT ProcessMeta2(CodeBox* pCode) 
+static RESULT ProcessTrieMeta(CodeBox* pCode) 
+{
+	LOG("Process Meta %p\n", pCode);
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Woverride-init"
+#define DEF_DISPATCH(_name, _tok, _cat) [_tok] = &&_tok,
+#define ASCII_CHAR_RANGE ' ' ... '~' // 32 ... 126 
+
+	static void *codeDispatch[] = {	
+		[TK_NONE] = &&TK_NONE,
+		[TK_ERR]  = &&TK_ERR,
+		[ASCII_CHAR_RANGE] = &&ASCII_CHAR,
+		DEF_TK_PP(DEF_DISPATCH)
+	};
+
+#undef DEF_DISPATCH
+#pragma GCC diagnostic pop
+
+	void **disp  = codeDispatch;
+
+	FlatrieNode* pTrie = TOK_TRIE;
+	
+	const int textCount  = pCode->textCount;
+	char	  *pText     = pCode->pText;
+	TextMeta  *pTextMeta = pCode->pTextMeta;
+	TOK       *pTextTok  = pCode->pTextTok;
+	TOK_CAT   *pTextCat  = pCode->pTextCat;
+
+	struct {
+		int  iT;
+		int  iN;
+		char c;
+		TK   tk;
+		FlatrieNode n;
+	} step = { .iT = -1 };
+
+#define DISP()\
+	if (++step.iT == textCount || step.iT == 32) return RESULT_SUCCESS;\
+	step.c = pText[step.iT];\
+	step.n = pTrie[step.iN];\
+	step.iN += step.n.c.val == step.c ? step.n.c.succ : step.n.c.fail;\
+	step.tk  = step.n.tok.yes ? step.n.tok.val : step.n.c.val;\
+	goto *disp[step.tk];
+
+	DISP();
+
+ASCII_CHAR:
+	printf("CHAR %c == %c\n", step.n.c.val, step.c);
+	pTextCat[step.iT] = TOK_CAT_NONE;
+	DISP();
+
+TK_NONE:
+	printf("NONE %c\n", step.c);
+	pTextCat[step.iT] = TOK_CAT_NONE;
+	DISP();
+
+TK_ERR:
+	printf("ERR %c == %c\n", step.n.c.val, step.c);
+	pTextCat[step.iT] = TOK_CAT_ERROR;
+	DISP();
+
+TK_PP_INCLUDE:
+TK_PP_IF:
+TK_PP_IFNDEF:
+TK_PP_IFDEF:
+TK_PP_DEFINE:
+	printf("TK_PP_DEFINE\n");
+TK_PP_ENDIF:
+TK_PP_UNDEF:
+TK_PP_ELIF:
+TK_PP_ELSE:
+TK_PP_ERROR:
+TK_PP_PRAGMA:
+TK_PP_LINE:
+	printf("TK_PP_LINE\n");
+	pTextCat[step.iT] = TOK_CAT_KEYWORD;
+	DISP();
+
+	return RESULT_SUCCESS;
+}
+
+static RESULT ProcessHashMeta(CodeBox* pCode) 
 {
 	/*
 	 * Dispatch Tables
 	 */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Woverride-init"
-#define DEF_DISPATCH(_name, _tok, _cat)  [_tok] = &&_tok,
+#define DEF_DISPATCH(_name, _tok, _cat) [_tok] = &&_tok,
 
 	static void *codeDispatch[] = {	
 		DEF_TOK(DEF_DISPATCH)
@@ -1883,12 +2003,11 @@ static CodeBox text;
 
 int main(void)
 {
-	// REQUIRE(ContructTokMap(TOK_MAP,         (const char*(*)(u16))string_TOK,         COUNT(TOK_DEFINITIONS),         TOK_DEFINITIONS));
-	// REQUIRE(ContructTokMap(TOK_COMMENT_MAP, (const char*(*)(u16))string_TOK_COMMENT, COUNT(TOK_COMMENT_DEFINITIONS), TOK_COMMENT_DEFINITIONS));
-	// REQUIRE(ContructTokMap(TOK_QUOTE_MAP,   (const char*(*)(u16))string_TOK_QUOTE,   COUNT(TOK_QUOTE_DEFINITIONS),   TOK_QUOTE_DEFINITIONS));
+	// REQUIRE(ContructTokMap(TOK_MAP,         (const char*(*)(u16))string_TOK,         NARRAY(TOK_DEFINITIONS),         TOK_DEFINITIONS));
+	// REQUIRE(ContructTokMap(TOK_COMMENT_MAP, (const char*(*)(u16))string_TOK_COMMENT, NARRAY(TOK_COMMENT_DEFINITIONS), TOK_COMMENT_DEFINITIONS));
+	// REQUIRE(ContructTokMap(TOK_QUOTE_MAP,   (const char*(*)(u16))string_TOK_QUOTE,   NARRAY(TOK_QUOTE_DEFINITIONS),   TOK_QUOTE_DEFINITIONS));
 
-	ConstructFlatrie(COUNT(TK_PP_DEFINITIONS), TK_PP_DEFINITIONS, COUNT(TOK_TRIE), TOK_TRIE);
-	return 0;
+	ConstructFlatrie(NARRAY(TK_PP_DEFINITIONS), TK_PP_DEFINITIONS, NARRAY(TOK_TRIE), TOK_TRIE);
 
 	/* Config */
 	SetTraceLogLevel(LOG_ALL);
@@ -1964,14 +2083,13 @@ int main(void)
 		}
 		pCode->textRowCount = rowIndex;
 		pCode->textCount = index;
-		LOG("Loaded Buffer Size %d\n", text.textCount);
+		LOG("Loaded Buffer Size %d\n", pCode->textCount);
 		ASSERT(text.textCount < TEXT_BUFFER_CAPACITY, "Loaded buffer size too big!");
 
 		memcpy(pCode->pText, loadedFile, pCode->textCount + 1);
 		free(loadedFile);
 
-		// ProcessMeta(&text);
-		ProcessMeta2(&text);
+		ProcessTrieMeta(pCode);
 	}
 
 /*
