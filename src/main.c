@@ -1242,6 +1242,7 @@ static RESULT ProcessTrieMeta(CodeBox* pCode)
 		[TK_NONE] = &&TK_NONE,
 		[TK_ERR]  = &&TK_ERR,
 		[ASCII_CHAR_RANGE] = &&ASCII_CHAR,
+		[' '] = &&TK_SPACE,
 		DEF_TK_PP(DEF_DISPATCH)
 	};
 
@@ -1305,6 +1306,11 @@ TK_ERR:
 	pTextCat[step.iT] = TOK_CAT_ERROR;
 	DISP();
 
+TK_SPACE:
+	printf("TK_SPACE\n");
+	pTextCat[step.iT] = TOK_CAT_WHITESPACE;
+	DISP();
+
 TK_PP_INCLUDE:
 TK_PP_IF:
 TK_PP_IFNDEF:
@@ -1318,10 +1324,8 @@ TK_PP_ERROR:
 TK_PP_PRAGMA:
 TK_PP_LINE:
 	printf("%s %d %d\n", string_TK(step.tk), step.iT, step.iN);
-	pTextCat[step.iT] = TOK_CAT_KEYWORD;
-	// step.iT++;
+	FILL(pTextCat, TOK_CAT_KEYWORD, step.iT-1);
 	step.iN = 0;
-	// step.c  = pText[step.iT];
 	step.n  = pTrie[step.iN];
 	step.tk = step.n.tok.yes ? step.n.tok.val : step.n.c.val;
 	goto *disp[step.tk];
