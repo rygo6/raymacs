@@ -1,0 +1,19 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build with bat (UCRT64)",
+            "type": "shell",
+            "command": "C:\\msys64\\msys2_shell.cmd -defterm -here -no-start -ucrt64 -c /c/UnitySrc/raymacs/build-ucrt64.bat",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$gcc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        }
+    ]
+}
