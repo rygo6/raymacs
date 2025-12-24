@@ -1262,29 +1262,43 @@ static RESULT ProcessTrieMeta(CodeBox* pCode)
 		int  iT;
 		int  iN;
 		char c;
-		TK   tk;
 		FlatrieNode n;
-	} step = { .iT = -1 };
+		bool match;
+		TK   tk;
+	} step;
+
+	step.iT = 0;
+	step.iN = 0;
+	step.c  = pText[0];
+	step.n  = pTrie[0];
+	step.tk = step.n.tok.yes ? step.n.tok.val : step.n.c.val;
+	goto *disp[step.tk];
+
+	int total = 0;
 
 #define DISP()\
-	if (++step.iT == textCount || step.iT == 32) return RESULT_SUCCESS;\
-	step.c = pText[step.iT];\
-	step.n = pTrie[step.iN];\
-	step.iN += step.n.c.val == step.c ? step.n.c.succ : step.n.c.fail;\
+	step.match = step.n.c.val == step.c;\
+	step.iT += step.match;\
+	step.iN += step.match ? step.n.c.succ : step.n.c.fail;\
+	if (step.iT == textCount || total++ > 128) return RESULT_SUCCESS;\
+	step.c   = pText[step.iT];\
+	step.n   = pTrie[step.iN];\
 	step.tk  = step.n.tok.yes ? step.n.tok.val : step.n.c.val;\
 	goto *disp[step.tk];
 
-	DISP();
-
 ASCII_CHAR:
-	printf("CHAR %c == %c\n", step.n.c.val, step.c);
+	printf("CHAR %d%c == %d%c\n",step.iT, step.c, step.iN, step.n.c.val);
 	pTextCat[step.iT] = TOK_CAT_NONE;
 	DISP();
 
 TK_NONE:
 	printf("NONE %c\n", step.c);
-	pTextCat[step.iT] = TOK_CAT_NONE;
-	DISP();
+	printf("%s\n", string_TK(step.tk));
+	pTextCat[step.iT] = TOK_CAT_ERROR;
+	step.iT++;
+	if (step.iT == textCount || total++ > 128) return RESULT_SUCCESS;\
+	step.c = pText[step.iT];
+	goto *disp[step.tk];
 
 TK_ERR:
 	printf("ERR %c == %c\n", step.n.c.val, step.c);
@@ -1296,7 +1310,6 @@ TK_PP_IF:
 TK_PP_IFNDEF:
 TK_PP_IFDEF:
 TK_PP_DEFINE:
-	printf("TK_PP_DEFINE\n");
 TK_PP_ENDIF:
 TK_PP_UNDEF:
 TK_PP_ELIF:
@@ -1304,9 +1317,14 @@ TK_PP_ELSE:
 TK_PP_ERROR:
 TK_PP_PRAGMA:
 TK_PP_LINE:
-	printf("TK_PP_LINE\n");
+	printf("%s %d %d\n", string_TK(step.tk), step.iT, step.iN);
 	pTextCat[step.iT] = TOK_CAT_KEYWORD;
-	DISP();
+	// step.iT++;
+	step.iN = 0;
+	// step.c  = pText[step.iT];
+	step.n  = pTrie[step.iN];
+	step.tk = step.n.tok.yes ? step.n.tok.val : step.n.c.val;
+	goto *disp[step.tk];
 
 	return RESULT_SUCCESS;
 }
