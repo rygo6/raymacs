@@ -1008,7 +1008,7 @@ fail  6   1   1   0   0   0   0
 #define TRIE_MAX_PACKED_OFFSET  4096  // 12 bit
 #define TRIE_MAX_SPARSE_OFFSET  32768 // 15 bit
 #define MAX_TOKEN_SIZE 16
-typedef union FlatrieNode {
+typedef union FrieNode {
 	struct { // the first 128 ASCII chars are sparse
 		// char value is index in sparse layout
 		bool jump : 1;  
@@ -1026,15 +1026,15 @@ typedef union FlatrieNode {
 		u16  val   : 15;
 		u16  cat   : 15;
 	} tok;
-} FlatrieNode;
-// STATIC_ASSERT(sizeof(FlatrieNode) == 4);
+} FrieNode;
+// STATIC_ASSERT(sizeof(FrieNode) == 4);
 
-static FlatrieNode TOK_TRIE[1024];
+static FrieNode TOK_TRIE[1024];
 
-static void LogTrie(FlatrieNode* trie)
+static void FrieLog(FrieNode* trie)
 {
 	LOG("Flatrie:\n");
-	int iNode = 32; FlatrieNode node = trie[iNode]; 
+	int iNode = 32; FrieNode node = trie[iNode]; 
 	while (node.packed.isTok || node.packed.val != '\0' || iNode < 128) {
 		if (iNode < 128)       
 			fprintf(stderr, ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "%d" ANSI_RESET ANSI_WHITE "%c" ANSI_DIM ANSI_ITALIC ANSI_YELLOW "%d" ANSI_RESET ANSI_BRIGHT_BLACK "%c" ANSI_RESET, iNode, iNode, node.sparse.succ, iNode == 127 ? '\n' : '|');
@@ -1047,7 +1047,7 @@ static void LogTrie(FlatrieNode* trie)
 	fprintf(stderr, "\n");
 }
 
-static TK FrieGet(const char *pText, FlatrieNode *pTrie) 
+static TK FrieGet(const char *pText, FrieNode *pFrie) 
 {
 	TRIE_LOG("Checking Frie for %s\n", pText);
 
@@ -1072,14 +1072,14 @@ static TK FrieGet(const char *pText, FlatrieNode *pTrie)
 		u16  jump;
 		TK   tk;
 		char c;
-		FlatrieNode n;
+		FrieNode n;
 	} step;
 	ZERO(&step);
 
 TK_SPARSE_CHAR:
 	{
 		step.c  = pText[step.iT];
-		step.n  = pTrie[(u8)step.c];
+		step.n  = pFrie[(u8)step.c];
 		TRIE_LOG("TK_SPARSE_CHAR %d %d %c:%d jump%d\n", step.iT, step.iN, step.c, step.c, step.jump);
 		step.iT++;
 		step.tk = step.n.sparse.jump ? TK_SPARSE_MATCH : (TK)step.c;
@@ -1092,7 +1092,7 @@ TK_SPARSE_MATCH:
 		TRIE_LOG("TK_SPARSE_MATCH %d %d %c:%d succ%d\n", step.iT, step.iN, step.c, step.c, step.n.sparse.succ);
 		step.iN += step.n.sparse.succ;
 		step.c   = pText[step.iT];
-		step.n   = pTrie[step.iN];
+		step.n   = pFrie[step.iN];
 		step.tk  = step.n.tok.isTok ? step.n.tok.val : TK_PACKED_CHAR;
 		TRIE_LOG("disp isTok%d %d %s\n", step.n.tok.isTok, step.tk, string_TK(step.tk));
 		goto *disp[step.tk];
@@ -1105,7 +1105,7 @@ TK_PACKED_CHAR:
 		step.iT += match;
 		step.iN += match ? step.n.packed.succ : step.n.packed.fail;
 		step.c   = pText[step.iT];
-		step.n   = pTrie[step.iN];
+		step.n   = pFrie[step.iN];
 		step.tk  = step.n.tok.isTok ? step.n.tok.val : TK_PACKED_CHAR;
 		TRIE_LOG("disp isTok%d %d %s\n", step.n.tok.isTok, step.tk, string_TK(step.tk));
 		goto *disp[step.tk];
@@ -1118,19 +1118,19 @@ TK_ERR:
 }
 
 
-static RESULT ConstructFlatrie(int tokCount, const TokDef* tokDefs, int trieCapacity, FlatrieNode* pTrie) 
+static RESULT ConstructFrie(int tokCount, const TokDef* tokDefs, int trieCapacity, FrieNode* pFrie) 
 {
 	CHECK(trieCapacity > 256, RESULT_CAPACITY_ERROR);
 	const int iASCIIEnd = 128;
 	int iEndNode = 0; int iTok = 0;
 	
 	for (int iASCII = 0; iASCII < iASCIIEnd; ++iASCII) {
-		pTrie[iEndNode++] = (FlatrieNode){ .sparse.jump = false, .sparse.succ = 0 }; 
+		pFrie[iEndNode++] = (FrieNode){ .sparse.jump = false, .sparse.succ = 0 }; 
 	}
 
 NextTok: 
 #ifdef TRIE_DEBUG
-	LogTrie(pTrie);
+	FrieLog(pFrie);
 #endif
 
 	if (iTok == tokCount) goto RESULT_SUCCESS;
@@ -1141,7 +1141,7 @@ NextNameChar:
 	char cName = def.name[iName];
 
 	if (iName == 0) {
-		FlatrieNode node = pTrie[(u8)cName];
+		FrieNode node = pFrie[(u8)cName];
 
 		if (node.sparse.jump) {
 			TRIE_LOG("Entry Jump i%d %c end%d %s\n", (u8)cName, cName, iEndNode, def.name);
@@ -1152,14 +1152,14 @@ NextNameChar:
 
 		TRIE_LOG("New Entry i%d %c end%d %s\n", (u8)cName, cName, iEndNode, def.name);
 		CHECKMSG(iEndNode < TRIE_MAX_SPARSE_OFFSET, RESULT_MAX_OFFSET_ERROR, "end offset:%d", iEndNode);
-		pTrie[(u8)cName] = (FlatrieNode){ .sparse.jump = true, .sparse.succ = iEndNode };
+		pFrie[(u8)cName] = (FrieNode){ .sparse.jump = true, .sparse.succ = iEndNode };
 		iNode = iEndNode; 
 		iName++;
 		goto NextNameChar;
 	}
 
 	{
-		FlatrieNode node  = pTrie[iNode];
+		FrieNode node  = pFrie[iNode];
 
 		// If we encountered a tok
 		if (node.tok.isTok) {
@@ -1168,14 +1168,14 @@ NextNameChar:
 			TRIE_LOG("Insert Tok i%d firstfail%d end%d %s\n", iNode, iNodeFirstFail, iEndNode, def.name);
 			iNode = iNodeFirstFail;
 
-			bool nextIsTok = pTrie[iNode+1].tok.isTok;
+			bool nextIsTok = pFrie[iNode+1].tok.isTok;
 			// Shift all to right by 1 to make room for new char condition.
 			TRIE_LOG("Shift 1 dst:%d src:%d len:%d\n", iNode+1, iNode, iEndNode - iNode);
-			memmove(pTrie + iNode + 1, pTrie + iNode, (iEndNode - iNode) * sizeof(FlatrieNode));
+			memmove(pFrie + iNode + 1, pFrie + iNode, (iEndNode - iNode) * sizeof(FrieNode));
 
 			// Increment sparse ascii jump values if they would have jumped past current insertion
 			for (int iNodePrev = 0; iNodePrev < iASCIIEnd; iNodePrev++) {
-				FlatrieNode *pPrevNode = pTrie + iNodePrev;
+				FrieNode *pPrevNode = pFrie + iNodePrev;
 				if (pPrevNode->sparse.succ > iNode) { 
 					TRIE_LOG("Increment sparse i%d %c succ%d\n", iNodePrev, iNodePrev, pPrevNode->sparse.succ);
 					pPrevNode->sparse.succ++;
@@ -1184,7 +1184,7 @@ NextNameChar:
 
 			// Increment all fail succ values in prior trie steps if they would have jumped past current insertion
 			for (int iNodePrev = iASCIIEnd; iNodePrev < iNode; iNodePrev++) {
-				FlatrieNode *pPrevNode = pTrie + iNodePrev;
+				FrieNode *pPrevNode = pFrie + iNodePrev;
 				int diff = iNode - iNodePrev;
 				if (pPrevNode->tok.isTok) continue;
 				if (pPrevNode->packed.succ > diff) {
@@ -1202,7 +1202,7 @@ NextNameChar:
 			TRIE_LOG("Insert Char i%d %c end%d %s\n", iNode, cName, iEndNode, def.name);
 			u16 succ = iEndNode - iNode;
 			CHECKMSG(succ < TRIE_MAX_PACKED_OFFSET, RESULT_MAX_OFFSET_ERROR, "succ offset:%d", succ);
-			pTrie[iNode] = (FlatrieNode){ .packed.val = cName, .packed.succ = succ, .packed.fail = 1 };
+			pFrie[iNode] = (FrieNode){ .packed.val = cName, .packed.succ = succ, .packed.fail = 1 };
 			iName++; iNode = iEndNode;
 			goto NextNameChar;
 		}
@@ -1210,8 +1210,8 @@ NextNameChar:
 		// End of Token Name. Write token go to next token!
 		if (cName == '\0') {
 			TRIE_LOG("Finish Token %d %d %s %s\n", iNode, iEndNode, def.name, string_TK(def.tok));
-			pTrie[iNode++] = (FlatrieNode){ .tok.isTok = true, .tok.val = def.tok };
-			pTrie[iNode++] = (FlatrieNode){ .tok.isTok = true, .tok.val = TK_ERR };
+			pFrie[iNode++] = (FrieNode){ .tok.isTok = true, .tok.val = def.tok };
+			pFrie[iNode++] = (FrieNode){ .tok.isTok = true, .tok.val = TK_ERR };
 			iTok++;	iEndNode = iNode;
 			goto NextTok;
 		}
@@ -1235,7 +1235,7 @@ NextNameChar:
 		u16 fail = (def.len - iName) + 1; // +1 as err comes after tok
 		CHECKMSG(fail < TRIE_MAX_PACKED_OFFSET, RESULT_MAX_OFFSET_ERROR, "fail offset:%d", fail);
 		TRIE_LOG("Add Char i%d fail%d end%d %s %c\n", iNode, fail, iEndNode, def.name, cName);
-		pTrie[iNode] = (FlatrieNode){ 
+		pFrie[iNode] = (FrieNode){ 
 			.packed.isTok    = false, 
 			.packed.val   = cName, 
 			.packed.succ  = 1, 
@@ -1247,21 +1247,21 @@ NextNameChar:
 
 RESULT_CAPACITY_ERROR:
 	LOG_ERR("Trie capacity reached! %d %s\n", iNode, def.name);
-	LogTrie(pTrie);
+	FrieLog(pFrie);
 	return RESULT_MAX_OFFSET_ERROR;
 
 RESULT_DUPLICATE_ERROR:
 	LOG_ERR("Trying insert the same token twice! %d %s\n", iNode, def.name);
-	LogTrie(pTrie);
+	FrieLog(pFrie);
 	return RESULT_MAX_OFFSET_ERROR;
 
 RESULT_MAX_OFFSET_ERROR:
 	LOG_ERR("Trying to add offset greater than TRIE_MAX_OFFSET. %d %s\n", iNode, def.name);
-	LogTrie(pTrie);
+	FrieLog(pFrie);
 	return RESULT_MAX_OFFSET_ERROR;
 
 RESULT_SUCCESS:
-	LogTrie(pTrie);
+	FrieLog(pFrie);
 	return RESULT_SUCCESS;
 }
 
@@ -1485,7 +1485,7 @@ static RESULT ProcessTrieMeta(CodeBox* pCode)
 
 	void **disp  = codeDispatch;
 
-	FlatrieNode* pTrie = TOK_TRIE;
+	FrieNode* pFrie = TOK_TRIE;
 	
 	const int textCount  = pCode->textCount;
 	char	  *pText     = pCode->pText;
@@ -1497,7 +1497,7 @@ static RESULT ProcessTrieMeta(CodeBox* pCode)
 		int  iT;
 		int  iN;
 		char c;
-		FlatrieNode n;
+		FrieNode n;
 		u16  jump;
 		TK   tk;
 	} step;
@@ -1513,7 +1513,7 @@ static RESULT ProcessTrieMeta(CodeBox* pCode)
 	step.iN += match ? step.n.packed.succ : step.n.packed.fail;\
 	if (step.iT == textCount || total++ > totalMax) return RESULT_SUCCESS;\
 	step.c   = pText[step.iT];\
-	step.n   = pTrie[step.iN];\
+	step.n   = pFrie[step.iN];\
 	step.tk  = step.n.tok.isTok ? step.n.tok.val : step.n.packed.val;\
 	goto *disp[step.tk];\
 }
@@ -1522,7 +1522,7 @@ TK_SPARSE_CHAR:
 	{
 		if (step.iT == textCount || total++ > totalMax) return RESULT_SUCCESS;
 		step.c  = pText[step.iT];
-		step.n  = pTrie[(u8)step.c];
+		step.n  = pFrie[(u8)step.c];
 		step.tk = step.n.sparse.jump ? TK_SPARSE_MATCH : (TK)step.c;
 		// printf("TK_SPARSE_CHAR %d %d %c:%d jump%d\n", step.iT, step.iN, step.c, step.c, step.jump);
 		step.iT++;
@@ -1535,7 +1535,7 @@ TK_SPARSE_MATCH:
 		if (step.iT == textCount || total++ > totalMax) return RESULT_SUCCESS;
 		step.iN += step.n.sparse.succ;
 		step.c = pText[step.iT];
-		step.n = pTrie[step.iN];
+		step.n = pFrie[step.iN];
 		step.tk = step.n.tok.isTok ? step.n.tok.val : TK_PACKED_CHAR;
 		goto *disp[step.tk];
 	}
@@ -1548,7 +1548,7 @@ TK_PACKED_CHAR:
 		step.iN += match ? step.n.packed.succ : step.n.packed.fail;
 		if (step.iT == textCount || total++ > totalMax) return RESULT_SUCCESS;
 		step.c   = pText[step.iT];
-		step.n   = pTrie[step.iN];
+		step.n   = pFrie[step.iN];
 		step.tk  = step.n.tok.isTok ? step.n.tok.val : TK_PACKED_CHAR;
 		goto *disp[step.tk];
 	}
@@ -2336,7 +2336,7 @@ int main(void)
 	// REQUIRE(ContructTokMap(TOK_COMMENT_MAP, (const char*(*)(u16))string_TOK_COMMENT, NARRAY(TOK_COMMENT_DEFINITIONS), TOK_COMMENT_DEFINITIONS));
 	// REQUIRE(ContructTokMap(TOK_QUOTE_MAP,   (const char*(*)(u16))string_TOK_QUOTE,   NARRAY(TOK_QUOTE_DEFINITIONS),   TOK_QUOTE_DEFINITIONS));
 
-	ConstructFlatrie(NARRAY(TK_PP_DEFINITIONS), TK_PP_DEFINITIONS, NARRAY(TOK_TRIE), TOK_TRIE);
+	ConstructFrie(NARRAY(TK_PP_DEFINITIONS), TK_PP_DEFINITIONS, NARRAY(TOK_TRIE), TOK_TRIE);
 #define DEF_DISPATCH(_name, _tok, _cat)\
 {\
 	TK _tk = FrieGet(_name, TOK_TRIE);\
