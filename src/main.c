@@ -1,7 +1,7 @@
 double T() {
-	int a0 = 1;
+	int a0 = -1;
 	do {a0++;} while (a0<10);
-	int b = a0+a0;
+	int b = a0-a0 - 1- 2 -3;
 	int*x;
 	a0--;
 	return 0;
@@ -551,18 +551,18 @@ STATIC_ASSERT(NARRAY(TOK_CAT_COLOR) == TOK_CAT_COUNT);
 	DEF("uint8_t"   ,TOK_UINT8_T   ,TOK_CAT_TYPE)\
 	DEF("size_t"    ,TOK_SIZE_T    ,TOK_CAT_TYPE)\
 	DEF("int8_t"    ,TOK_INT8_T    ,TOK_CAT_TYPE)\
-	DEF(" "  ,TOK_SPACE           ,TOK_CAT_WHITESPACE)\
-	DEF("\t" ,TOK_TAB             ,TOK_CAT_WHITESPACE)\
-	DEF("\n" ,TOK_NEWLINE         ,TOK_CAT_WHITESPACE)\
-	DEF("\r" ,TOK_CARRIAGE_RETURN ,TOK_CAT_WHITESPACE)\
-	DEF("\f" ,TOK_FORM_FEED       ,TOK_CAT_WHITESPACE)\
-	DEF("\v" ,TOK_VERTICAL_TAB    ,TOK_CAT_WHITESPACE)\
-	DEF("(" ,TOK_PAREN_OPEN    ,TOK_CAT_SCOPE)\
-	DEF(")" ,TOK_PAREN_CLOSE   ,TOK_CAT_SCOPE)\
-	DEF("{" ,TOK_BRACE_OPEN    ,TOK_CAT_SCOPE)\
-	DEF("}" ,TOK_BRACE_CLOSE   ,TOK_CAT_SCOPE)\
-	DEF("[" ,TOK_BRACKET_OPEN  ,TOK_CAT_SCOPE)\
-	DEF("]" ,TOK_BRACKET_CLOSE ,TOK_CAT_SCOPE)\
+	DEF(" "   ,TOK_SPACE           ,TOK_CAT_WHITESPACE)\
+	DEF("\t"  ,TOK_TAB             ,TOK_CAT_WHITESPACE)\
+	DEF("\n"  ,TOK_NEWLINE         ,TOK_CAT_WHITESPACE)\
+	DEF("\r"  ,TOK_CARRIAGE_RETURN ,TOK_CAT_WHITESPACE)\
+	DEF("\f"  ,TOK_FORM_FEED       ,TOK_CAT_WHITESPACE)\
+	DEF("\v"  ,TOK_VERTICAL_TAB    ,TOK_CAT_WHITESPACE)\
+	DEF("("   ,TOK_PAREN_OPEN    ,TOK_CAT_SCOPE)\
+	DEF(")"   ,TOK_PAREN_CLOSE   ,TOK_CAT_SCOPE)\
+	DEF("{"   ,TOK_BRACE_OPEN    ,TOK_CAT_SCOPE)\
+	DEF("}"   ,TOK_BRACE_CLOSE   ,TOK_CAT_SCOPE)\
+	DEF("["   ,TOK_BRACKET_OPEN  ,TOK_CAT_SCOPE)\
+	DEF("]"   ,TOK_BRACKET_CLOSE ,TOK_CAT_SCOPE)\
 	DEF("->"  ,TOK_ARROW              ,TOK_CAT_ASSIGN)\
 	DEF("."   ,TOK_DOT                ,TOK_CAT_ASSIGN)\
 	DEF(";"   ,TOK_SEMICOLON          ,TOK_CAT_ASSIGN)\
@@ -603,10 +603,10 @@ STATIC_ASSERT(NARRAY(TOK_CAT_COLOR) == TOK_CAT_COUNT);
 	DEF("|="  ,TOK_PIPE_ASSIGN        ,TOK_CAT_OPERATOR)\
 	DEF("^="  ,TOK_CARET_ASSIGN       ,TOK_CAT_OPERATOR)\
 	DEF("="   ,TOK_ASSIGN             ,TOK_CAT_OPERATOR)\
-	DEF("\"" ,TOK_DOUBLE_QUOTE ,TOK_CAT_QUOTE)\
-	DEF("'"  ,TOK_SINGLE_QUOTE ,TOK_CAT_QUOTE)\
-	DEF("/*" ,TOK_COMMENT_OPEN ,TOK_CAT_COMMENT)\
-	DEF("//" ,TOK_LINE_COMMENT ,TOK_CAT_COMMENT)
+	DEF("\""  ,TOK_DOUBLE_QUOTE        ,TOK_CAT_QUOTE)\
+	DEF("'"   ,TOK_SINGLE_QUOTE        ,TOK_CAT_QUOTE)\
+	DEF("/*"  ,TOK_COMMENT_OPEN        ,TOK_CAT_COMMENT)\
+	DEF("//"  ,TOK_LINE_COMMENT        ,TOK_CAT_COMMENT)
 
 #define DEF_TOK_COMMENT(DEF)\
 	DEF(SKIP"\0"   ,TOK_COMMENT_NONE  ,TOK_CAT_NONE)\
@@ -658,7 +658,10 @@ STATIC_ASSERT(NARRAY(TOK_CAT_COLOR) == TOK_CAT_COUNT);
     DEF(TK_ERR,          /*ENQ*/'\x05')\
 	/* White Spaces */\
 	DEF(TK_TAB,            /*9*/'\t')\
+	DEF(TK_VERTICAL_TAB,  /*10*/'\v')\
 	DEF(TK_NEWLINE,       /*10*/'\n')\
+	DEF(TK_FORM_FEED,     /*12*/'\f')\
+	DEF(TK_CARR_RETURN,   /*13*/'\r')\
     /*ASCII 32-126*/\
     DEF(TK_SPACE,         /*32*/' ')\
     DEF(TK_BANG,          /*33*/'!')\
@@ -755,7 +758,8 @@ STATIC_ASSERT(NARRAY(TOK_CAT_COLOR) == TOK_CAT_COUNT);
     DEF(TK_PIPE,         /*124*/'|')\
     DEF(TK_RBRACE,       /*125*/'}')\
     DEF(TK_TILDE,        /*126*/'~')\
-    /*Keywords 128+*/\
+    /* Keywords 128+ */\
+	/* PreProcess */\
 	DEF(TK_PP_INCLUDE, TK_KEYWORD_BEGIN)\
 	DEF(TK_PP_DEFINE)\
 	DEF(TK_PP_IFNDEF)\
@@ -770,6 +774,7 @@ STATIC_ASSERT(NARRAY(TOK_CAT_COLOR) == TOK_CAT_COUNT);
 	DEF(TK_PP_IF)\
 	DEF(TK_PP_HASH_HASH)\
 	DEF(TK_PP_HASH)\
+	/* Keyword */\
 	DEF(TK_STATIC_ASSERT)\
 	DEF(TK_THREAD_LOCAL)\
 	DEF(TK_IMAGINARY)\
@@ -802,6 +807,7 @@ STATIC_ASSERT(NARRAY(TOK_CAT_COLOR) == TOK_CAT_COUNT);
 	DEF(TK_FOR)\
 	DEF(TK_IF)\
 	DEF(TK_DO)\
+	/* Types */\
 	DEF(TK_UNSIGNED)\
 	DEF(TK_STRUCT)\
 	DEF(TK_SIGNED)\
@@ -826,6 +832,30 @@ STATIC_ASSERT(NARRAY(TOK_CAT_COLOR) == TOK_CAT_COUNT);
 	DEF(TK_UINT8_T)\
 	DEF(TK_SIZE_T)\
 	DEF(TK_INT8_T)\
+	/* Operators */\
+    DEF(TK_INC,           /* ++ */)\
+    DEF(TK_DEC,           /* -- */)\
+    DEF(TK_ARROW,         /* -> */)\
+    DEF(TK_LSHIFT,        /* << */)\
+    DEF(TK_RSHIFT,        /* >> */)\
+    DEF(TK_LE,            /* <= */)\
+    DEF(TK_GE,            /* >= */)\
+    DEF(TK_EQ_EQ,         /* == */)\
+    DEF(TK_NE,            /* != */)\
+    DEF(TK_AND,           /* && */)\
+    DEF(TK_OR,            /* || */)\
+    DEF(TK_ADD_ASSIGN,    /* += */)\
+    DEF(TK_SUB_ASSIGN,    /* -= */)\
+    DEF(TK_MUL_ASSIGN,    /* *= */)\
+    DEF(TK_DIV_ASSIGN,    /* /= */)\
+    DEF(TK_MOD_ASSIGN,    /* %= */)\
+    DEF(TK_AND_ASSIGN,    /* &= */)\
+    DEF(TK_OR_ASSIGN,     /* |= */)\
+    DEF(TK_XOR_ASSIGN,    /* ^= */)\
+    DEF(TK_LSHIFT_ASSIGN, /* <<=*/)\
+    DEF(TK_RSHIFT_ASSIGN, /* >>=*/)\
+    DEF(TK_ELLIPSIS,      /* ...*/)\
+    DEF(TK_HASH_HASH,     /* ## */)\
 	DEF(TK_COUNT)
 DEF_ENUM(TK);
 STATIC_ASSERT((TK_COUNT-1) <= TK_KEYWORD_END, "Not setup to support more than 256 tokens!");
@@ -835,8 +865,68 @@ STATIC_ASSERT((TK_COUNT-1) <= TK_KEYWORD_END, "Not setup to support more than 25
 #define DEF_TK_PP(DEF)\
 	DEF("#",  TK_PP_HASH,     TOK_CAT_ESCAPE)\
 	DEF("##", TK_PP_HASH_HASH, TOK_CAT_ESCAPE)
+
+// Prompt Claude:
+// Fill in the rest of the C11 keywords, types and operators in this format
+#define DEF_TK_INPUT(DEF)\
+	DEF("+",        TK_PLUS,  TOK_CAT_OPERATOR)\
+	DEF("=",        TK_EQ,    TOK_CAT_ASSIGN)\
+	DEF("#if"DELIM, TK_PP_IF, TOK_CAT_PP)\
+	DEF("do"DELIM,  TK_DO,    TOK_CAT_KEYWORD)\
+	DEF("int"DELIM, TK_INT,   TOK_CAT_TYPE)
 	
+// Claude Output:
 #define DEF_TK_BASE(DEF)\
+    DEF("!",                   TK_BANG,          TOK_CAT_OPERATOR)\
+    DEF("%",                   TK_PERCENT,       TOK_CAT_OPERATOR)\
+    DEF("&",                   TK_AMP,           TOK_CAT_OPERATOR)\
+    DEF("(",                   TK_LPAREN,        TOK_CAT_OPERATOR)\
+    DEF(")",                   TK_RPAREN,        TOK_CAT_OPERATOR)\
+    DEF("*",                   TK_STAR,          TOK_CAT_OPERATOR)\
+    DEF("+",                   TK_PLUS,          TOK_CAT_OPERATOR)\
+    DEF(",",                   TK_COMMA,         TOK_CAT_OPERATOR)\
+    DEF("-",                   TK_MINUS,         TOK_CAT_OPERATOR)\
+    DEF(".",                   TK_DOT,           TOK_CAT_OPERATOR)\
+    DEF("/",                   TK_SLASH,         TOK_CAT_OPERATOR)\
+    DEF(":",                   TK_COLON,         TOK_CAT_OPERATOR)\
+    DEF(";",                   TK_SEMICOLON,     TOK_CAT_OPERATOR)\
+    DEF("<",                   TK_LT,            TOK_CAT_OPERATOR)\
+    DEF("=",                   TK_EQ,            TOK_CAT_OPERATOR)\
+    DEF(">",                   TK_GT,            TOK_CAT_OPERATOR)\
+    DEF("?",                   TK_QUESTION,      TOK_CAT_OPERATOR)\
+    DEF("[",                   TK_LBRACKET,      TOK_CAT_OPERATOR)\
+    DEF("]",                   TK_RBRACKET,      TOK_CAT_OPERATOR)\
+    DEF("^",                   TK_CARET,         TOK_CAT_OPERATOR)\
+    DEF("{",                   TK_LBRACE,        TOK_CAT_OPERATOR)\
+    DEF("|",                   TK_PIPE,          TOK_CAT_OPERATOR)\
+    DEF("}",                   TK_RBRACE,        TOK_CAT_OPERATOR)\
+    DEF("~",                   TK_TILDE,         TOK_CAT_OPERATOR)\
+    DEF("++",                  TK_INC,           TOK_CAT_OPERATOR)\
+    DEF("--",                  TK_DEC,           TOK_CAT_OPERATOR)\
+    DEF("->",                  TK_ARROW,         TOK_CAT_OPERATOR)\
+    DEF("<<",                  TK_LSHIFT,        TOK_CAT_OPERATOR)\
+    DEF(">>",                  TK_RSHIFT,        TOK_CAT_OPERATOR)\
+    DEF("<=",                  TK_LE,            TOK_CAT_OPERATOR)\
+    DEF(">=",                  TK_GE,            TOK_CAT_OPERATOR)\
+    DEF("==",                  TK_EQ_EQ,         TOK_CAT_OPERATOR)\
+    DEF("!=",                  TK_NE,            TOK_CAT_OPERATOR)\
+    DEF("&&",                  TK_AND,           TOK_CAT_OPERATOR)\
+    DEF("||",                  TK_OR,            TOK_CAT_OPERATOR)\
+    DEF("+=",                  TK_ADD_ASSIGN,    TOK_CAT_OPERATOR)\
+    DEF("-=",                  TK_SUB_ASSIGN,    TOK_CAT_OPERATOR)\
+    DEF("*=",                  TK_MUL_ASSIGN,    TOK_CAT_OPERATOR)\
+    DEF("/=",                  TK_DIV_ASSIGN,    TOK_CAT_OPERATOR)\
+    DEF("%=",                  TK_MOD_ASSIGN,    TOK_CAT_OPERATOR)\
+    DEF("&=",                  TK_AND_ASSIGN,    TOK_CAT_OPERATOR)\
+    DEF("|=",                  TK_OR_ASSIGN,     TOK_CAT_OPERATOR)\
+    DEF("^=",                  TK_XOR_ASSIGN,    TOK_CAT_OPERATOR)\
+    DEF("<<=",                 TK_LSHIFT_ASSIGN, TOK_CAT_OPERATOR)\
+    DEF(">>=",                 TK_RSHIFT_ASSIGN, TOK_CAT_OPERATOR)\
+    DEF("...",                 TK_ELLIPSIS,      TOK_CAT_OPERATOR)\
+	DEF(";",                   TK_SEMICOLON,     TOK_CAT_ASSIGN)\
+	DEF("=",                   TK_EQ,            TOK_CAT_ASSIGN)\
+	DEF("#",                   TK_HASH,          TOK_CAT_ESCAPE)\
+	DEF("##",                  TK_HASH_HASH,     TOK_CAT_ESCAPE)\
 	DEF("#ifndef"DELIM,        TK_PP_IFNDEF,     TOK_CAT_PP)\
 	DEF("#ifdef"DELIM,         TK_PP_IFDEF,      TOK_CAT_PP)\
 	DEF("#if"DELIM,            TK_PP_IF,         TOK_CAT_PP)\
@@ -905,8 +995,7 @@ STATIC_ASSERT((TK_COUNT-1) <= TK_KEYWORD_END, "Not setup to support more than 25
 	DEF("uint32_t"DELIM,       TK_UINT32_T,      TOK_CAT_TYPE)\
 	DEF("unsigned"DELIM,       TK_UNSIGNED,      TOK_CAT_TYPE)\
 	DEF("uint64_t"DELIM,       TK_UINT64_T,      TOK_CAT_TYPE)\
-	DEF("ptrdiff_t"DELIM,      TK_PTRDIFF_T,     TOK_CAT_TYPE)\
-	
+	DEF("ptrdiff_t"DELIM,      TK_PTRDIFF_T,     TOK_CAT_TYPE)
 
 	// DEF("\\\n"      ,TOK_PREPROCESS_CONTINUE      ,TOK_CAT_PP_OPERATOR)
 
@@ -1121,6 +1210,7 @@ static TK FrieGet(const char *pText, FrieNode *pFrie)
 		int  iN;
 		FrieNode n;
 		char cT;
+		TK   tk;
 	} step;
 	ZERO(&step);
 
@@ -1129,12 +1219,13 @@ static TK FrieGet(const char *pText, FrieNode *pFrie)
 
 TK_SPARSE_CHAR:
 	{
-		FRIE_LOG("TK_SPARSE_CHAR iT:%-4d iN:%-4d %4d:%s %s %s jump%d ", step.iT, step.iN, step.cT, EscapeChar(step.cT), string_TK(step.n.sparse.tok), string_TOK_CAT(step.n.sparse.cat), step.n.sparse.succ);
+		FRIE_LOG("TK_SPARSE_CHAR iT:%-4d iN:%-4d %4d:%s %s %s %s jump%d ", step.iT, step.iN, step.cT, EscapeChar(step.cT),  string_TK(step.cT), string_TK(step.n.sparse.tok), string_TOK_CAT(step.n.sparse.cat), step.n.sparse.succ);
+		step.tk = step.cT; // Store last valid token
 		// Retrieve next char first to use in setup of next node dispatch.
 		step.iT++; step.cT = pText[step.iT]; 
 		// Setup next node dispatch.
-		step.iN = step.n.sparse.succ > 0 ? step.n.sparse.succ : step.cT;
-		TK tk   = step.n.sparse.tok; // Mut dispatch from this node token value.
+		step.iN = step.n.sparse.succ > 0 && step.cT > 0 ? step.n.sparse.succ : step.cT;
+		TK tk   = step.n.sparse.tok; // Must dispatch from this node token value.
 		step.n  = pFrie[step.iN];
 		FRIE_LOG("dispatch-->%s\n", string_TK(tk));
 		goto *disp[tk];
@@ -1166,13 +1257,14 @@ TK_DELIMIT:
 	}
 
 TK_ALL:
-	FRIE_LOG("Token found %d %s\n", step.n.packed.val, string_TK(step.n.packed.val));
-	return step.n.packed.val;
+	step.tk = step.n.terminator.val; // Store last valid token
+	FRIE_LOG("Token found %d %s\n", step.tk, string_TK(step.tk));
+	return step.tk;
 
 TK_ERR:
 TK_NONE:
-	FRIE_LOG("No token found! %d %s\n", step.n.packed.val, string_TK(step.n.packed.val));
-	return step.n.packed.val;
+	FRIE_LOG("No token found! %d %s\n", step.tk, string_TK(step.tk));
+	return step.tk;
 }
 
 /* Shift all frie nodes right by 1 updating all offsets. */
@@ -1212,22 +1304,22 @@ static RESULT ConstructFrie(int tokCount, const TokDef* tokDefs, int frieCapacit
 	CHECK(frieCapacity > 256, RESULT_CAPACITY_ERROR);
 	ZERO_RANGE(pFrie, frieCapacity);
 
-	for (int i = '!'; i <= '/'; ++i) pFrie[i] = (FrieNode){ .sparse.tok = TK_SPARSE_CHAR, .sparse.cat = TOK_CAT_OPERATOR }; 
-	for (int i = '0'; i <= '9'; ++i) pFrie[i] = (FrieNode){ .sparse.tok = TK_SPARSE_CHAR, .sparse.cat = TOK_CAT_DIGIT }; 
-	for (int i = 'A'; i <= 'Z'; ++i) pFrie[i] = (FrieNode){ .sparse.tok = TK_SPARSE_CHAR, .sparse.cat = TOK_CAT_ALPHA }; 
-	for (int i = 'a'; i <= 'z'; ++i) pFrie[i] = (FrieNode){ .sparse.tok = TK_SPARSE_CHAR, .sparse.cat = TOK_CAT_ALPHA }; 
-	pFrie['\t'] = (FrieNode){ .sparse.tok = TK_SPARSE_CHAR, .sparse.cat = TOK_CAT_WHITESPACE }; 
-	pFrie['\n'] = (FrieNode){ .sparse.tok = TK_SPARSE_CHAR, .sparse.cat = TOK_CAT_WHITESPACE }; 
-	pFrie[' ']  = (FrieNode){ .sparse.tok = TK_SPARSE_CHAR, .sparse.cat = TOK_CAT_WHITESPACE }; 
-	pFrie['^']  = (FrieNode){ .sparse.tok = TK_SPARSE_CHAR, .sparse.cat = TOK_CAT_OPERATOR }; 
-	pFrie['[']  = (FrieNode){ .sparse.tok = TK_SPARSE_CHAR, .sparse.cat = TOK_CAT_SCOPE }; 
-	pFrie[']']  = (FrieNode){ .sparse.tok = TK_SPARSE_CHAR, .sparse.cat = TOK_CAT_SCOPE }; 
-	pFrie['{']  = (FrieNode){ .sparse.tok = TK_SPARSE_CHAR, .sparse.cat = TOK_CAT_SCOPE }; 
-	pFrie['}']  = (FrieNode){ .sparse.tok = TK_SPARSE_CHAR, .sparse.cat = TOK_CAT_SCOPE }; 
-	pFrie['(']  = (FrieNode){ .sparse.tok = TK_SPARSE_CHAR, .sparse.cat = TOK_CAT_SCOPE }; 
-	pFrie[')']  = (FrieNode){ .sparse.tok = TK_SPARSE_CHAR, .sparse.cat = TOK_CAT_SCOPE }; 
-	pFrie['_']  = (FrieNode){ .sparse.tok = TK_SPARSE_CHAR, .sparse.cat = TOK_CAT_ALPHA }; 
-	pFrie['\\'] = (FrieNode){ .sparse.tok = TK_SPARSE_CHAR, .sparse.cat = TOK_CAT_ESCAPE }; 
+	for (int i = '!'; i <= '/'; ++i) pFrie[i] = (FrieNode){ .sparse.cat = TOK_CAT_OPERATOR }; 
+	for (int i = '0'; i <= '9'; ++i) pFrie[i] = (FrieNode){ .sparse.cat = TOK_CAT_DIGIT }; 
+	for (int i = 'A'; i <= 'Z'; ++i) pFrie[i] = (FrieNode){ .sparse.cat = TOK_CAT_ALPHA }; 
+	for (int i = 'a'; i <= 'z'; ++i) pFrie[i] = (FrieNode){ .sparse.cat = TOK_CAT_ALPHA }; 
+	pFrie['\t'] = (FrieNode){ .sparse.cat = TOK_CAT_WHITESPACE }; 
+	pFrie['\n'] = (FrieNode){ .sparse.cat = TOK_CAT_WHITESPACE }; 
+	pFrie[' ']  = (FrieNode){ .sparse.cat = TOK_CAT_WHITESPACE }; 
+	pFrie['^']  = (FrieNode){ .sparse.cat = TOK_CAT_OPERATOR }; 
+	pFrie['[']  = (FrieNode){ .sparse.cat = TOK_CAT_SCOPE }; 
+	pFrie[']']  = (FrieNode){ .sparse.cat = TOK_CAT_SCOPE }; 
+	pFrie['{']  = (FrieNode){ .sparse.cat = TOK_CAT_SCOPE }; 
+	pFrie['}']  = (FrieNode){ .sparse.cat = TOK_CAT_SCOPE }; 
+	pFrie['(']  = (FrieNode){ .sparse.cat = TOK_CAT_SCOPE }; 
+	pFrie[')']  = (FrieNode){ .sparse.cat = TOK_CAT_SCOPE }; 
+	pFrie['_']  = (FrieNode){ .sparse.cat = TOK_CAT_ALPHA }; 
+	pFrie['\\'] = (FrieNode){ .sparse.cat = TOK_CAT_ESCAPE }; 
 
 	int iTok = 0;
 	int iEndNode = TK_KEYWORD_BEGIN;
@@ -1239,7 +1331,8 @@ NextTok:
 
 	if (iTok == tokCount) goto RESULT_SUCCESS;
 	TokDef def = tokDefs[iTok];
-	int iNode = 0; int iName = 0; int iNodeFirstFail = TK_KEYWORD_BEGIN; int iNodeFirstJump = 0; bool delim = false;
+	int iNode = 0; int iName = 0; int iNodeFirstFail = TK_KEYWORD_BEGIN; int iNodeFirstJump = 0; 
+	bool delim = def.name[def.len-1] == TK_DELIMIT;
 
 NextNameChar: 
 	char cName = def.name[iName];
@@ -1258,7 +1351,6 @@ NextNameChar:
 		if (cNameNext == '\0') {
 			FRIE_LOG("One Char Token i%d %c end%d %s\n", (u8)cName, cName, iEndNode, def.name);
 			pNode->sparse.cat = def.cat;
-			pNode->sparse.tok = def.tok;
 			iTok++; 
 			goto NextTok;
 		}
@@ -1327,7 +1419,7 @@ NextNameChar:
 		// End of Token Name. Write token go to next token!
 		if (cName == '\0') {
 			CHECKMSG(iNode == iEndNode, RESULT_ORDER_ERROR, "Trying to inset shorter token after longer token! %s %s", def.name, string_TK(def.tok));
-			FRIE_LOG("Finish Token i%d end%d %s %s\n", iNode, iEndNode, def.name, string_TK(def.tok));
+			FRIE_LOG("Finish Token i%d end%d len%d %s %s\n", iNode, iEndNode, iName - delim, def.name, string_TK(def.tok));
 			pFrie[iNode++] = (FrieNode){ .terminator.val = def.tok, .terminator.cat = def.cat, .terminator.len = iName - delim};
 			pFrie[iNode++] = (FrieNode){ .terminator.val = TK_ERR,  .terminator.cat = TOK_CAT_ERROR, .terminator.len = 1 };
 			iTok++;	iEndNode = iNode;
@@ -1351,9 +1443,9 @@ NextNameChar:
 		}
 
 		{
-			u16 fail = (def.len - iName); // +1 as err comes after tok
+			u16 fail = (def.len + 1) - iName - delim; // +1 as err comes after tok
 			CHECKMSG(fail < TRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "fail offset:%d", fail);
-			FRIE_LOG("Add Char i%d fail%d end%d %s %c\n", iNode, fail, iEndNode, def.name, cName);
+			FRIE_LOG("Add Char iT:%d iN:%d fail:%d end:%d delim%d len:%d %s %c\n", iNode, iName, fail, iEndNode, delim, def.len, def.name, cName);
 			pFrie[iNode] = (FrieNode){ 
 				.packed.val   = cName, 
 				.packed.succ  = 1, 
@@ -1601,14 +1693,14 @@ static RESULT ProcessTrieMeta(CodeBox* pCode)
 #pragma GCC diagnostic ignored "-Woverride-init"
 
 	static void *codeDispatch[] = {	
-		[0 ... TOK_COUNT] = &&TK_ERR,
-		[TK_PACKED_CHAR]  = &&TK_PACKED_CHAR,
-		[TK_SPARSE_CHAR]  = &&TK_SPARSE_CHAR,
-		[TK_DELIMIT]      = &&TK_DELIMIT,
-		[TK_ASCII_RANGE]  = &&TK_PACKED_CHAR,
-		DEF_TK_BASE(DEF_DISPATCH)
-		['\n'] = &&TK_SPARSE_CHAR,
-		['\t'] = &&TK_SPARSE_CHAR,
+		[0 ... TOK_COUNT]  = &&TK_ERR,
+		[TK_DELIMIT]       = &&TK_DELIMIT,
+		[TK_PACKED_CHAR]   = &&TK_PACKED_CHAR,
+		[TK_SPARSE_CHAR]   = &&TK_SPARSE_CHAR,
+		[TK_NEWLINE]       = &&TK_SPARSE_CHAR,
+		[TK_TAB]           = &&TK_SPARSE_CHAR,
+		[TK_ASCII_RANGE]   = &&TK_PACKED_CHAR,
+		[TK_KEYWORD_RANGE] = &&TK_ALL,
 	};
 
 #pragma GCC diagnostic pop
@@ -1638,11 +1730,6 @@ static RESULT ProcessTrieMeta(CodeBox* pCode)
 	step.n = pFrie[(u8)step.cT];
 	goto TK_SPARSE_CHAR;
 
-TK_HASH:
-	// LOG("############################### HASH\n");
-	// disp = defineDispatch;
-	// pFrie = TOK_PP_FRIE;
-
 TK_ERR:
 TK_NONE:
 	step.iN = step.cT;
@@ -1651,11 +1738,12 @@ TK_SPARSE_CHAR:
 	{
 		// printf("TK_SPARSE_CHAR iT:%-4d iN:%-4d %4d:%s -->sparse %d cat:%s  ", step.iT, step.iN, step.cT, EscapeChar(step.cT), step.n.sparse.succ, string_TOK_CAT(step.n.sparse.cat));
 		pTextCat[step.iT] = step.n.sparse.cat;
+		pTextTok[step.iT] = step.cT;
 
 		// retrieve next char first to use in setup of next node step state
 		step.iT++;  // Sparse is success or fail explicity so you always increment text index.
 		if (step.iT == textCount) return RESULT_SUCCESS;
-	    if (total++ > totalMax) return RESULT_SUCCESS;
+	    // if (total++ > totalMax) return RESULT_SUCCESS;
 		step.cT = pText[step.iT]; // Load char for next step;
 
 		// step.iTBegin = step.iT; could do this to set individual char cat afterwards
@@ -1665,7 +1753,7 @@ TK_SPARSE_CHAR:
 		u8 tk = step.n.sparse.tok;
 		step.cat = step.n.sparse.cat;
 		step.n = pFrie[step.iN]; // Load node for next step;
-		// printf("dispatch-->%s\n", string_TK(step.tk));
+		// printf("dispatch-->%s\n", string_TK(step.n.packed.val));
 		goto *disp[tk];
 	}
 
@@ -1674,16 +1762,15 @@ TK_PACKED_CHAR:
 		bool match = step.n.packed.val == step.cT;
 		// printf("TK_PACKED_CHAR iT:%-4d iN:%-4d %4d:%s==", step.iT, step.iN, step.cT, EscapeChar(step.cT));
 		// printf("%s:%-4d match:%d %s ", EscapeChar(step.n.packed.val), step.n.packed.val, match, string_TOK_CAT(step.n.sparse.cat));
-		pTextCat[step.iT] = step.cat;
+		pTextCat[step.iT] = step.cat; pTextTok[step.iT] = step.cT; // TODO figure way to not need to set this each time?
 		step.iN += match ? step.n.packed.succ : step.n.packed.fail;
 		step.n = pFrie[step.iN]; // Load node for next step;
-		// step.tk = step.n.tok.val;
 		// printf("dispatch-->%s\n", string_TK(step.tk));
 
 		// If match progress text index. Unless we are going to a token. This does waste an increment and pText lookup on fail condiiton.
 		step.iT += match;
 		if (step.iT == textCount) return RESULT_SUCCESS;
-	    if (total++ > totalMax) return RESULT_SUCCESS;
+	    // if (total++ > totalMax) return RESULT_SUCCESS;
 		step.cT = pText[step.iT]; // Load char for next step;
 		goto *disp[step.n.packed.val];
 	}
@@ -1694,87 +1781,14 @@ TK_DELIMIT:
 		// printf("TK_DELIMIT     iT:%-4d iN:%-4d %4d:%s delim:%d %s ", step.iT, step.iN, step.cT, EscapeChar(step.cT), IS_DELIM_CHAR(step.cT), string_TOK_CAT(step.n.sparse.cat));
 		step.iN += delimiter ? step.n.packed.succ : step.n.packed.fail;
 		step.n = pFrie[step.iN]; // Load node for next step;
-		// step.tk = step.n.tok.val;
-		// printf("dispatch-->%s\n", string_TK(step.tk));
+		// printf("dispatch-->%s\n", string_TK(step.n.packed.val));
 		goto *disp[step.n.packed.val];
 	}
 
-TK_PP_INCLUDE:
-TK_PP_IF:
-TK_PP_IFNDEF:
-TK_PP_IFDEF:
-TK_PP_DEFINE:
-TK_PP_ENDIF:
-TK_PP_UNDEF:
-TK_PP_ELIF:
-TK_PP_ELSE:
-TK_PP_ERROR:
-TK_PP_PRAGMA:
-TK_PP_LINE:
-
-TK_PP_HASH:
-TK_PP_HASH_HASH:
-
-TK_STATIC_ASSERT:
-TK_THREAD_LOCAL:
-TK_IMAGINARY:
-TK_NORETURN:
-TK_COMPLEX:
-TK_GENERIC:
-TK_ALIGNOF:
-TK_ALIGNAS:
-TK_ATOMIC:
-TK_CONTINUE:
-TK_VOLATILE:
-TK_REGISTER:
-TK_RESTRICT:
-TK_TYPEDEF:
-TK_DEFAULT:
-TK_TYPEOF:
-TK_SWITCH:
-TK_STATIC:
-TK_SIZEOF:
-TK_RETURN:
-TK_INLINE:
-TK_EXTERN:
-TK_WHILE:
-TK_CONST:
-TK_BREAK:
-TK_GOTO:
-TK_ELSE:
-TK_CASE:
-TK_AUTO:
-TK_FOR:
-TK_IF:
-TK_DO: 
-
-TK_UNSIGNED:
-TK_STRUCT:
-TK_SIGNED:
-TK_DOUBLE:
-TK_FLOAT:
-TK_SHORT:
-TK_BOOL:
-TK_UNION:
-TK_VOID:
-TK_LONG:
-TK_CHAR:
-TK_ENUM:
-TK_INT:
-TK_PTRDIFF_T:
-TK_UINT64_T:
-TK_UINT32_T:
-TK_UINT16_T:
-TK_INT64_T:
-TK_INT32_T:
-TK_INT16_T:
-TK_WCHAR_T:
-TK_UINT8_T:
-TK_SIZE_T:
-TK_INT8_T:
+TK_ALL:
 	{
 		u8 len = step.n.terminator.len;
-		// printf("%s iT:%d iN:%d fill:%d len:%d cat:%s \n", string_TK(step.tk), step.iT, step.iN, step.iT - len, len, string_TOK_CAT(step.n.terminator.cat));
+		// printf("%s iT:%d iN:%d fill:%d len:%d cat:%s \n", string_TK(step.n.terminator.val), step.iT, step.iN, step.iT - len, len, string_TOK_CAT(step.n.terminator.cat));
 		FILL(pTextCat + step.iT - len, step.n.terminator.cat, len);
 		FILL(pTextTok + step.iT - len, step.n.terminator.val, len);
 		step.iN = step.cT;
