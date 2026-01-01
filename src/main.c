@@ -1077,8 +1077,7 @@ typedef union PACKED FrieNode {
 	struct PACKED {
 		u32   val : 8;  // Token Value. 0-6 Special Frie Token. 32-128 ASCII Tokens. >128 Keyword Tokens
 		u32   kind : 8;  // token kindegory
-		u32   len : 6;  // token word length
-		u32   pad : 10; // 10 more bits available
+		u32   pad : 16; // 10 more bits available
 	} terminator;
 	u32 raw; // Must use u32 for everything to ensure union packs to 4 bytes. Differing types makes the compiler add arbitrary packing.
 } FrieNode;
@@ -1344,8 +1343,8 @@ NextNameChar:
 		if (cName == '\0') {
 			CHECKMSG(iNode == iEndNode, RESULT_ORDER_ERROR, "Trying to inset shorter token after longer token! %s %s", def.name, string_TOK(tok));
 			FRIE_LOG("Finish Token i%d end%d len%d %s %s\n", iNode, iEndNode, iName - delim, def.name, string_TOK(tok));
-			pFrie[iNode++] = (FrieNode){ .terminator.val = tok,    .terminator.kind = def.kind, .terminator.len = iName - delim};
-			pFrie[iNode++] = (FrieNode){ .terminator.val = TOK_ERR, .terminator.kind = TOK_KIND_ERROR, .terminator.len = 1 };
+			pFrie[iNode++] = (FrieNode){ .terminator.val = tok,    .terminator.kind = def.kind };
+			pFrie[iNode++] = (FrieNode){ .terminator.val = TOK_ERR, .terminator.kind = TOK_KIND_ERROR };
 			iTok++;	iEndNode = iNode;
 			goto NextTok;
 		}
@@ -1512,7 +1511,7 @@ static RESULT ProcessTrieMeta(CodeBox* pCode)
 #pragma GCC diagnostic ignored "-Woverride-init"
 
 	static void *codeDispatch[TOK_CAPACITY] = {	
-		[TOK_ALL_RANGE]         = &&TOK_ERR,
+		[TOK_ALL_RANGE]     = &&TOK_ERR,
 		[TOK_WHITE_RANGE]   = &&TOK_SPARSE_CHAR,
 		[TOK_ASCII_RANGE]   = &&TOK_SPARSE_CHAR,
 		[TOK_KEYWORD_RANGE] = &&TOK_ALL,
@@ -1684,10 +1683,9 @@ TOK_DELIMIT:
 TOK_ALL:
 	{
 		FRIE_LOG("%s iT:%d iN:%d fill:%d len:%d kind:%s \n", string_TOK(step.nd.terminator.val), step.iT, step.iN, step.iT - step.nd.terminator.len, step.nd.terminator.len, string_TOK_KIND(step.nd.terminator.kind));
-		TextMeta *pMetaStart = pMeta + step.iT - step.nd.terminator.len;
-		for (u8 i = 0; i < step.nd.terminator.len; ++i) { 
-			pMetaStart[i].tok  = step.nd.terminator.val; 
-			pMetaStart[i].kind = step.nd.terminator.kind; 
+		for (int i = step.iTStart; i < step.iT; ++i) { 
+			pMeta[i].tok  = step.nd.terminator.val; 
+			pMeta[i].kind = step.nd.terminator.kind; 
 		}
 		step.iN = step.cT < 0 ? TOK_ERR : step.cT; 
 		step.nd = pFrie[step.iN];
