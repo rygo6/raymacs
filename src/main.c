@@ -514,33 +514,42 @@ STATIC_ASSERT(NARRAY(TOK_CAT_COLOR) == TOK_CAT_COUNT);
 #define TK_CAPACITY 256
 
 #define TK_SECIAL_BEGIN 0
-#define TK_SECIAL_END   5
-#define TK_SECIAL_RANGE TK_SECIAL_BEGIN ... TK_FRIE_SECIAL_END
+#define TK_SECIAL_END   7
+#define TK_SECIAL_RANGE TK_SPECIAL_BEGIN ... TK_SPECIAL_END
 
-#define TK_WHITESPACE_BEGIN 9
-#define TK_WHITESPACE_END   13
-#define TK_WHITE_RANGE TK_WHITESPACE_BEGIN ... TK_WHITESPACE_END
+#define TK_WHITE_BEGIN 9
+#define TK_WHITE_END   13
+#define TK_WHITE_RANGE TK_WHITE_BEGIN ... TK_WHITE_END
 
 #define TK_ASCII_BEGIN 32
-#define TK_ASCII_END   126
+#define TK_ASCII_END   127
 #define TK_ASCII_RANGE TK_ASCII_BEGIN ... TK_ASCII_END
 
+#define TK_VISIBLE_ASCII_BEGIN 33
+#define TK_VISIBLE_ASCII_END   126
+#define TK_VISIBLE_ASCII_RANGE TK_VISIBLE_ASCII_BEGIN ... TK_VISIBLE_ASCII_END
+
 #define TK_KEYWORD_BEGIN 128
-#define TK_KEYWORD_END   255
+#define TK_KEYWORD_END   (TK_CAPACITY - 1)
 #define TK_KEYWORD_RANGE TK_KEYWORD_BEGIN ... TK_KEYWORD_END
 
-#define TK_BEGIN 0
-#define TK_END   TK_KEYWORD_END
-#define TK_RANGE TK_BEGIN ... TK_END
+#define TK_ALL_BEGIN 0
+#define TK_ALL_END   TK_KEYWORD_END
+#define TK_ALL_RANGE TK_ALL_BEGIN ... TK_ALL_END
+
+#define TK_RANGE_NAME "\x06"
+#define TK_DELIM_STR  "\x03"
 
 #define DEF_TK(DEF)\
-    /*Frie Special */\
-    DEF(TK_NONE,         /*NUL*/'\x00')\
-    DEF(TK_SPARSE_CHAR,  /*SOH*/'\x01')\
-    DEF(TK_PACKED_CHAR,  /*STX*/'\x02')\
-	DEF(TK_DELIMIT,      /*ETX*/'\x03')\
-	DEF(TK_MUNCH,        /*EOT*/'\x04')\
-    DEF(TK_ERR,          /*ENQ*/'\x05')\
+    /* Traverse Special */\
+    DEF(TK_NONE,         /*NUL*/'\000')\
+    DEF(TK_SPARSE_CHAR,  /*SOH*/'\001')\
+    DEF(TK_PACKED_CHAR,  /*STX*/'\002')\
+	DEF(TK_DELIMIT,      /*ETX*/'\003')\
+	DEF(TK_MUNCH,        /*EOT*/'\004')\
+    DEF(TK_ERR,          /*ENQ*/'\005')\
+	/* Construct Special */\
+    DEF(TK_RANGE,        /*SUB*/'\006')\
 	/* White Spaces */\
 	DEF(TK_TAB,            /*9*/'\t')\
 	DEF(TK_VERTICAL_TAB,  /*10*/'\v')\
@@ -763,81 +772,16 @@ STATIC_ASSERT(NARRAY(TOK_CAT_COLOR) == TOK_CAT_COUNT);
 DEF_ENUM(TK);
 STATIC_ASSERT(TK_COUNT < TK_CAPACITY, "Not setup to support more than 256 tokens!");
 
-#define DELIM "\x03"
+#define DLM TK_DELIM_STR
 
-#define DEF_TK_BASE(DEF)\
-    /* Whitespace */\
-    DEF("\t", TK_TAB,          TOK_CAT_WHITESPACE)\
-    DEF("\v", TK_VERTICAL_TAB, TOK_CAT_WHITESPACE)\
-    DEF("\n", TK_NEWLINE,      TOK_CAT_WHITESPACE)\
-    DEF("\f", TK_FORM_FEED,    TOK_CAT_WHITESPACE)\
-    DEF("\r", TK_CARR_RETURN,  TOK_CAT_WHITESPACE)\
-    DEF(" ",  TK_SPACE,        TOK_CAT_WHITESPACE)\
-    /* Digit */\
-    DEF("0", TK_0, TOK_CAT_DIGIT)\
-    DEF("1", TK_1, TOK_CAT_DIGIT)\
-    DEF("2", TK_2, TOK_CAT_DIGIT)\
-    DEF("3", TK_3, TOK_CAT_DIGIT)\
-    DEF("4", TK_4, TOK_CAT_DIGIT)\
-    DEF("5", TK_5, TOK_CAT_DIGIT)\
-    DEF("6", TK_6, TOK_CAT_DIGIT)\
-    DEF("7", TK_7, TOK_CAT_DIGIT)\
-    DEF("8", TK_8, TOK_CAT_DIGIT)\
-    DEF("9", TK_9, TOK_CAT_DIGIT)\
-    /* Uppercase Alpha */\
-    DEF("A", TK_A, TOK_CAT_ALPHA)\
-    DEF("B", TK_B, TOK_CAT_ALPHA)\
-    DEF("C", TK_C, TOK_CAT_ALPHA)\
-    DEF("D", TK_D, TOK_CAT_ALPHA)\
-    DEF("E", TK_E, TOK_CAT_ALPHA)\
-    DEF("F", TK_F, TOK_CAT_ALPHA)\
-    DEF("G", TK_G, TOK_CAT_ALPHA)\
-    DEF("H", TK_H, TOK_CAT_ALPHA)\
-    DEF("I", TK_I, TOK_CAT_ALPHA)\
-    DEF("J", TK_J, TOK_CAT_ALPHA)\
-    DEF("K", TK_K, TOK_CAT_ALPHA)\
-    DEF("L", TK_L, TOK_CAT_ALPHA)\
-    DEF("M", TK_M, TOK_CAT_ALPHA)\
-    DEF("N", TK_N, TOK_CAT_ALPHA)\
-    DEF("O", TK_O, TOK_CAT_ALPHA)\
-    DEF("P", TK_P, TOK_CAT_ALPHA)\
-    DEF("Q", TK_Q, TOK_CAT_ALPHA)\
-    DEF("R", TK_R, TOK_CAT_ALPHA)\
-    DEF("S", TK_S, TOK_CAT_ALPHA)\
-    DEF("T", TK_T, TOK_CAT_ALPHA)\
-    DEF("U", TK_U, TOK_CAT_ALPHA)\
-    DEF("V", TK_V, TOK_CAT_ALPHA)\
-    DEF("W", TK_W, TOK_CAT_ALPHA)\
-    DEF("X", TK_X, TOK_CAT_ALPHA)\
-    DEF("Y", TK_Y, TOK_CAT_ALPHA)\
-    DEF("Z", TK_Z, TOK_CAT_ALPHA)\
-    /* Lowercase Alpha */\
-    DEF("a", TK_a, TOK_CAT_ALPHA)\
-    DEF("b", TK_b, TOK_CAT_ALPHA)\
-    DEF("c", TK_c, TOK_CAT_ALPHA)\
-    DEF("d", TK_d, TOK_CAT_ALPHA)\
-    DEF("e", TK_e, TOK_CAT_ALPHA)\
-    DEF("f", TK_f, TOK_CAT_ALPHA)\
-    DEF("g", TK_g, TOK_CAT_ALPHA)\
-    DEF("h", TK_h, TOK_CAT_ALPHA)\
-    DEF("i", TK_i, TOK_CAT_ALPHA)\
-    DEF("j", TK_j, TOK_CAT_ALPHA)\
-    DEF("k", TK_k, TOK_CAT_ALPHA)\
-    DEF("l", TK_l, TOK_CAT_ALPHA)\
-    DEF("m", TK_m, TOK_CAT_ALPHA)\
-    DEF("n", TK_n, TOK_CAT_ALPHA)\
-    DEF("o", TK_o, TOK_CAT_ALPHA)\
-    DEF("p", TK_p, TOK_CAT_ALPHA)\
-    DEF("q", TK_q, TOK_CAT_ALPHA)\
-    DEF("r", TK_r, TOK_CAT_ALPHA)\
-    DEF("s", TK_s, TOK_CAT_ALPHA)\
-    DEF("t", TK_t, TOK_CAT_ALPHA)\
-    DEF("u", TK_u, TOK_CAT_ALPHA)\
-    DEF("v", TK_v, TOK_CAT_ALPHA)\
-    DEF("w", TK_w, TOK_CAT_ALPHA)\
-    DEF("x", TK_x, TOK_CAT_ALPHA)\
-    DEF("y", TK_y, TOK_CAT_ALPHA)\
-    DEF("z", TK_z, TOK_CAT_ALPHA)\
+#define DEF_TK_BASE(DEF, DEF_RANGE)\
+	DEF_RANGE('0' ... '9',  TOK_CAT_DIGIT)\
+	DEF_RANGE('a' ... 'z',  TOK_CAT_ALPHA)\
+	DEF_RANGE('A' ... 'Z',  TOK_CAT_ALPHA)\
+	/* Whitespace */\
+	DEF("\t", TK_TAB,     TOK_CAT_WHITESPACE)\
+	DEF("\n", TK_NEWLINE, TOK_CAT_WHITESPACE)\
+	DEF(" ",  TK_SPACE,   TOK_CAT_WHITESPACE)\
 	/* Other Alpha */\
     DEF("_",  TK_UNDERSCORE, TOK_CAT_ALPHA)\
     DEF("\\", TK_BACKSLASH,  TOK_CAT_ALPHA)\
@@ -894,7 +838,6 @@ STATIC_ASSERT(TK_COUNT < TK_CAPACITY, "Not setup to support more than 256 tokens
     DEF("^=",  TK_XOR_ASSIGN,    TOK_CAT_OPERATOR)\
     DEF("<<=", TK_LSHIFT_ASSIGN, TOK_CAT_OPERATOR)\
     DEF(">>=", TK_RSHIFT_ASSIGN, TOK_CAT_OPERATOR)\
-	DEF("=",   TK_EQ,            TOK_CAT_OPERATOR)\
 	/* Statement */\
     DEF("?",   TK_QUESTION,      TOK_CAT_STATEMENT)\
     DEF(":",   TK_COLON,         TOK_CAT_STATEMENT)\
@@ -903,180 +846,84 @@ STATIC_ASSERT(TK_COUNT < TK_CAPACITY, "Not setup to support more than 256 tokens
 	/* Pre Process */\
 	DEF("#",             TK_HASH,          TOK_CAT_PP)\
 	DEF("##",            TK_HASH_HASH,     TOK_CAT_PP)\
-	DEF("#ifndef"DELIM,  TK_PP_IFNDEF,     TOK_CAT_PP)\
-	DEF("#ifdef"DELIM,   TK_PP_IFDEF,      TOK_CAT_PP)\
-	DEF("#if"DELIM,      TK_PP_IF,         TOK_CAT_PP)\
-	DEF("#elif"DELIM,    TK_PP_ELIF,       TOK_CAT_PP)\
-	DEF("#line"DELIM,    TK_PP_LINE,       TOK_CAT_PP)\
-	DEF("#else"DELIM,    TK_PP_ELSE,       TOK_CAT_PP)\
-	DEF("#error"DELIM,   TK_PP_ERROR,      TOK_CAT_PP)\
-	DEF("#undef"DELIM,   TK_PP_UNDEF,      TOK_CAT_PP)\
-	DEF("#endif"DELIM,   TK_PP_ENDIF,      TOK_CAT_PP)\
-	DEF("#pragma"DELIM,  TK_PP_PRAGMA,     TOK_CAT_PP)\
-	DEF("#define"DELIM,  TK_PP_DEFINE,     TOK_CAT_PP)\
-	DEF("#include"DELIM, TK_PP_INCLUDE,    TOK_CAT_PP)\
+	DEF("#ifndef"DLM,  TK_PP_IFNDEF,     TOK_CAT_PP)\
+	DEF("#ifdef"DLM,   TK_PP_IFDEF,      TOK_CAT_PP)\
+	DEF("#if"DLM,      TK_PP_IF,         TOK_CAT_PP)\
+	DEF("#elif"DLM,    TK_PP_ELIF,       TOK_CAT_PP)\
+	DEF("#line"DLM,    TK_PP_LINE,       TOK_CAT_PP)\
+	DEF("#else"DLM,    TK_PP_ELSE,       TOK_CAT_PP)\
+	DEF("#error"DLM,   TK_PP_ERROR,      TOK_CAT_PP)\
+	DEF("#undef"DLM,   TK_PP_UNDEF,      TOK_CAT_PP)\
+	DEF("#endif"DLM,   TK_PP_ENDIF,      TOK_CAT_PP)\
+	DEF("#pragma"DLM,  TK_PP_PRAGMA,     TOK_CAT_PP)\
+	DEF("#define"DLM,  TK_PP_DEFINE,     TOK_CAT_PP)\
+	DEF("#include"DLM, TK_PP_INCLUDE,    TOK_CAT_PP)\
 	/* Keyword */\
-	DEF("do"DELIM,             TK_DO,            TOK_CAT_KEYWORD)\
-	DEF("if"DELIM,             TK_IF,            TOK_CAT_KEYWORD)\
-	DEF("for"DELIM,            TK_FOR,           TOK_CAT_KEYWORD)\
-	DEF("auto"DELIM,           TK_AUTO,          TOK_CAT_KEYWORD)\
-	DEF("case"DELIM,           TK_CASE,          TOK_CAT_KEYWORD)\
-	DEF("else"DELIM,           TK_ELSE,          TOK_CAT_KEYWORD)\
-	DEF("goto"DELIM,           TK_GOTO,          TOK_CAT_KEYWORD)\
-	DEF("break"DELIM,          TK_BREAK,         TOK_CAT_KEYWORD)\
-	DEF("const"DELIM,          TK_CONST,         TOK_CAT_KEYWORD)\
-	DEF("while"DELIM,          TK_WHILE,         TOK_CAT_KEYWORD)\
-	DEF("typeof"DELIM,         TK_TYPEOF,        TOK_CAT_KEYWORD)\
-	DEF("switch"DELIM,         TK_SWITCH,        TOK_CAT_KEYWORD)\
-	DEF("static"DELIM,         TK_STATIC,        TOK_CAT_KEYWORD)\
-	DEF("inline"DELIM,         TK_INLINE,        TOK_CAT_KEYWORD)\
-	DEF("sizeof"DELIM,         TK_SIZEOF,        TOK_CAT_KEYWORD)\
-	DEF("return"DELIM,         TK_RETURN,        TOK_CAT_KEYWORD)\
-	DEF("extern"DELIM,         TK_EXTERN,        TOK_CAT_KEYWORD)\
-	DEF("typedef"DELIM,        TK_TYPEDEF,       TOK_CAT_KEYWORD)\
-	DEF("default"DELIM,        TK_DEFAULT,       TOK_CAT_KEYWORD)\
-	DEF("_Atomic"DELIM,        TK_ATOMIC,        TOK_CAT_KEYWORD)\
-	DEF("register"DELIM,       TK_REGISTER,      TOK_CAT_KEYWORD)\
-	DEF("volatile"DELIM,       TK_VOLATILE,      TOK_CAT_KEYWORD)\
-	DEF("continue"DELIM,       TK_CONTINUE,      TOK_CAT_KEYWORD)\
-	DEF("restrict"DELIM,       TK_RESTRICT,      TOK_CAT_KEYWORD)\
-	DEF("_Alignas"DELIM,       TK_ALIGNAS,       TOK_CAT_KEYWORD)\
-	DEF("_Alignof"DELIM,       TK_ALIGNOF,       TOK_CAT_KEYWORD)\
-	DEF("_Generic"DELIM,       TK_GENERIC,       TOK_CAT_KEYWORD)\
-	DEF("_Complex"DELIM,       TK_COMPLEX,       TOK_CAT_KEYWORD)\
-	DEF("_Noreturn"DELIM,      TK_NORETURN,      TOK_CAT_KEYWORD)\
-	DEF("_Imaginary"DELIM,     TK_IMAGINARY,     TOK_CAT_KEYWORD)\
-	DEF("_Thread_local"DELIM,  TK_THREAD_LOCAL,  TOK_CAT_KEYWORD)\
-	DEF("_Static_assert"DELIM, TK_STATIC_ASSERT, TOK_CAT_KEYWORD)\
+	DEF("do"DLM,             TK_DO,            TOK_CAT_KEYWORD)\
+	DEF("if"DLM,             TK_IF,            TOK_CAT_KEYWORD)\
+	DEF("for"DLM,            TK_FOR,           TOK_CAT_KEYWORD)\
+	DEF("auto"DLM,           TK_AUTO,          TOK_CAT_KEYWORD)\
+	DEF("case"DLM,           TK_CASE,          TOK_CAT_KEYWORD)\
+	DEF("else"DLM,           TK_ELSE,          TOK_CAT_KEYWORD)\
+	DEF("goto"DLM,           TK_GOTO,          TOK_CAT_KEYWORD)\
+	DEF("break"DLM,          TK_BREAK,         TOK_CAT_KEYWORD)\
+	DEF("const"DLM,          TK_CONST,         TOK_CAT_KEYWORD)\
+	DEF("while"DLM,          TK_WHILE,         TOK_CAT_KEYWORD)\
+	DEF("typeof"DLM,         TK_TYPEOF,        TOK_CAT_KEYWORD)\
+	DEF("switch"DLM,         TK_SWITCH,        TOK_CAT_KEYWORD)\
+	DEF("static"DLM,         TK_STATIC,        TOK_CAT_KEYWORD)\
+	DEF("inline"DLM,         TK_INLINE,        TOK_CAT_KEYWORD)\
+	DEF("sizeof"DLM,         TK_SIZEOF,        TOK_CAT_KEYWORD)\
+	DEF("return"DLM,         TK_RETURN,        TOK_CAT_KEYWORD)\
+	DEF("extern"DLM,         TK_EXTERN,        TOK_CAT_KEYWORD)\
+	DEF("typedef"DLM,        TK_TYPEDEF,       TOK_CAT_KEYWORD)\
+	DEF("default"DLM,        TK_DEFAULT,       TOK_CAT_KEYWORD)\
+	DEF("_Atomic"DLM,        TK_ATOMIC,        TOK_CAT_KEYWORD)\
+	DEF("register"DLM,       TK_REGISTER,      TOK_CAT_KEYWORD)\
+	DEF("volatile"DLM,       TK_VOLATILE,      TOK_CAT_KEYWORD)\
+	DEF("continue"DLM,       TK_CONTINUE,      TOK_CAT_KEYWORD)\
+	DEF("restrict"DLM,       TK_RESTRICT,      TOK_CAT_KEYWORD)\
+	DEF("_Alignas"DLM,       TK_ALIGNAS,       TOK_CAT_KEYWORD)\
+	DEF("_Alignof"DLM,       TK_ALIGNOF,       TOK_CAT_KEYWORD)\
+	DEF("_Generic"DLM,       TK_GENERIC,       TOK_CAT_KEYWORD)\
+	DEF("_Complex"DLM,       TK_COMPLEX,       TOK_CAT_KEYWORD)\
+	DEF("_Noreturn"DLM,      TK_NORETURN,      TOK_CAT_KEYWORD)\
+	DEF("_Imaginary"DLM,     TK_IMAGINARY,     TOK_CAT_KEYWORD)\
+	DEF("_Thread_local"DLM,  TK_THREAD_LOCAL,  TOK_CAT_KEYWORD)\
+	DEF("_Static_assert"DLM, TK_STATIC_ASSERT, TOK_CAT_KEYWORD)\
 	/* Type */\
-	DEF("int"DELIM,       TK_INT,           TOK_CAT_TYPE)\
-	DEF("enum"DELIM,      TK_ENUM,          TOK_CAT_TYPE)\
-	DEF("char"DELIM,      TK_CHAR,          TOK_CAT_TYPE)\
-	DEF("long"DELIM,      TK_LONG,          TOK_CAT_TYPE)\
-	DEF("void"DELIM,      TK_VOID,          TOK_CAT_TYPE)\
-	DEF("bool"DELIM,      TK_BOOL,          TOK_CAT_TYPE)\
-	DEF("union"DELIM,     TK_UNION,         TOK_CAT_TYPE)\
-	DEF("float"DELIM,     TK_FLOAT,         TOK_CAT_TYPE)\
-	DEF("short"DELIM,     TK_SHORT,         TOK_CAT_TYPE)\
-	DEF("_Bool"DELIM,     TK_BOOL,          TOK_CAT_TYPE)\
-	DEF("signed"DELIM,    TK_SIGNED,        TOK_CAT_TYPE)\
-	DEF("struct"DELIM,    TK_STRUCT,        TOK_CAT_TYPE)\
-	DEF("double"DELIM,    TK_DOUBLE,        TOK_CAT_TYPE)\
-	DEF("size_t"DELIM,    TK_SIZE_T,        TOK_CAT_TYPE)\
-	DEF("int8_t"DELIM,    TK_INT8_T,        TOK_CAT_TYPE)\
-	DEF("uint8_t"DELIM,   TK_UINT8_T,       TOK_CAT_TYPE)\
-	DEF("wchar_t"DELIM,   TK_WCHAR_T,       TOK_CAT_TYPE)\
-	DEF("int16_t"DELIM,   TK_INT16_T,       TOK_CAT_TYPE)\
-	DEF("int32_t"DELIM,   TK_INT32_T,       TOK_CAT_TYPE)\
-	DEF("int64_t"DELIM,   TK_INT64_T,       TOK_CAT_TYPE)\
-	DEF("uint16_t"DELIM,  TK_UINT16_T,      TOK_CAT_TYPE)\
-	DEF("uint32_t"DELIM,  TK_UINT32_T,      TOK_CAT_TYPE)\
-	DEF("unsigned"DELIM,  TK_UNSIGNED,      TOK_CAT_TYPE)\
-	DEF("uint64_t"DELIM,  TK_UINT64_T,      TOK_CAT_TYPE)\
-	DEF("ptrdiff_t"DELIM, TK_PTRDIFF_T,     TOK_CAT_TYPE)
+	DEF("int"DLM,       TK_INT,           TOK_CAT_TYPE)\
+	DEF("enum"DLM,      TK_ENUM,          TOK_CAT_TYPE)\
+	DEF("char"DLM,      TK_CHAR,          TOK_CAT_TYPE)\
+	DEF("long"DLM,      TK_LONG,          TOK_CAT_TYPE)\
+	DEF("void"DLM,      TK_VOID,          TOK_CAT_TYPE)\
+	DEF("bool"DLM,      TK_BOOL,          TOK_CAT_TYPE)\
+	DEF("union"DLM,     TK_UNION,         TOK_CAT_TYPE)\
+	DEF("float"DLM,     TK_FLOAT,         TOK_CAT_TYPE)\
+	DEF("short"DLM,     TK_SHORT,         TOK_CAT_TYPE)\
+	DEF("_Bool"DLM,     TK_BOOL,          TOK_CAT_TYPE)\
+	DEF("signed"DLM,    TK_SIGNED,        TOK_CAT_TYPE)\
+	DEF("struct"DLM,    TK_STRUCT,        TOK_CAT_TYPE)\
+	DEF("double"DLM,    TK_DOUBLE,        TOK_CAT_TYPE)\
+	DEF("size_t"DLM,    TK_SIZE_T,        TOK_CAT_TYPE)\
+	DEF("int8_t"DLM,    TK_INT8_T,        TOK_CAT_TYPE)\
+	DEF("uint8_t"DLM,   TK_UINT8_T,       TOK_CAT_TYPE)\
+	DEF("wchar_t"DLM,   TK_WCHAR_T,       TOK_CAT_TYPE)\
+	DEF("int16_t"DLM,   TK_INT16_T,       TOK_CAT_TYPE)\
+	DEF("int32_t"DLM,   TK_INT32_T,       TOK_CAT_TYPE)\
+	DEF("int64_t"DLM,   TK_INT64_T,       TOK_CAT_TYPE)\
+	DEF("uint16_t"DLM,  TK_UINT16_T,      TOK_CAT_TYPE)\
+	DEF("uint32_t"DLM,  TK_UINT32_T,      TOK_CAT_TYPE)\
+	DEF("unsigned"DLM,  TK_UNSIGNED,      TOK_CAT_TYPE)\
+	DEF("uint64_t"DLM,  TK_UINT64_T,      TOK_CAT_TYPE)\
+	DEF("ptrdiff_t"DLM, TK_PTRDIFF_T,     TOK_CAT_TYPE)
 
-#define DEF_TK_QUOTE(DEF)\
-    /* Whitespace */\
-    DEF("\t", TK_TAB,          TOK_CAT_WHITESPACE)\
-    DEF("\v", TK_VERTICAL_TAB, TOK_CAT_WHITESPACE)\
-    DEF("\n", TK_NEWLINE,      TOK_CAT_WHITESPACE)\
-    DEF("\f", TK_FORM_FEED,    TOK_CAT_WHITESPACE)\
-    DEF("\r", TK_CARR_RETURN,  TOK_CAT_WHITESPACE)\
-    DEF(" ",  TK_SPACE,        TOK_CAT_WHITESPACE)\
-    /* Digit */\
-    DEF("0", TK_0, TOK_CAT_TEXT)\
-    DEF("1", TK_1, TOK_CAT_TEXT)\
-    DEF("2", TK_2, TOK_CAT_TEXT)\
-    DEF("3", TK_3, TOK_CAT_TEXT)\
-    DEF("4", TK_4, TOK_CAT_TEXT)\
-    DEF("5", TK_5, TOK_CAT_TEXT)\
-    DEF("6", TK_6, TOK_CAT_TEXT)\
-    DEF("7", TK_7, TOK_CAT_TEXT)\
-    DEF("8", TK_8, TOK_CAT_TEXT)\
-    DEF("9", TK_9, TOK_CAT_TEXT)\
-    /* Uppercase Alpha */\
-    DEF("A", TK_A, TOK_CAT_TEXT)\
-    DEF("B", TK_B, TOK_CAT_TEXT)\
-    DEF("C", TK_C, TOK_CAT_TEXT)\
-    DEF("D", TK_D, TOK_CAT_TEXT)\
-    DEF("E", TK_E, TOK_CAT_TEXT)\
-    DEF("F", TK_F, TOK_CAT_TEXT)\
-    DEF("G", TK_G, TOK_CAT_TEXT)\
-    DEF("H", TK_H, TOK_CAT_TEXT)\
-    DEF("I", TK_I, TOK_CAT_TEXT)\
-    DEF("J", TK_J, TOK_CAT_TEXT)\
-    DEF("K", TK_K, TOK_CAT_TEXT)\
-    DEF("L", TK_L, TOK_CAT_TEXT)\
-    DEF("M", TK_M, TOK_CAT_TEXT)\
-    DEF("N", TK_N, TOK_CAT_TEXT)\
-    DEF("O", TK_O, TOK_CAT_TEXT)\
-    DEF("P", TK_P, TOK_CAT_TEXT)\
-    DEF("Q", TK_Q, TOK_CAT_TEXT)\
-    DEF("R", TK_R, TOK_CAT_TEXT)\
-    DEF("S", TK_S, TOK_CAT_TEXT)\
-    DEF("T", TK_T, TOK_CAT_TEXT)\
-    DEF("U", TK_U, TOK_CAT_TEXT)\
-    DEF("V", TK_V, TOK_CAT_TEXT)\
-    DEF("W", TK_W, TOK_CAT_TEXT)\
-    DEF("X", TK_X, TOK_CAT_TEXT)\
-    DEF("Y", TK_Y, TOK_CAT_TEXT)\
-    DEF("Z", TK_Z, TOK_CAT_TEXT)\
-    /* Lowercase Alpha */\
-    DEF("a", TK_a, TOK_CAT_TEXT)\
-    DEF("b", TK_b, TOK_CAT_TEXT)\
-    DEF("c", TK_c, TOK_CAT_TEXT)\
-    DEF("d", TK_d, TOK_CAT_TEXT)\
-    DEF("e", TK_e, TOK_CAT_TEXT)\
-    DEF("f", TK_f, TOK_CAT_TEXT)\
-    DEF("g", TK_g, TOK_CAT_TEXT)\
-    DEF("h", TK_h, TOK_CAT_TEXT)\
-    DEF("i", TK_i, TOK_CAT_TEXT)\
-    DEF("j", TK_j, TOK_CAT_TEXT)\
-    DEF("k", TK_k, TOK_CAT_TEXT)\
-    DEF("l", TK_l, TOK_CAT_TEXT)\
-    DEF("m", TK_m, TOK_CAT_TEXT)\
-    DEF("n", TK_n, TOK_CAT_TEXT)\
-    DEF("o", TK_o, TOK_CAT_TEXT)\
-    DEF("p", TK_p, TOK_CAT_TEXT)\
-    DEF("q", TK_q, TOK_CAT_TEXT)\
-    DEF("r", TK_r, TOK_CAT_TEXT)\
-    DEF("s", TK_s, TOK_CAT_TEXT)\
-    DEF("t", TK_t, TOK_CAT_TEXT)\
-    DEF("u", TK_u, TOK_CAT_TEXT)\
-    DEF("v", TK_v, TOK_CAT_TEXT)\
-    DEF("w", TK_w, TOK_CAT_TEXT)\
-    DEF("x", TK_x, TOK_CAT_TEXT)\
-    DEF("y", TK_y, TOK_CAT_TEXT)\
-    DEF("z", TK_z, TOK_CAT_TEXT)\
-	/* Other Alpha */\
-	DEF("~",         TK_TILDE,     TOK_CAT_TEXT)\
-    DEF("{",         TK_LBRACE,    TOK_CAT_TEXT)\
-    DEF("}",         TK_RBRACE,    TOK_CAT_TEXT)\
-    DEF("!" /*33*/,  TK_BANG,      TOK_CAT_TEXT)\
-    DEF("#" /*35*/,  TK_HASH,      TOK_CAT_TEXT)\
-    DEF("$" /*36*/,  TK_DOLLAR,    TOK_CAT_TEXT)\
-    DEF("%" /*37*/,  TK_PERCENT,   TOK_CAT_TEXT)\
-    DEF("&" /*38*/,  TK_AMP,       TOK_CAT_TEXT)\
-    DEF("(" /*40*/,  TK_LPAREN,    TOK_CAT_TEXT)\
-    DEF(")" /*41*/,  TK_RPAREN,    TOK_CAT_TEXT)\
-    DEF("*" /*42*/,  TK_STAR,      TOK_CAT_TEXT)\
-    DEF("+" /*43*/,  TK_PLUS,      TOK_CAT_TEXT)\
-    DEF("," /*44*/,  TK_COMMA,     TOK_CAT_TEXT)\
-    DEF("-" /*45*/,  TK_MINUS,     TOK_CAT_TEXT)\
-    DEF("." /*46*/,  TK_DOT,       TOK_CAT_TEXT)\
-    DEF("/" /*47*/,  TK_SLASH,     TOK_CAT_TEXT)\
-    DEF(":" /*58*/,  TK_COLON,     TOK_CAT_TEXT)\
-    DEF(";" /*59*/,  TK_SEMICOLON, TOK_CAT_TEXT)\
-    DEF("<" /*60*/,  TK_LT,        TOK_CAT_TEXT)\
-    DEF("=" /*61*/,  TK_EQ,        TOK_CAT_TEXT)\
-    DEF(">" /*62*/,  TK_GT,        TOK_CAT_TEXT)\
-    DEF("?" /*63*/,  TK_QUESTION,  TOK_CAT_TEXT)\
-    DEF("@" /*64*/,  TK_AT,        TOK_CAT_TEXT)\
-    DEF("[" /*91*/,  TK_LBRACKET,  TOK_CAT_TEXT)\
-    DEF("]" /*93*/,  TK_RBRACKET,  TOK_CAT_TEXT)\
-    DEF("^" /*94*/,  TK_CARET,     TOK_CAT_TEXT)\
-    DEF("_" /*95*/,  TK_UNDERSCORE,TOK_CAT_TEXT)\
-	DEF("|",         TK_PIPE,      TOK_CAT_TEXT)\
+#define DEF_TK_QUOTE(DEF, DEF_RANGE)\
+	DEF_RANGE(TK_ASCII_RANGE,  TOK_CAT_TEXT)\
+	/* Whitespace */\
+	DEF("\t", TK_TAB,          TOK_CAT_WHITESPACE)\
+	DEF("\n", TK_NEWLINE,      TOK_CAT_WHITESPACE)\
+	DEF(" ",  TK_SPACE,        TOK_CAT_WHITESPACE)\
 	/* Quote */\
 	DEF("\"",  TK_DQUOTE,   TOK_CAT_QUOTE)\
 	DEF("\'",  TK_SQUOTE,   TOK_CAT_QUOTE)\
@@ -1113,134 +960,38 @@ STATIC_ASSERT(TK_COUNT < TK_CAPACITY, "Not setup to support more than 256 tokens
     DEF("\\7",         TK_ESC_OCT,      TOK_CAT_ESCAPE)\
 	*/
 
-#define DEF_TK_COMMENT(DEF)\
-    /* Whitespace */\
-    DEF("\t", TK_TAB,          TOK_CAT_WHITESPACE)\
-    DEF("\v", TK_VERTICAL_TAB, TOK_CAT_WHITESPACE)\
-    DEF("\n", TK_NEWLINE,      TOK_CAT_WHITESPACE)\
-    DEF("\f", TK_FORM_FEED,    TOK_CAT_WHITESPACE)\
-    DEF("\r", TK_CARR_RETURN,  TOK_CAT_WHITESPACE)\
-    DEF(" ",  TK_SPACE,        TOK_CAT_WHITESPACE)\
+#define DEF_TK_COMMENT(DEF, DEF_RANGE)\
+	DEF_RANGE(TK_ASCII_RANGE,  TOK_CAT_COMMENT)\
+	/* Whitespace */\
+	DEF("\t", TK_TAB,          TOK_CAT_WHITESPACE)\
+	DEF("\n", TK_NEWLINE,      TOK_CAT_WHITESPACE)\
+	DEF(" ",  TK_SPACE,        TOK_CAT_WHITESPACE)\
 	/* Comment */\
-	DEF("*/", TK_RCOMMENT, TOK_CAT_COMMENT)\
-    /* Digit */\
-    DEF("0", TK_0, TOK_CAT_COMMENT)\
-    DEF("1", TK_1, TOK_CAT_COMMENT)\
-    DEF("2", TK_2, TOK_CAT_COMMENT)\
-    DEF("3", TK_3, TOK_CAT_COMMENT)\
-    DEF("4", TK_4, TOK_CAT_COMMENT)\
-    DEF("5", TK_5, TOK_CAT_COMMENT)\
-    DEF("6", TK_6, TOK_CAT_COMMENT)\
-    DEF("7", TK_7, TOK_CAT_COMMENT)\
-    DEF("8", TK_8, TOK_CAT_COMMENT)\
-    DEF("9", TK_9, TOK_CAT_COMMENT)\
-    /* Uppercase Alpha */\
-    DEF("A", TK_A, TOK_CAT_COMMENT)\
-    DEF("B", TK_B, TOK_CAT_COMMENT)\
-    DEF("C", TK_C, TOK_CAT_COMMENT)\
-    DEF("D", TK_D, TOK_CAT_COMMENT)\
-    DEF("E", TK_E, TOK_CAT_COMMENT)\
-    DEF("F", TK_F, TOK_CAT_COMMENT)\
-    DEF("G", TK_G, TOK_CAT_COMMENT)\
-    DEF("H", TK_H, TOK_CAT_COMMENT)\
-    DEF("I", TK_I, TOK_CAT_COMMENT)\
-    DEF("J", TK_J, TOK_CAT_COMMENT)\
-    DEF("K", TK_K, TOK_CAT_COMMENT)\
-    DEF("L", TK_L, TOK_CAT_COMMENT)\
-    DEF("M", TK_M, TOK_CAT_COMMENT)\
-    DEF("N", TK_N, TOK_CAT_COMMENT)\
-    DEF("O", TK_O, TOK_CAT_COMMENT)\
-    DEF("P", TK_P, TOK_CAT_COMMENT)\
-    DEF("Q", TK_Q, TOK_CAT_COMMENT)\
-    DEF("R", TK_R, TOK_CAT_COMMENT)\
-    DEF("S", TK_S, TOK_CAT_COMMENT)\
-    DEF("T", TK_T, TOK_CAT_COMMENT)\
-    DEF("U", TK_U, TOK_CAT_COMMENT)\
-    DEF("V", TK_V, TOK_CAT_COMMENT)\
-    DEF("W", TK_W, TOK_CAT_COMMENT)\
-    DEF("X", TK_X, TOK_CAT_COMMENT)\
-    DEF("Y", TK_Y, TOK_CAT_COMMENT)\
-    DEF("Z", TK_Z, TOK_CAT_COMMENT)\
-    /* Lowercase Alpha */\
-    DEF("a", TK_a, TOK_CAT_COMMENT)\
-    DEF("b", TK_b, TOK_CAT_COMMENT)\
-    DEF("c", TK_c, TOK_CAT_COMMENT)\
-    DEF("d", TK_d, TOK_CAT_COMMENT)\
-    DEF("e", TK_e, TOK_CAT_COMMENT)\
-    DEF("f", TK_f, TOK_CAT_COMMENT)\
-    DEF("g", TK_g, TOK_CAT_COMMENT)\
-    DEF("h", TK_h, TOK_CAT_COMMENT)\
-    DEF("i", TK_i, TOK_CAT_COMMENT)\
-    DEF("j", TK_j, TOK_CAT_COMMENT)\
-    DEF("k", TK_k, TOK_CAT_COMMENT)\
-    DEF("l", TK_l, TOK_CAT_COMMENT)\
-    DEF("m", TK_m, TOK_CAT_COMMENT)\
-    DEF("n", TK_n, TOK_CAT_COMMENT)\
-    DEF("o", TK_o, TOK_CAT_COMMENT)\
-    DEF("p", TK_p, TOK_CAT_COMMENT)\
-    DEF("q", TK_q, TOK_CAT_COMMENT)\
-    DEF("r", TK_r, TOK_CAT_COMMENT)\
-    DEF("s", TK_s, TOK_CAT_COMMENT)\
-    DEF("t", TK_t, TOK_CAT_COMMENT)\
-    DEF("u", TK_u, TOK_CAT_COMMENT)\
-    DEF("v", TK_v, TOK_CAT_COMMENT)\
-    DEF("w", TK_w, TOK_CAT_COMMENT)\
-    DEF("x", TK_x, TOK_CAT_COMMENT)\
-    DEF("y", TK_y, TOK_CAT_COMMENT)\
-    DEF("z", TK_z, TOK_CAT_COMMENT)\
-    /* Other Alpha */\
-    DEF("{",         TK_LBRACE,    TOK_CAT_COMMENT)\
-    DEF("}",         TK_RBRACE,    TOK_CAT_COMMENT)\
-    DEF("!" /*33*/,  TK_BANG,      TOK_CAT_COMMENT)\
-    DEF("\""/*34*/,  TK_DQUOTE,    TOK_CAT_COMMENT)\
-    DEF("#" /*35*/,  TK_HASH,      TOK_CAT_COMMENT)\
-    DEF("$" /*36*/,  TK_DOLLAR,    TOK_CAT_COMMENT)\
-    DEF("%" /*37*/,  TK_PERCENT,   TOK_CAT_COMMENT)\
-    DEF("&" /*38*/,  TK_AMP,       TOK_CAT_COMMENT)\
-    DEF("\'"/*39*/,  TK_SQUOTE,    TOK_CAT_COMMENT)\
-    DEF("(" /*40*/,  TK_LPAREN,    TOK_CAT_COMMENT)\
-    DEF(")" /*41*/,  TK_RPAREN,    TOK_CAT_COMMENT)\
-    DEF("*" /*42*/,  TK_STAR,      TOK_CAT_COMMENT)\
-    DEF("+" /*43*/,  TK_PLUS,      TOK_CAT_COMMENT)\
-    DEF("," /*44*/,  TK_COMMA,     TOK_CAT_COMMENT)\
-    DEF("-" /*45*/,  TK_MINUS,     TOK_CAT_COMMENT)\
-    DEF("." /*46*/,  TK_DOT,       TOK_CAT_COMMENT)\
-    DEF("/" /*47*/,  TK_SLASH,     TOK_CAT_COMMENT)\
-    DEF(":" /*58*/,  TK_COLON,     TOK_CAT_COMMENT)\
-    DEF(";" /*59*/,  TK_SEMICOLON, TOK_CAT_COMMENT)\
-    DEF("<" /*60*/,  TK_LT,        TOK_CAT_COMMENT)\
-    DEF("=" /*61*/,  TK_EQ,        TOK_CAT_COMMENT)\
-    DEF(">" /*62*/,  TK_GT,        TOK_CAT_COMMENT)\
-    DEF("?" /*63*/,  TK_QUESTION,  TOK_CAT_COMMENT)\
-    DEF("@" /*64*/,  TK_AT,        TOK_CAT_COMMENT)\
-    DEF("[" /*91*/,  TK_LBRACKET,  TOK_CAT_COMMENT)\
-    DEF("]" /*93*/,  TK_RBRACKET,  TOK_CAT_COMMENT)\
-    DEF("^" /*94*/,  TK_CARET,     TOK_CAT_COMMENT)\
-    DEF("_" /*95*/,  TK_UNDERSCORE,TOK_CAT_COMMENT)\
-    DEF("`" /*96*/,  TK_BACKTICK,  TOK_CAT_COMMENT)\
-	DEF("|",         TK_PIPE,      TOK_CAT_COMMENT)\
-	DEF("\\"/*92*/,  TK_BACKSLASH, TOK_CAT_COMMENT)
+	DEF("*/", TK_RCOMMENT,     TOK_CAT_COMMENT)
 
 typedef struct TokDef {
-	const char* name;
-	int len;
-	int tok;
-	int cat;
+	char* name;
+	u16 cat;
 } TokDef;
 
 #define STR_LEN(_str) (sizeof(_str) - 1)
-#define DEF_TOK_DEFINITION_ITEM(_name, _tok, _cat) (TokDef){ _name, (int)STR_LEN(_name), (int)_tok, (int)_cat },
+#define DEF_TOK_DEF_ITEM(_name, _tok, _cat)  [_tok]   = (TokDef){ _name,         _cat },
+#define DEF_TOK_RANGE_DEF_ITEM(_range, _cat) [_range] = (TokDef){ TK_RANGE_NAME, _cat },
 
-static const TokDef TK_BASE_DEFINITIONS[]    = { DEF_TK_BASE(DEF_TOK_DEFINITION_ITEM)    };
-static const TokDef TK_QUOTE_DEFINITIONS[]   = { DEF_TK_QUOTE(DEF_TOK_DEFINITION_ITEM)   };
-static const TokDef TK_COMMENT_DEFINITIONS[] = { DEF_TK_COMMENT(DEF_TOK_DEFINITION_ITEM) };
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Woverride-init"
 
+static const TokDef TK_BASE_DEFINITIONS[]    = { DEF_TK_BASE(DEF_TOK_DEF_ITEM,    DEF_TOK_RANGE_DEF_ITEM) };
+static const TokDef TK_QUOTE_DEFINITIONS[]   = { DEF_TK_QUOTE(DEF_TOK_DEF_ITEM,   DEF_TOK_RANGE_DEF_ITEM) };
+static const TokDef TK_COMMENT_DEFINITIONS[] = { DEF_TK_COMMENT(DEF_TOK_DEF_ITEM, DEF_TOK_RANGE_DEF_ITEM) };
+
+#pragma GCC diagnostic pop
 
 /*
 	We will have Sparse Trie and Packed Trie
 	at a certain point it can switch past a certain density
 	that density should probably had to do with scan time
-	will have to test to compare
+	will have to test to compareww
 
 	Traverse
 	Store index of first fail.
@@ -1356,12 +1107,12 @@ static void FrieLog(FrieNode* trie)
 
 static TK FrieGet(const char *pText, FrieNode *pFrie) 
 {
-	LOG("Checking Frie for %s\n", pText);
+	FRIE_LOG("Checking Frie for %s\n", pText);
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Woverride-init"
 	static void *codeDispatch[TK_CAPACITY] = {	
-		[TK_RANGE]         = &&TK_ERR,
+		[TK_ALL_RANGE]         = &&TK_ERR,
 		[TK_ERR]           = &&TK_ERR,
 		[TK_DELIMIT]       = &&TK_DELIMIT,
 		[TK_PACKED_CHAR]   = &&TK_PACKED_CHAR,
@@ -1427,13 +1178,26 @@ TK_DELIMIT:
 
 TK_ALL:
 	step.tk = step.nd.terminator.val; // Store last valid token
-	LOG("Token found %d %s\n", step.tk, string_TK(step.tk));
+	FRIE_LOG("Token found %d %s\n", step.tk, string_TK(step.tk));
 	return step.tk;
 
 TK_ERR:
 TK_NONE:
-	LOG("No token found! %d %s\n", step.tk, string_TK(step.tk));
+	FRIE_LOG("No token found! %d %s\n", step.tk, string_TK(step.tk));
 	return step.tk;
+}
+
+static void FrieValidate(int tokCount, const TokDef* tokDefs, FrieNode* pFrie) 
+{
+		char sparseCharBuf[2] = { '\0', '\0' };
+	for (int iTok = TK_SECIAL_END; iTok < tokCount; ++iTok) {
+		TokDef def = tokDefs[iTok];
+		if (def.name == NULL) continue;
+		if (def.name[0] == TK_RANGE) {	def.name = sparseCharBuf; def.name[0] = iTok; }
+		TK tok = FrieGet(def.name, pFrie);
+		LOG("%d:%s expected:%d:%s\n", tok, string_TK(tok), iTok, string_TK(iTok));
+		MUST(tok == iTok);
+	}
 }
 
 /* Shift all frie nodes right by 1 updating all offsets. */
@@ -1472,22 +1236,25 @@ static RESULT ConstructFrie(int tokCount, const TokDef* tokDefs, int frieCapacit
 {
 	CHECK(frieCapacity > 256, RESULT_CAPACITY_ERROR);
 	ZERO_RANGE(pFrie, frieCapacity);
-
+	
 	int iTok = 0;
 	int iEndNode = TK_KEYWORD_BEGIN;
+	char sparseCharBuf[2] = { '\0', '\0' };
 
 NextTok: 
 	if (iTok == tokCount) goto RESULT_SUCCESS;
 	TokDef def = tokDefs[iTok];
-	int iNode = 0; int iName = 0; int iNodeFirstFail = TK_KEYWORD_BEGIN; int iNodeFirstJump = 0; 
-	bool delim = def.name[def.len-1] == TK_DELIMIT;
+	if (def.name == NULL) {	iTok++; goto NextTok; }
+	if (def.name[0] == TK_RANGE) {	def.name = sparseCharBuf; def.name[0] = iTok; }
+	int len = strlen(def.name); bool delim = def.name[len-1] == TK_DELIMIT;
+	int iNode = 0; int iName = 0; int iNodeFirstFail = TK_KEYWORD_BEGIN;
+	TK tok = iTok; 
 
 NextNameChar: 
 	char cName = def.name[iName];
 	if (cName == '\0' && iName == 0) {
 		LOG_WARN("Trying to add empty token!\n");
-		iTok++; 
-		goto NextTok;
+		iTok++; goto NextTok;
 	}
 	char cNameNext= def.name[iName+1];
 
@@ -1499,7 +1266,7 @@ NextNameChar:
 		if (cNameNext == '\0') {
 			FRIE_LOG("One Char Token i%d %c end%d %s\n", (u8)cName, cName, iEndNode, def.name);
 			pNode->sparse.cat = def.cat;
-			CHECKMSG(pNode->sparse.stok != TK_SPARSE_CHAR, RESULT_DUPLICATE_ERROR, "Trying to insert single char token twice! %s %s %s", def.name, string_CHAR(cName), string_TK(def.tok));
+			CHECKMSG(pNode->sparse.stok != TK_SPARSE_CHAR, RESULT_DUPLICATE_ERROR, "Trying to insert single char token twice! %s %s %s", def.name, string_CHAR(cName), string_TK(tok));
 			// If token is already jumping to packed char then a longer token has been set
 			if (pNode->sparse.stok != TK_PACKED_CHAR) pNode->sparse.stok = TK_SPARSE_CHAR;
 			iTok++; 
@@ -1569,10 +1336,10 @@ NextNameChar:
 
 		// End of Token Name. Write token go to next token!
 		if (cName == '\0') {
-			CHECKMSG(iNode == iEndNode, RESULT_ORDER_ERROR, "Trying to inset shorter token after longer token! %s %s", def.name, string_TK(def.tok));
-			FRIE_LOG("Finish Token i%d end%d len%d %s %s\n", iNode, iEndNode, iName - delim, def.name, string_TK(def.tok));
-			pFrie[iNode++] = (FrieNode){ .terminator.val = def.tok, .terminator.cat = def.cat, .terminator.len = iName - delim};
-			pFrie[iNode++] = (FrieNode){ .terminator.val = TK_ERR,  .terminator.cat = TOK_CAT_ERROR, .terminator.len = 1 };
+			CHECKMSG(iNode == iEndNode, RESULT_ORDER_ERROR, "Trying to inset shorter token after longer token! %s %s", def.name, string_TK(tok));
+			FRIE_LOG("Finish Token i%d end%d len%d %s %s\n", iNode, iEndNode, iName - delim, def.name, string_TK(tok));
+			pFrie[iNode++] = (FrieNode){ .terminator.val = tok,    .terminator.cat = def.cat, .terminator.len = iName - delim};
+			pFrie[iNode++] = (FrieNode){ .terminator.val = TK_ERR, .terminator.cat = TOK_CAT_ERROR, .terminator.len = 1 };
 			iTok++;	iEndNode = iNode;
 			goto NextTok;
 		}
@@ -1594,7 +1361,7 @@ NextNameChar:
 		}
 
 		{
-			u16 fail = (def.len + 1) - iName - delim; // +1 as err comes after tok
+			u16 fail = (len + 1) - iName - delim; // +1 as err comes after tok
 			CHECKMSG(fail < TRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "fail offset:%d", fail);
 			FRIE_LOG("Add Char iT:%d iN:%d fail:%d end:%d delim%d len:%d %s %c\n", iNode, iName, fail, iEndNode, delim, def.len, def.name, cName);
 			pFrie[iNode] = (FrieNode){ 
@@ -1629,11 +1396,7 @@ RESULT_OFFSET_ERROR:
 
 RESULT_SUCCESS:
 	FrieLog(pFrie);
-	for (int i = 0; i < tokCount; ++i) {
-		TK tk = FrieGet(tokDefs[i].name, pFrie);
-		LOG("%s expected:%s\n", string_TK(tk), string_TK(tokDefs[i].tok));
-		MUST(tk == tokDefs[i].tok);
-	}
+	FrieValidate(tokCount, tokDefs, pFrie);
 	return RESULT_SUCCESS;
 }
 
@@ -1755,7 +1518,7 @@ static RESULT ProcessTrieMeta(CodeBox* pCode)
 #pragma GCC diagnostic ignored "-Woverride-init"
 
 	static void *codeDispatch[TK_CAPACITY] = {	
-		[TK_RANGE]         = &&TK_ERR,
+		[TK_ALL_RANGE]         = &&TK_ERR,
 		[TK_WHITE_RANGE]   = &&TK_SPARSE_CHAR,
 		[TK_ASCII_RANGE]   = &&TK_SPARSE_CHAR,
 		[TK_KEYWORD_RANGE] = &&TK_ALL,
