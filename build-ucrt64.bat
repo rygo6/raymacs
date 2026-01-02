@@ -9,4 +9,6 @@ if exist bin\rayDE.exe del bin\rayDE.exe
 
 gcc -o bin/rayDE.exe src/main.c -g -std=gnu11 -I"%RAYLIB_PATH%/src" -L"%RAYLIB_PATH%/src" -march=native -mtune=native -lraylib -lopengl32 -lgdi32 -lwinmm -Wall -Wextra -Werror -Wshadow -Wformat=2 -Wno-unused-variable -Wno-unused-function -Wno-unused-label -Wno-unused-but-set-variable
 
+@echo Success!
+
 bin\rayDE.exe

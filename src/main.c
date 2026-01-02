@@ -1,10 +1,9 @@
-//0123456789
-
-/* 
- * Test
- */
 #ifdef A
 #endif
+
+inline double Test1() { return 0; }
+static char Test0() { return '0'; }
+
 
 double T() {
 	char *str = "Hello\n\x01!\\";
@@ -16,6 +15,8 @@ double T() {
 	a0--;
 	return 0;
 }
+
+//0123456789
 
 #define CONCAT(_a, _b, define) hello _a## _b # _a  #_a #define \
  hello
@@ -32,6 +33,10 @@ static double Test(int input) {
 		vala>>=vala;
 	return output;
 }
+
+/* 
+ * Test
+ */
 
 #define HELLO { \
 	int o = 1; \
@@ -451,6 +456,7 @@ DEF_ENUM(SCOPE);
 #define COLOR_BACKGROUND  (Color){  48,  56,  65, 255 } 
 
 #define COLOR_HIGHLIGHT_CODE        (Color){ 216, 222, 233, 255 }
+#define COLOR_HIGHLIGHT_IDENTIFIER  (Color){  89, 180, 167, 255 }
 #define COLOR_HIGHLIGHT_ERROR       (Color){ 255,   0,   0, 255 }
 #define COLOR_HIGHLIGHT_PREPROCESS  (Color){ 135, 132, 219, 255 }
 #define COLOR_HIGHLIGHT_CONTINUE    (Color){ 148,  99, 148, 255 }
@@ -467,9 +473,8 @@ DEF_ENUM(SCOPE);
 #define COLOR_HIGHLIGHT_TYPE        (Color){ 198, 149, 198, 255 }
 
 /*
- * Lex
+ * Token Definition
  */
-
 #define DEF_TOK_KIND(DEF) \
 	DEF(TOK_KIND_NONE) \
 	DEF(TOK_KIND_WHITESPACE) \
@@ -477,13 +482,13 @@ DEF_ENUM(SCOPE);
 	DEF(TOK_KIND_ALPHA) \
 	DEF(TOK_KIND_DIGIT) \
 	DEF(TOK_KIND_LITERAL) \
+	DEF(TOK_KIND_ASSIGN) \
 	DEF(TOK_KIND_IDENTIFIER) \
 	DEF(TOK_KIND_TYPE) \
 	DEF(TOK_KIND_KEYWORD) \
 	DEF(TOK_KIND_OPERATOR) \
 	DEF(TOK_KIND_STATEMENT) \
 	DEF(TOK_KIND_PP) \
-	DEF(TOK_KIND_PP_OPERATOR) \
 	DEF(TOK_KIND_CONTINUE) \
 	DEF(TOK_KIND_SCOPE) \
 	DEF(TOK_KIND_QUOTE) \
@@ -497,15 +502,16 @@ static Color TOK_KIND_COLOR[] = {
 	[TOK_KIND_NONE]        = COLOR_HIGHLIGHT_ERROR,
 	[TOK_KIND_ERROR]       = COLOR_HIGHLIGHT_ERROR,
 	[TOK_KIND_ALPHA]       = COLOR_HIGHLIGHT_CODE,
-	[TOK_KIND_LITERAL]       = COLOR_HIGHLIGHT_CODE,
+	[TOK_KIND_LITERAL]     = COLOR_HIGHLIGHT_CODE,
 	[TOK_KIND_DIGIT]       = COLOR_HIGHLIGHT_NUMBER,
 	[TOK_KIND_TYPE]        = COLOR_HIGHLIGHT_TYPE,
+	[TOK_KIND_IDENTIFIER]  = COLOR_HIGHLIGHT_IDENTIFIER,
 	[TOK_KIND_KEYWORD]     = COLOR_HIGHLIGHT_KEYWORD,
 	[TOK_KIND_WHITESPACE]  = COLOR_HIGHLIGHT_WHITESPACE,
 	[TOK_KIND_STATEMENT]   = COLOR_HIGHLIGHT_SCOPE,
+	[TOK_KIND_ASSIGN]      = COLOR_HIGHLIGHT_SCOPE,
 	[TOK_KIND_OPERATOR]    = COLOR_HIGHLIGHT_OPERATOR,
 	[TOK_KIND_PP]          = COLOR_HIGHLIGHT_PREPROCESS,
-	[TOK_KIND_PP_OPERATOR] = COLOR_HIGHLIGHT_PREPROCESS,
 	[TOK_KIND_CONTINUE]    = COLOR_HIGHLIGHT_CONTINUE,
 	[TOK_KIND_SCOPE]       = COLOR_HIGHLIGHT_SCOPE,
 	[TOK_KIND_QUOTE]       = COLOR_HIGHLIGHT_QUOTE,
@@ -517,9 +523,9 @@ STATIC_ASSERT(NARRAY(TOK_KIND_COLOR) == TOK_KIND_COUNT);
 
 #define TOK_CAPACITY 256
 
-#define TOK_SECIAL_BEGIN 0
-#define TOK_SECIAL_END   7
-#define TOK_SECIAL_RANGE TOK_SPECIAL_BEGIN ... TOK_SPECIAL_END
+#define TOK_SPECIAL_BEGIN 0
+#define TOK_SPECIAL_END   7
+#define TOK_SPECIAL_RANGE TOK_SPECIAL_BEGIN ... TOK_SPECIAL_END
 
 #define TOK_WHITE_BEGIN 9
 #define TOK_WHITE_END   13
@@ -528,10 +534,6 @@ STATIC_ASSERT(NARRAY(TOK_KIND_COLOR) == TOK_KIND_COUNT);
 #define TOK_ASCII_BEGIN 32
 #define TOK_ASCII_END   127
 #define TOK_ASCII_RANGE TOK_ASCII_BEGIN ... TOK_ASCII_END
-
-#define TOK_VISIBLE_ASCII_BEGIN 33
-#define TOK_VISIBLE_ASCII_END   126
-#define TOK_VISIBLE_ASCII_RANGE TOK_VISIBLE_ASCII_BEGIN ... TOK_VISIBLE_ASCII_END
 
 #define TOK_KEYWORD_BEGIN 128
 #define TOK_KEYWORD_END   (TOK_CAPACITY - 1)
@@ -700,11 +702,11 @@ STATIC_ASSERT(NARRAY(TOK_KIND_COLOR) == TOK_KIND_COUNT);
 	DEF(TOK_GOTO)\
 	DEF(TOK_ELSE)\
 	DEF(TOK_CASE)\
-	DEF(TOK_AUTO)\
 	DEF(TOK_FOR)\
 	DEF(TOK_IF)\
 	DEF(TOK_DO)\
 	/* Type */\
+	DEF(TOK_AUTO)\
 	DEF(TOK_UNSIGNED)\
 	DEF(TOK_STRUCT)\
 	DEF(TOK_SIGNED)\
@@ -756,7 +758,7 @@ STATIC_ASSERT(NARRAY(TOK_KIND_COLOR) == TOK_KIND_COUNT);
 	DEF(TOK_LCOMMENT)\
     DEF(TOK_RCOMMENT)\
     DEF(TOK_COMMENT)\
-	/* Escape Code */\
+	/* Escape */\
     DEF(TOK_ESC_NULL,      /* \\0  NUL */)\
     DEF(TOK_ESC_ALERT,     /* \\a  BEL */)\
     DEF(TOK_ESC_BACKSPACE, /* \\b  BS  */)\
@@ -772,6 +774,14 @@ STATIC_ASSERT(NARRAY(TOK_KIND_COLOR) == TOK_KIND_COUNT);
 	DEF(TOK_ESC_HEX,       /* \\x      */)\
     DEF(TOK_ESC_UNICODE4,  /* \\u      */)\
     DEF(TOK_ESC_UNICODE8,  /* \\U      */)\
+	/* Numer */\
+	DEF(TOK_NUMBER_HEX)\
+	DEF(TOK_NUMBER_BINARY)\
+	/* Declaration */\
+	DEF(TOK_DECLARE_ARRAY)\
+	DEF(TOK_DECLARE_MEMBER)\
+	DEF(TOK_DECLARE_FUNCTION)\
+	DEF(TOK_DECLARE_INITIALIZE)\
 	DEF(TOK_COUNT)
 DEF_ENUM(TOK);
 STATIC_ASSERT(TOK_COUNT < TOK_CAPACITY, "Not setup to support more than 256 tokens!");
@@ -793,12 +803,12 @@ STATIC_ASSERT(TOK_COUNT < TOK_CAPACITY, "Not setup to support more than 256 toke
     DEF("&",  TOK_AMP,        TOK_KIND_ALPHA)\
     DEF("$",  TOK_DOLLAR,     TOK_KIND_ALPHA)\
     /* Brace */\
-	DEF("[", TOK_LBRACKET, TOK_KIND_OPERATOR)\
-    DEF("]", TOK_RBRACKET, TOK_KIND_OPERATOR)\
-    DEF("{", TOK_LBRACE,   TOK_KIND_OPERATOR)\
-    DEF("}", TOK_RBRACE,   TOK_KIND_OPERATOR)\
-    DEF("(", TOK_LPAREN,   TOK_KIND_OPERATOR)\
-    DEF(")", TOK_RPAREN,   TOK_KIND_OPERATOR)\
+	DEF("[", TOK_LBRACKET, TOK_KIND_SCOPE)\
+    DEF("]", TOK_RBRACKET, TOK_KIND_SCOPE)\
+    DEF("{", TOK_LBRACE,   TOK_KIND_SCOPE)\
+    DEF("}", TOK_RBRACE,   TOK_KIND_SCOPE)\
+    DEF("(", TOK_LPAREN,   TOK_KIND_SCOPE)\
+    DEF(")", TOK_RPAREN,   TOK_KIND_SCOPE)\
 	/* Quote */\
 	DEF("\"", TOK_DQUOTE,   TOK_KIND_QUOTE)\
 	DEF("\'", TOK_SQUOTE,   TOK_KIND_QUOTE)\
@@ -843,36 +853,36 @@ STATIC_ASSERT(TOK_COUNT < TOK_CAPACITY, "Not setup to support more than 256 toke
     DEF("<<=", TOK_LSHIFT_ASSIGN, TOK_KIND_OPERATOR)\
     DEF(">>=", TOK_RSHIFT_ASSIGN, TOK_KIND_OPERATOR)\
 	/* Statement */\
-    DEF("?",   TOK_QUESTION,      TOK_KIND_STATEMENT)\
-    DEF(":",   TOK_COLON,         TOK_KIND_STATEMENT)\
-    DEF("...", TOK_ELLIPSIS,      TOK_KIND_STATEMENT)\
-	DEF(";",   TOK_SEMICOLON,     TOK_KIND_STATEMENT)\
+    DEF("?",   TOK_QUESTION,  TOK_KIND_STATEMENT)\
+    DEF(":",   TOK_COLON,     TOK_KIND_STATEMENT)\
+    DEF("...", TOK_ELLIPSIS,  TOK_KIND_STATEMENT)\
+	DEF(";",   TOK_SEMICOLON, TOK_KIND_STATEMENT)\
 	/* Pre Process */\
-	DEF("#",             TOK_HASH,          TOK_KIND_PP)\
-	DEF("##",            TOK_HASH_HASH,     TOK_KIND_PP)\
-	DEF("#ifndef"DLM,    TOK_PP_IFNDEF,     TOK_KIND_PP)\
-	DEF("#ifdef"DLM,     TOK_PP_IFDEF,      TOK_KIND_PP)\
-	DEF("#if"DLM,        TOK_PP_IF,         TOK_KIND_PP)\
-	DEF("#elif"DLM,      TOK_PP_ELIF,       TOK_KIND_PP)\
-	DEF("#line"DLM,      TOK_PP_LINE,       TOK_KIND_PP)\
-	DEF("#else"DLM,      TOK_PP_ELSE,       TOK_KIND_PP)\
-	DEF("#error"DLM,     TOK_PP_ERROR,      TOK_KIND_PP)\
-	DEF("#undef"DLM,     TOK_PP_UNDEF,      TOK_KIND_PP)\
-	DEF("#endif"DLM,     TOK_PP_ENDIF,      TOK_KIND_PP)\
-	DEF("#pragma"DLM,    TOK_PP_PRAGMA,     TOK_KIND_PP)\
-	DEF("#define"DLM,    TOK_PP_DEFINE,     TOK_KIND_PP)\
-	DEF("#include"DLM,   TOK_PP_INCLUDE,    TOK_KIND_PP)\
+	DEF("#",           TOK_HASH,       TOK_KIND_PP)\
+	DEF("##",          TOK_HASH_HASH,  TOK_KIND_PP)\
+	DEF("#if"DLM,      TOK_PP_IF,      TOK_KIND_PP)\
+	DEF("#elif"DLM,    TOK_PP_ELIF,    TOK_KIND_PP)\
+	DEF("#line"DLM,    TOK_PP_LINE,    TOK_KIND_PP)\
+	DEF("#else"DLM,    TOK_PP_ELSE,    TOK_KIND_PP)\
+	DEF("#error"DLM,   TOK_PP_ERROR,   TOK_KIND_PP)\
+	DEF("#undef"DLM,   TOK_PP_UNDEF,   TOK_KIND_PP)\
+	DEF("#endif"DLM,   TOK_PP_ENDIF,   TOK_KIND_PP)\
+	DEF("#ifdef"DLM,   TOK_PP_IFDEF,   TOK_KIND_PP)\
+	DEF("#ifndef"DLM,  TOK_PP_IFNDEF,  TOK_KIND_PP)\
+	DEF("#pragma"DLM,  TOK_PP_PRAGMA,  TOK_KIND_PP)\
+	DEF("#define"DLM,  TOK_PP_DEFINE,  TOK_KIND_PP)\
+	DEF("#include"DLM, TOK_PP_INCLUDE, TOK_KIND_PP)\
 	/* Specifier */\
-	DEF("static"DLM,         TOK_STATIC,        TOK_KIND_KEYWORD)\
-	DEF("extern"DLM,         TOK_EXTERN,        TOK_KIND_KEYWORD)\
-	DEF("typedef"DLM,        TOK_TYPEDEF,       TOK_KIND_KEYWORD)\
-	DEF("register"DLM,       TOK_REGISTER,      TOK_KIND_KEYWORD)\
-	DEF("_Thread_local"DLM,  TOK_THREAD_LOCAL,  TOK_KIND_KEYWORD)\
+	DEF("static"DLM,        TOK_STATIC,       TOK_KIND_KEYWORD)\
+	DEF("extern"DLM,        TOK_EXTERN,       TOK_KIND_KEYWORD)\
+	DEF("typedef"DLM,       TOK_TYPEDEF,      TOK_KIND_KEYWORD)\
+	DEF("register"DLM,      TOK_REGISTER,     TOK_KIND_KEYWORD)\
+	DEF("_Thread_local"DLM, TOK_THREAD_LOCAL, TOK_KIND_KEYWORD)\
 	/* Qualifier */\
-	DEF("const"DLM,          TOK_CONST,         TOK_KIND_KEYWORD)\
-	DEF("volatile"DLM,       TOK_VOLATILE,      TOK_KIND_KEYWORD)\
-	DEF("restrict"DLM,       TOK_RESTRICT,      TOK_KIND_KEYWORD)\
-	DEF("_Atomic"DLM,        TOK_ATOMIC,        TOK_KIND_KEYWORD)\
+	DEF("const"DLM,    TOK_CONST,    TOK_KIND_KEYWORD)\
+	DEF("_Atomic"DLM,  TOK_ATOMIC,   TOK_KIND_KEYWORD)\
+	DEF("volatile"DLM, TOK_VOLATILE, TOK_KIND_KEYWORD)\
+	DEF("restrict"DLM, TOK_RESTRICT, TOK_KIND_KEYWORD)\
 	/* Keyword */\
 	DEF("do"DLM,             TOK_DO,            TOK_KIND_KEYWORD)\
 	DEF("if"DLM,             TOK_IF,            TOK_KIND_KEYWORD)\
@@ -898,31 +908,109 @@ STATIC_ASSERT(TOK_COUNT < TOK_CAPACITY, "Not setup to support more than 256 toke
 	DEF("_Imaginary"DLM,     TOK_IMAGINARY,     TOK_KIND_KEYWORD)\
 	DEF("_Static_assert"DLM, TOK_STATIC_ASSERT, TOK_KIND_KEYWORD)\
 	/* Type */\
-	DEF("int"DLM,       TOK_INT,           TOK_KIND_TYPE)\
-	DEF("enum"DLM,      TOK_ENUM,          TOK_KIND_TYPE)\
-	DEF("char"DLM,      TOK_CHAR,          TOK_KIND_TYPE)\
-	DEF("long"DLM,      TOK_LONG,          TOK_KIND_TYPE)\
-	DEF("void"DLM,      TOK_VOID,          TOK_KIND_TYPE)\
-	DEF("bool"DLM,      TOK_BOOL,          TOK_KIND_TYPE)\
-	DEF("union"DLM,     TOK_UNION,         TOK_KIND_TYPE)\
-	DEF("float"DLM,     TOK_FLOAT,         TOK_KIND_TYPE)\
-	DEF("short"DLM,     TOK_SHORT,         TOK_KIND_TYPE)\
-	DEF("_Bool"DLM,     TOK_BOOL,          TOK_KIND_TYPE)\
-	DEF("signed"DLM,    TOK_SIGNED,        TOK_KIND_TYPE)\
-	DEF("struct"DLM,    TOK_STRUCT,        TOK_KIND_TYPE)\
-	DEF("double"DLM,    TOK_DOUBLE,        TOK_KIND_TYPE)\
-	DEF("size_t"DLM,    TOK_SIZE_T,        TOK_KIND_TYPE)\
-	DEF("int8_t"DLM,    TOK_INT8_T,        TOK_KIND_TYPE)\
-	DEF("uint8_t"DLM,   TOK_UINT8_T,       TOK_KIND_TYPE)\
-	DEF("wchar_t"DLM,   TOK_WCHAR_T,       TOK_KIND_TYPE)\
-	DEF("int16_t"DLM,   TOK_INT16_T,       TOK_KIND_TYPE)\
-	DEF("int32_t"DLM,   TOK_INT32_T,       TOK_KIND_TYPE)\
-	DEF("int64_t"DLM,   TOK_INT64_T,       TOK_KIND_TYPE)\
-	DEF("uint16_t"DLM,  TOK_UINT16_T,      TOK_KIND_TYPE)\
-	DEF("uint32_t"DLM,  TOK_UINT32_T,      TOK_KIND_TYPE)\
-	DEF("unsigned"DLM,  TOK_UNSIGNED,      TOK_KIND_TYPE)\
-	DEF("uint64_t"DLM,  TOK_UINT64_T,      TOK_KIND_TYPE)\
-	DEF("ptrdiff_t"DLM, TOK_PTRDIFF_T,     TOK_KIND_TYPE)
+	DEF("int"DLM,       TOK_INT,       TOK_KIND_TYPE)\
+	DEF("enum"DLM,      TOK_ENUM,      TOK_KIND_TYPE)\
+	DEF("char"DLM,      TOK_CHAR,      TOK_KIND_TYPE)\
+	DEF("long"DLM,      TOK_LONG,      TOK_KIND_TYPE)\
+	DEF("void"DLM,      TOK_VOID,      TOK_KIND_TYPE)\
+	DEF("bool"DLM,      TOK_BOOL,      TOK_KIND_TYPE)\
+	DEF("union"DLM,     TOK_UNION,     TOK_KIND_TYPE)\
+	DEF("float"DLM,     TOK_FLOAT,     TOK_KIND_TYPE)\
+	DEF("short"DLM,     TOK_SHORT,     TOK_KIND_TYPE)\
+	DEF("_Bool"DLM,     TOK_BOOL,      TOK_KIND_TYPE)\
+	DEF("signed"DLM,    TOK_SIGNED,    TOK_KIND_TYPE)\
+	DEF("struct"DLM,    TOK_STRUCT,    TOK_KIND_TYPE)\
+	DEF("double"DLM,    TOK_DOUBLE,    TOK_KIND_TYPE)\
+	DEF("size_t"DLM,    TOK_SIZE_T,    TOK_KIND_TYPE)\
+	DEF("int8_t"DLM,    TOK_INT8_T,    TOK_KIND_TYPE)\
+	DEF("uint8_t"DLM,   TOK_UINT8_T,   TOK_KIND_TYPE)\
+	DEF("wchar_t"DLM,   TOK_WCHAR_T,   TOK_KIND_TYPE)\
+	DEF("int16_t"DLM,   TOK_INT16_T,   TOK_KIND_TYPE)\
+	DEF("int32_t"DLM,   TOK_INT32_T,   TOK_KIND_TYPE)\
+	DEF("int64_t"DLM,   TOK_INT64_T,   TOK_KIND_TYPE)\
+	DEF("uint16_t"DLM,  TOK_UINT16_T,  TOK_KIND_TYPE)\
+	DEF("uint32_t"DLM,  TOK_UINT32_T,  TOK_KIND_TYPE)\
+	DEF("unsigned"DLM,  TOK_UNSIGNED,  TOK_KIND_TYPE)\
+	DEF("uint64_t"DLM,  TOK_UINT64_T,  TOK_KIND_TYPE)\
+	DEF("ptrdiff_t"DLM, TOK_PTRDIFF_T, TOK_KIND_TYPE)
+
+#define DEF_TOK_DECLARATION(DEF, DEF_RANGE)\
+	DEF_RANGE('0' ... '9', TOK_KIND_IDENTIFIER)\
+	DEF_RANGE('a' ... 'z', TOK_KIND_IDENTIFIER)\
+	DEF_RANGE('A' ... 'Z', TOK_KIND_IDENTIFIER)\
+	DEF_RANGE('_', TOK_KIND_IDENTIFIER)\
+	DEF_RANGE('*', TOK_KIND_IDENTIFIER)\
+	DEF_RANGE(',', TOK_KIND_ASSIGN)\
+	/* Declaration Delimiter*/\
+	DEF(";", TOK_DECLARE_MEMBER,     TOK_KIND_ASSIGN)\
+	DEF("=", TOK_DECLARE_INITIALIZE, TOK_KIND_ASSIGN)\
+	DEF("(", TOK_DECLARE_FUNCTION,   TOK_KIND_ASSIGN)\
+	DEF("[", TOK_DECLARE_ARRAY,      TOK_KIND_ASSIGN)\
+	/* Whitespace */\
+	DEF("\t", TOK_TAB,     TOK_KIND_WHITESPACE)\
+	DEF("\n", TOK_NEWLINE, TOK_KIND_WHITESPACE)\
+	DEF(" ",  TOK_SPACE,   TOK_KIND_WHITESPACE)\
+	/* Comment */\
+	DEF("/*", TOK_LCOMMENT, TOK_KIND_COMMENT)\
+    DEF("//", TOK_COMMENT,  TOK_KIND_COMMENT)\
+	/* Pre Process */\
+	DEF("#if"DLM,      TOK_PP_IF,      TOK_KIND_PP)\
+	DEF("#elif"DLM,    TOK_PP_ELIF,    TOK_KIND_PP)\
+	DEF("#line"DLM,    TOK_PP_LINE,    TOK_KIND_PP)\
+	DEF("#else"DLM,    TOK_PP_ELSE,    TOK_KIND_PP)\
+	DEF("#error"DLM,   TOK_PP_ERROR,   TOK_KIND_PP)\
+	DEF("#undef"DLM,   TOK_PP_UNDEF,   TOK_KIND_PP)\
+	DEF("#endif"DLM,   TOK_PP_ENDIF,   TOK_KIND_PP)\
+	DEF("#ifdef"DLM,   TOK_PP_IFDEF,   TOK_KIND_PP)\
+	DEF("#ifndef"DLM,  TOK_PP_IFNDEF,  TOK_KIND_PP)\
+	DEF("#pragma"DLM,  TOK_PP_PRAGMA,  TOK_KIND_PP)\
+	DEF("#define"DLM,  TOK_PP_DEFINE,  TOK_KIND_PP)\
+	DEF("#include"DLM, TOK_PP_INCLUDE, TOK_KIND_PP)\
+	/* Specifier */\
+	DEF("auto"DLM,           TOK_AUTO,          TOK_KIND_KEYWORD)\
+	DEF("static"DLM,         TOK_STATIC,       TOK_KIND_KEYWORD)\
+	DEF("extern"DLM,         TOK_EXTERN,       TOK_KIND_KEYWORD)\
+	DEF("typedef"DLM,        TOK_TYPEDEF,      TOK_KIND_KEYWORD)\
+	DEF("register"DLM,       TOK_REGISTER,     TOK_KIND_KEYWORD)\
+	DEF("_Thread_local"DLM,  TOK_THREAD_LOCAL, TOK_KIND_KEYWORD)\
+	/* Qualifier */\
+	DEF("const"DLM,          TOK_CONST,    TOK_KIND_KEYWORD)\
+	DEF("_Atomic"DLM,        TOK_ATOMIC,   TOK_KIND_KEYWORD)\
+	DEF("volatile"DLM,       TOK_VOLATILE, TOK_KIND_KEYWORD)\
+	DEF("restrict"DLM,       TOK_RESTRICT, TOK_KIND_KEYWORD)\
+	/* Keyword */\
+	DEF("inline"DLM,         TOK_INLINE,        TOK_KIND_KEYWORD)\
+	DEF("_Alignas"DLM,       TOK_ALIGNAS,       TOK_KIND_KEYWORD)\
+	DEF("_Complex"DLM,       TOK_COMPLEX,       TOK_KIND_KEYWORD)\
+	DEF("_Noreturn"DLM,      TOK_NORETURN,      TOK_KIND_KEYWORD)\
+	DEF("_Imaginary"DLM,     TOK_IMAGINARY,     TOK_KIND_KEYWORD)\
+	DEF("_Static_assert"DLM, TOK_STATIC_ASSERT, TOK_KIND_KEYWORD)\
+	/* Type */\
+	DEF("int"DLM,       TOK_INT,       TOK_KIND_TYPE)\
+	DEF("enum"DLM,      TOK_ENUM,      TOK_KIND_TYPE)\
+	DEF("char"DLM,      TOK_CHAR,      TOK_KIND_TYPE)\
+	DEF("long"DLM,      TOK_LONG,      TOK_KIND_TYPE)\
+	DEF("void"DLM,      TOK_VOID,      TOK_KIND_TYPE)\
+	DEF("bool"DLM,      TOK_BOOL,      TOK_KIND_TYPE)\
+	DEF("union"DLM,     TOK_UNION,     TOK_KIND_TYPE)\
+	DEF("float"DLM,     TOK_FLOAT,     TOK_KIND_TYPE)\
+	DEF("short"DLM,     TOK_SHORT,     TOK_KIND_TYPE)\
+	DEF("signed"DLM,    TOK_SIGNED,    TOK_KIND_TYPE)\
+	DEF("_Bool"DLM,     TOK_BOOL,      TOK_KIND_TYPE)\
+	DEF("struct"DLM,    TOK_STRUCT,    TOK_KIND_TYPE)\
+	DEF("double"DLM,    TOK_DOUBLE,    TOK_KIND_TYPE)\
+	DEF("size_t"DLM,    TOK_SIZE_T,    TOK_KIND_TYPE)\
+	DEF("int8_t"DLM,    TOK_INT8_T,    TOK_KIND_TYPE)\
+	DEF("uint8_t"DLM,   TOK_UINT8_T,   TOK_KIND_TYPE)\
+	DEF("wchar_t"DLM,   TOK_WCHAR_T,   TOK_KIND_TYPE)\
+	DEF("int16_t"DLM,   TOK_INT16_T,   TOK_KIND_TYPE)\
+	DEF("int32_t"DLM,   TOK_INT32_T,   TOK_KIND_TYPE)\
+	DEF("int64_t"DLM,   TOK_INT64_T,   TOK_KIND_TYPE)\
+	DEF("uint16_t"DLM,  TOK_UINT16_T,  TOK_KIND_TYPE)\
+	DEF("uint32_t"DLM,  TOK_UINT32_T,  TOK_KIND_TYPE)\
+	DEF("unsigned"DLM,  TOK_UNSIGNED,  TOK_KIND_TYPE)\
+	DEF("uint64_t"DLM,  TOK_UINT64_T,  TOK_KIND_TYPE)\
+	DEF("ptrdiff_t"DLM, TOK_PTRDIFF_T, TOK_KIND_TYPE)\
 
 #define DEF_TOK_QUOTE(DEF, DEF_RANGE)\
 	DEF_RANGE(TOK_ASCII_RANGE,  TOK_KIND_TEXT)\
@@ -954,7 +1042,7 @@ STATIC_ASSERT(TOK_COUNT < TOK_CAPACITY, "Not setup to support more than 256 toke
     DEF("\\u", TOK_ESC_UNICODE4, TOK_KIND_ESCAPE)\
     DEF("\\U", TOK_ESC_UNICODE8, TOK_KIND_ESCAPE)
 
-	/*
+/*
      Octal Prefix TODO how to highlight whole octal? \
     DEF("\\0",         TOK_ESC_OCT,      TOK_KIND_ESCAPE)\
     DEF("\\1",         TOK_ESC_OCT,      TOK_KIND_ESCAPE)\
@@ -964,70 +1052,33 @@ STATIC_ASSERT(TOK_COUNT < TOK_CAPACITY, "Not setup to support more than 256 toke
     DEF("\\5",         TOK_ESC_OCT,      TOK_KIND_ESCAPE)\
     DEF("\\6",         TOK_ESC_OCT,      TOK_KIND_ESCAPE)\
     DEF("\\7",         TOK_ESC_OCT,      TOK_KIND_ESCAPE)\
-	*/
+*/
 
 #define DEF_TOK_COMMENT(DEF, DEF_RANGE)\
-	DEF_RANGE(TOK_ASCII_RANGE,  TOK_KIND_COMMENT)\
+	DEF_RANGE(TOK_ASCII_RANGE, TOK_KIND_COMMENT)\
 	/* Whitespace */\
-	DEF("\t", TOK_TAB,          TOK_KIND_WHITESPACE)\
-	DEF("\n", TOK_NEWLINE,      TOK_KIND_WHITESPACE)\
-	DEF(" ",  TOK_SPACE,        TOK_KIND_WHITESPACE)\
+	DEF("\t", TOK_TAB,         TOK_KIND_WHITESPACE)\
+	DEF("\n", TOK_NEWLINE,     TOK_KIND_WHITESPACE)\
+	DEF(" ",  TOK_SPACE,       TOK_KIND_WHITESPACE)\
 	/* Comment */\
-	DEF("*/", TOK_RCOMMENT,     TOK_KIND_COMMENT)
+	DEF("*/", TOK_RCOMMENT,    TOK_KIND_COMMENT)
 
-typedef struct TokDef {
-	char* name;
-	u16 kind;
-} TokDef;
-
-#define STR_LEN(_str) (sizeof(_str) - 1)
-#define DEF_TOK_DEF_ITEM(_name, _tok, _kind)  [_tok]   = (TokDef){ _name,          _kind },
-#define DEF_TOK_RANGE_DEF_ITEM(_range, _kind) [_range] = (TokDef){ TOK_RANGE_NAME, _kind },
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Woverride-init"
-
-static const TokDef TOK_BASE_DEFINITIONS[]    = { DEF_TOK_BASE(DEF_TOK_DEF_ITEM,    DEF_TOK_RANGE_DEF_ITEM) };
-static const TokDef TOK_QUOTE_DEFINITIONS[]   = { DEF_TOK_QUOTE(DEF_TOK_DEF_ITEM,   DEF_TOK_RANGE_DEF_ITEM) };
-static const TokDef TOK_COMMENT_DEFINITIONS[] = { DEF_TOK_COMMENT(DEF_TOK_DEF_ITEM, DEF_TOK_RANGE_DEF_ITEM) };
-
-#pragma GCC diagnostic pop
-
-/*
-	We will have Sparse Trie and Packed Trie
-	at a certain point it can switch past a certain density
-	that density should probably had to do with scan time
-	will have to test to compareww
-
-	Traverse
-	Store index of first fail.
-	If tE hit, go back to first fail.
-	Shift all right by 1.
-	Insert new char. Succ = open index at end. Fail = 1.
-	Each fail before current char increment by 1.
-	Go to new index at end. Insert rest of new char
-
-	tok:
-		t0=#if_
-		t1=#def_
-		t2=#ifdef_
-
-	Words Added:
-		if
-		def
-		ifdef
-
-	idx   0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5  6  7
-	char  #  d  i  f  d  _ t0 tE  e  f  _ t2 tE  e  f  _ t1 tE
-	succ  1  7  1  2  9  1        1  1  1        1  1  1
-	fail  6  5  4  4  3  2        4  3  2        4  3  2
-*/
+#define DEF_TOK_NUMBER(DEF, DEF_RANGE)\
+	DEF_RANGE('0' ... '9', TOK_KIND_DIGIT)\
+	/* Whitespace */\
+	DEF("\t", TOK_TAB,     TOK_KIND_WHITESPACE)\
+	DEF("\n", TOK_NEWLINE, TOK_KIND_WHITESPACE)\
+	DEF(" ",  TOK_SPACE,   TOK_KIND_WHITESPACE)\
+    /* Hex Prefix */\
+    DEF("\\x", TOK_ESC_HEX, TOK_KIND_ESCAPE)\
+    /* Unicode Prefix */\
+    DEF("\\u", TOK_ESC_UNICODE4, TOK_KIND_ESCAPE)\
+    DEF("\\U", TOK_ESC_UNICODE8, TOK_KIND_ESCAPE)
 
 /*
  * Flat Trie
  */
-
-// #define FRIE_DEBUG
+#define FRIE_DEBUG
 #ifdef FRIE_DEBUG
 	#define FRIE_LOG(...) fprintf(stderr, __VA_ARGS__)
 #else
@@ -1045,7 +1096,7 @@ static const bool IDENT_CHAR[128] = {
 #define IS_SPECIAL_TOKEN(_c) (_c <= TOK_FRIE_SECIAL_END)
 #define IS_ERROR_TOKEN(_c)   (_c == TOK_ERR)
 #define IS_KEYWORD_TOKEN(_c) (_c >= TOK_KEYWORD_BEGIN)
-#define IS_TOKEN(_c)         (((i8)_c) <= TOK_SECIAL_END)
+#define IS_TOKEN(_c)         (((i8)_c) <= TOK_SPECIAL_END)
 
 #define IS_IDENT_CHAR(_c) IDENT_CHAR[(u8)(_c)]
 #define IS_DELIM_CHAR(_c) !IDENT_CHAR[(u8)(_c)]
@@ -1060,32 +1111,50 @@ static const bool IDENT_CHAR[128] = {
 #define TRIE_MAX_SPARSE_OFFSET  65536 // 16 bit
 #define MAX_TOKEN_SIZE 16
 typedef union PACKED FrieNode {
-	/* First 128 ASCII chars are sparse nodes. Char value is index. */
+	/* First 128 ASCII chars are sparse nodes. Char tokue is index. */
 	struct PACKED { 
+		u32  tok :  8;  // Token
 		u32  succ : 16; // Amount to jump.
-		u32  kind  : 8;  // Token Category
-		u32  stok : 4;  // Special Token Value. 0-7 Special Frie Token. Only 4 bits needed.
-		u32  pad  : 4;  // 4 more bit available
+		u32  kind : 8;  // Token Category
 	} sparse;
 	/* All tokens past first 128 ASCII chars are packed nodes. Can contain TOK_DELIMIT or TOK_MUNCH nodes. */
 	struct PACKED { 
-		u32  val  : 8;  // Token Value. 0-6 Special Frie Token. 32-128 ASCII Tokens. >128 Keyword Tokens
+		u32  tok  : 8;  // Token Value. 0-6 Special Frie Token. 32-128 ASCII Tokens. >128 Keyword Tokens
 		u32  succ : 12; // offset to jump on success
 		u32  fail : 12; // offset to jump on fail
 	} packed;
 	/* Endpoint token node. Error or Keword token. Trie exits when ecnountering these. */
 	struct PACKED {
-		u32   val : 8;  // Token Value. 0-6 Special Frie Token. 32-128 ASCII Tokens. >128 Keyword Tokens
+		u32   tok  : 8;  // Token Value. 0-6 Special Frie Token. 32-128 ASCII Tokens. >128 Keyword Tokens
 		u32   kind : 8;  // token kindegory
-		u32   pad : 16; // 10 more bits available
+		u32   pad  : 16; // 10 more bits available
 	} terminator;
 	u32 raw; // Must use u32 for everything to ensure union packs to 4 bytes. Differing types makes the compiler add arbitrary packing.
 } FrieNode;
 STATIC_ASSERT(sizeof(FrieNode) == 4);
 
-static FrieNode TOK_BASE_FRIE[1024];
-static FrieNode TOK_QUOTE_FRIE[1024];
-static FrieNode TOK_COMMENT_FRIE[1024];
+typedef struct TokDef {
+	char* name;
+	u16 kind;
+} TokDef;
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Woverride-init"
+#define STR_LEN(_str) (sizeof(_str) - 1)
+#define DEF_TOK_DEF_ITEM(_name, _tok, _kind)  [_tok]   = (TokDef){ _name,          _kind },
+#define DEF_TOK_RANGE_DEF_ITEM(_range, _kind) [_range] = (TokDef){ TOK_RANGE_NAME, _kind },
+#define DEF_TOK_DEFS(_tok)\
+	static const TokDef _tok##_DEFS[] = { DEF_##_tok(DEF_TOK_DEF_ITEM, DEF_TOK_RANGE_DEF_ITEM) };\
+	static FrieNode _tok##_FRIE[1024];
+
+DEF_TOK_DEFS(TOK_BASE);
+DEF_TOK_DEFS(TOK_DECLARATION);
+DEF_TOK_DEFS(TOK_QUOTE);
+DEF_TOK_DEFS(TOK_COMMENT);
+DEF_TOK_DEFS(TOK_NUMBER);
+
+#undef DEF_TOK_DEFS
+#pragma GCC diagnostic pop
 
 static void FrieLog(FrieNode* trie)
 {
@@ -1093,18 +1162,18 @@ static void FrieLog(FrieNode* trie)
 	int iNode = 0; FrieNode node = trie[iNode]; 
 	fprintf(stderr, "Sparse Table: " ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "index" ANSI_RESET ANSI_WHITE "char" ANSI_DIM ANSI_ITALIC ANSI_YELLOW "SuccessTarget\n "ANSI_RESET);
 	while ( iNode < TOK_KEYWORD_BEGIN) {
-		fprintf(stderr, ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "%d" ANSI_RESET ANSI_WHITE "%s" ANSI_DIM ANSI_ITALIC ANSI_YELLOW "%d" ANSI_RESET ANSI_WHITE "%s" ANSI_BRIGHT_BLACK "|" ANSI_RESET, iNode, string_CHAR(iNode), node.sparse.succ, string_TOK(node.sparse.stok));
+		fprintf(stderr, ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "%d" ANSI_RESET ANSI_WHITE "%s" ANSI_DIM ANSI_ITALIC ANSI_YELLOW "%d" ANSI_WHITE "%s" ANSI_BRIGHT_BLACK "|" ANSI_RESET, iNode, string_CHAR(iNode), node.sparse.succ, string_TOK(node.sparse.tok));
 		node = trie[++iNode];
 	}
 
 	fprintf(stderr, "\nPacked Trie: " ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "index" ANSI_RESET ANSI_WHITE "char/token" ANSI_DIM ANSI_GREEN "SuccessOffset" ANSI_ITALIC ANSI_YELLOW "SuccessTarget" ANSI_RESET ANSI_DIM ANSI_RED "FailOffset" ANSI_RESET ANSI_ITALIC ANSI_DIM ANSI_YELLOW "FailTarget\n" ANSI_RESET);
-	while (node.packed.val != '\0' || iNode < 128) {
-		if (IS_DELIM_TOKEN(node.packed.val)) 
-			fprintf(stderr, ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "%d" ANSI_RESET ANSI_WHITE "%s" ANSI_DIM ANSI_GREEN "%d" ANSI_ITALIC ANSI_YELLOW "%d" ANSI_RESET ANSI_DIM ANSI_RED "%d" ANSI_RESET ANSI_ITALIC ANSI_DIM ANSI_YELLOW "%d" ANSI_BRIGHT_BLACK "|" ANSI_RESET, iNode, string_TOK(node.packed.val), node.packed.succ, node.packed.succ+iNode, node.packed.fail, node.packed.fail+iNode);
-		else if (IS_TOKEN(node.packed.val)) 
-			fprintf(stderr, ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "%d" ANSI_RESET ANSI_WHITE "%s" ANSI_DIM ANSI_BRIGHT_BLACK "%c" ANSI_RESET, iNode, string_TOK(node.terminator.val), node.terminator.val == TOK_ERR ? '\n' : '|');
+	while (node.packed.tok != '\0' || iNode < 128) {
+		if (IS_DELIM_TOKEN(node.packed.tok)) 
+			fprintf(stderr, ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "%d" ANSI_RESET ANSI_DIM ANSI_WHITE ANSI_ITALIC "%s" ANSI_DIM ANSI_GREEN "%d" ANSI_ITALIC ANSI_YELLOW "%d" ANSI_RESET ANSI_DIM ANSI_RED "%d" ANSI_RESET ANSI_ITALIC ANSI_DIM ANSI_YELLOW "%d" ANSI_BRIGHT_BLACK "|" ANSI_RESET, iNode, string_TOK(node.packed.tok), node.packed.succ, node.packed.succ+iNode, node.packed.fail, node.packed.fail+iNode);
+		else if (IS_TOKEN(node.packed.tok)) 
+			fprintf(stderr, ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "%d" ANSI_RESET ANSI_DIM ANSI_WHITE ANSI_ITALIC "%s" ANSI_BRIGHT_BLACK "%c" ANSI_RESET, iNode, string_TOK(node.terminator.tok), node.terminator.tok == TOK_ERR ? '\n' : '|');
 		else  			       
-			fprintf(stderr, ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "%d" ANSI_RESET ANSI_WHITE "%c" ANSI_DIM ANSI_GREEN "%d" ANSI_ITALIC ANSI_YELLOW "%d" ANSI_RESET ANSI_DIM ANSI_RED "%d" ANSI_RESET ANSI_ITALIC ANSI_DIM ANSI_YELLOW "%d" ANSI_BRIGHT_BLACK "|" ANSI_RESET, iNode, node.packed.val, node.packed.succ, node.packed.succ+iNode, node.packed.fail, node.packed.fail+iNode);
+			fprintf(stderr, ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "%d" ANSI_RESET ANSI_WHITE "%c" ANSI_DIM ANSI_GREEN "%d" ANSI_ITALIC ANSI_YELLOW "%d" ANSI_RESET ANSI_DIM ANSI_RED "%d" ANSI_RESET ANSI_ITALIC ANSI_DIM ANSI_YELLOW "%d" ANSI_BRIGHT_BLACK "|" ANSI_RESET, iNode, node.packed.tok, node.packed.succ, node.packed.succ+iNode, node.packed.fail, node.packed.fail+iNode);
 		node = trie[++iNode];
 	}
 	fprintf(stderr, "\n");
@@ -1116,17 +1185,18 @@ static TOK FrieGet(const char *pText, FrieNode *pFrie)
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Woverride-init"
+
 	static void *codeDispatch[TOK_CAPACITY] = {	
-		[TOK_ALL_RANGE]         = &&TOK_ERR,
-		[TOK_ERR]           = &&TOK_ERR,
+		[TOK_ALL_RANGE]     = &&TOK_ERR,
+		[TOK_WHITE_RANGE]   = &&TOK_SPARSE_CHAR,
+		[TOK_ASCII_RANGE]   = &&TOK_SPARSE_CHAR,
+		[TOK_KEYWORD_RANGE] = &&TOK_ALL,
 		[TOK_DELIMIT]       = &&TOK_DELIMIT,
 		[TOK_PACKED_CHAR]   = &&TOK_PACKED_CHAR,
 		[TOK_SPARSE_CHAR]   = &&TOK_SPARSE_CHAR,
-		[TOK_NEWLINE]       = &&TOK_SPARSE_CHAR,
-		[TOK_TAB]           = &&TOK_SPARSE_CHAR,
-		[TOK_ASCII_RANGE]   = &&TOK_PACKED_CHAR,
-		[TOK_KEYWORD_RANGE] = &&TOK_ALL,
+		[TOK_NONE]          = &&TOK_NONE,
 	};
+
 #pragma GCC diagnostic pop
 
 	void **disp  = codeDispatch;	
@@ -1136,7 +1206,8 @@ static TOK FrieGet(const char *pText, FrieNode *pFrie)
 		int      iN;
 		FrieNode nd;
 		char     cT;
-		TOK       tok;
+		TOK      startTok;
+		TOK      tok;
 	} step; ZERO(&step);
 
 	step.cT = pText[0];
@@ -1144,63 +1215,67 @@ static TOK FrieGet(const char *pText, FrieNode *pFrie)
 
 TOK_SPARSE_CHAR:
 	{
-		FRIE_LOG("TOK_SPARSE_CHAR iT:%-4d iN:%-4d %4d:%s %s %s %s jump%d ", step.iT, step.iN, step.cT, string_CHAR(step.cT),  string_TOK(step.cT), string_TOK(step.nd.sparse.stok), string_TOK_KIND(step.nd.sparse.kind), step.nd.sparse.succ);
-		step.tok = step.cT; // Store last valid token
+		FRIE_LOG("TOK_SPARSE_CHAR iT:%-4d iN:%-4d %4d:%s %s %s %s jump%d ", step.iT, step.iN, step.cT, string_CHAR(step.cT),  string_TOK(step.cT), string_TOK(step.nd.sparse.tok), string_TOK_KIND(step.nd.sparse.kind), step.nd.sparse.succ);
 		// Retrieve next char first to use in setup of next node dispatch.
-		step.iT++; step.cT = pText[step.iT]; 
+		step.cT = pText[++step.iT]; 
 		// Setup next node dispatch.
-		step.iN = step.nd.sparse.succ > 0 ? step.nd.sparse.succ : step.cT;
-		TOK tok   = step.cT > 0 ? step.nd.sparse.stok : TOK_NONE; // Must dispatch from this node token value.
+		bool match = step.nd.sparse.succ > 0;
+		step.iN  = match ? step.nd.sparse.succ : step.cT;
+		step.startTok = step.nd.sparse.tok;
 		step.nd = pFrie[step.iN];
-		FRIE_LOG("dispatch-->%s\n", string_TOK(tok));
-		goto *disp[tok];
+		step.tok = match ? TOK_PACKED_CHAR : step.nd.sparse.tok;
+		FRIE_LOG("dispatch-->%s\n", string_TOK(step.tok));
+		goto *disp[step.tok];
 	}
 
 TOK_PACKED_CHAR: 
 	{
 		FRIE_LOG("TOK_PACKED_CHAR iT:%-4d iN:%-4d %4d:%s==", step.iT, step.iN, step.cT, string_CHAR(step.cT));
-		FRIE_LOG("%s:%-4d ", string_CHAR(step.nd.packed.val), step.nd.packed.val);
+		FRIE_LOG("%s:%-4d ", string_CHAR(step.nd.packed.tok), step.nd.packed.tok);
 		// Determine node match and retrieve next node.
-		bool match = step.nd.packed.val == step.cT;
+		bool match = step.nd.packed.tok == step.cT;
 		step.iN += match ? step.nd.packed.succ : step.nd.packed.fail;
 		step.nd   = pFrie[step.iN];
 		// Progress to next text char if matched.
 		step.iT += match; step.cT = pText[step.iT];
-		FRIE_LOG("dispatch-->%d:%s\n", step.iN, string_TOK(step.nd.packed.val));
-		goto *disp[step.nd.packed.val];
+		step.tok = IS_TOKEN(step.nd.packed.tok) ? step.nd.packed.tok : TOK_PACKED_CHAR;
+		FRIE_LOG("dispatch-->%d:%s\n", step.iN, string_TOK(step.tok));
+		goto *disp[step.tok];
 	}
 
 TOK_DELIMIT: 
 	{
 		FRIE_LOG("TOK_DELIMIT     iT:%-4d iN:%-4d %4d:%s==", step.iT, step.iN, step.cT, string_CHAR(step.cT));
-		FRIE_LOG("%s:%-4d ", string_CHAR(step.nd.packed.val), step.nd.packed.val);
+		FRIE_LOG("%s:%-4d ", string_CHAR(step.nd.packed.tok), step.nd.packed.tok);
 		bool delim = IS_DELIM_CHAR(step.cT);
 		step.iN += delim ? step.nd.packed.succ : step.nd.packed.fail;
-		step.nd   = pFrie[step.iN];
-		FRIE_LOG("dispatch-->%s\n", string_TOK(step.nd.packed.val));
-		goto *disp[step.nd.packed.val];
+		step.nd  = pFrie[step.iN];
+		step.tok = IS_TOKEN(step.nd.packed.tok) ? step.nd.packed.tok : TOK_PACKED_CHAR;
+		FRIE_LOG("dispatch-->%s\n", string_TOK(step.nd.packed.tok));
+		goto *disp[step.tok];
 	}
 
 TOK_ALL:
-	step.tok = step.nd.terminator.val; // Store last valid token
 	FRIE_LOG("Token found %d %s\n", step.tok, string_TOK(step.tok));
 	return step.tok;
 
 TOK_ERR:
 TOK_NONE:
 	FRIE_LOG("No token found! %d %s\n", step.tok, string_TOK(step.tok));
-	return step.tok;
+	return step.startTok;
 }
+
+
 
 static void FrieValidate(int tokCount, const TokDef* tokDefs, FrieNode* pFrie) 
 {
-		char sparseCharBuf[2] = { '\0', '\0' };
-	for (int iTok = TOK_SECIAL_END; iTok < tokCount; ++iTok) {
+	char sparseCharBuf[2] = { '\0', '\0' };
+	for (int iTok = TOK_ASCII_BEGIN; iTok < tokCount; ++iTok) {
 		TokDef def = tokDefs[iTok];
 		if (def.name == NULL) continue;
 		if (def.name[0] == TOK_RANGE) {	def.name = sparseCharBuf; def.name[0] = iTok; }
 		TOK tok = FrieGet(def.name, pFrie);
-		LOG("%d:%s expected:%d:%s\n", tok, string_TOK(tok), iTok, string_TOK(iTok));
+		LOG("%s  %d:%s expected:%d:%s\n", def.name, tok, string_TOK(tok), iTok, string_TOK(iTok));
 		MUST(tok == iTok);
 	}
 }
@@ -1225,14 +1300,14 @@ static void FrieShift(FrieNode* pFrie, int iInsertNode, int iEndNode)
 	for (int iNodePrev = TOK_KEYWORD_BEGIN; iNodePrev < iInsertNode; iNodePrev++) {
 		FrieNode *pPrevNode = pFrie + iNodePrev;
 		int diff = iInsertNode - iNodePrev;
-		if (IS_KEYWORD_TOKEN(pPrevNode->packed.val)) continue;
+		if (IS_KEYWORD_TOKEN(pPrevNode->packed.tok)) continue;
 		if (pPrevNode->packed.succ > diff) {
 			pPrevNode->packed.succ++;
-			FRIE_LOG("Increment succ i%d %c succ%d\n", iNodePrev, pPrevNode->packed.val, pPrevNode->packed.succ);
+			FRIE_LOG("Increment succ i%d %c succ%d\n", iNodePrev, pPrevNode->packed.tok, pPrevNode->packed.succ);
 		}
 		if (pPrevNode->packed.fail > diff) {
 			pPrevNode->packed.fail++;
-			FRIE_LOG("Increment fail i%d %c fail%d\n", iNodePrev, pPrevNode->packed.val, pPrevNode->packed.fail);
+			FRIE_LOG("Increment fail i%d %c fail%d\n", iNodePrev, pPrevNode->packed.tok, pPrevNode->packed.fail);
 		}
 	}
 }
@@ -1241,6 +1316,8 @@ static RESULT ConstructFrie(int tokCount, const TokDef* tokDefs, int frieCapacit
 {
 	CHECK(frieCapacity > 256, RESULT_CAPACITY_ERROR);
 	ZERO_RANGE(pFrie, frieCapacity);
+
+	for (int i = 1; i < TOK_KEYWORD_BEGIN; ++i) pFrie[i].sparse.kind = TOK_KIND_ERROR;
 	
 	int iTok = 0;
 	int iEndNode = TOK_KEYWORD_BEGIN;
@@ -1271,9 +1348,8 @@ NextNameChar:
 		if (cNameNext == '\0') {
 			FRIE_LOG("One Char Token i%d %c end%d %s\n", (u8)cName, cName, iEndNode, def.name);
 			pNode->sparse.kind = def.kind;
-			CHECKMSG(pNode->sparse.stok != TOK_SPARSE_CHAR, RESULT_DUPLICATE_ERROR, "Trying to insert single char token twice! %s %s %s", def.name, string_CHAR(cName), string_TOK(tok));
-			// If token is already jumping to packed char then a longer token has been set
-			if (pNode->sparse.stok != TOK_PACKED_CHAR) pNode->sparse.stok = TOK_SPARSE_CHAR;
+			CHECKMSG(pNode->sparse.tok != TOK_SPARSE_CHAR, RESULT_DUPLICATE_ERROR, "Trying to insert single char token twice! %s %s %s", def.name, string_CHAR(cName), string_TOK(tok));
+			pNode->sparse.tok = tok;
 			iTok++; 
 			goto NextTok;
 		}
@@ -1290,7 +1366,6 @@ NextNameChar:
 		FRIE_LOG("New Entry i%d %c end%d %s\n", (u8)cName, cName, iEndNode, def.name);
 		CHECKMSG(iEndNode < TRIE_MAX_SPARSE_OFFSET, RESULT_OFFSET_ERROR, "end offset:%d", iEndNode);
 		pNode->sparse.succ = iEndNode;
-		pNode->sparse.stok = TOK_PACKED_CHAR;
 		iNode = iEndNode; 
 		iName++;
 		goto NextNameChar;
@@ -1299,8 +1374,8 @@ NextNameChar:
 	{
 		FrieNode node  = pFrie[iNode];
 		// Encounter a token, must shift to the right and fill in new token.
-		if (IS_KEYWORD_TOKEN(node.packed.val) || IS_ERROR_TOKEN(node.packed.val)) { 
-			// CHECKMSG(node.tok.val == TOK_ERR || node.tok.val == TOK_NONE, RESULT_DUPLICATE_ERROR, "Trying to write token in non-empty node!");
+		if (IS_KEYWORD_TOKEN(node.packed.tok) || IS_ERROR_TOKEN(node.packed.tok)) { 
+			// CHECKMSG(node.tok.tok == TOK_ERR || node.tok.tok == TOK_NONE, RESULT_DUPLICATE_ERROR, "Trying to write token in non-empty node!");
 
 			// FRIE_LOG("Insert Tok i%d firstfail%d end%d %s\n", iNode, iNodeFirstFail, iEndNode, def.name);
 			if (iNodeFirstFail != TOK_KEYWORD_BEGIN)	iNode = iNodeFirstFail;
@@ -1311,7 +1386,7 @@ NextNameChar:
 			u16 succ = iEndNode - iNode;
 			CHECKMSG(succ < TRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "succ offset:%d", succ);
 			pFrie[iNode] = (FrieNode){ 
-				.packed.val  = cName, 
+				.packed.tok  = cName, 
 				.packed.succ = succ, 
 				.packed.fail = 1 
 			};
@@ -1330,7 +1405,7 @@ NextNameChar:
 			u16 fail = insertingAtEnd ? succ + 1 : 1; // If inserting at end ERR token is 1 after succ, otherwise fail to next node
 			CHECKMSG(fail < TRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "fail offset:%d", fail);
 			pFrie[iNode] = (FrieNode){ 
-				.packed.val  = TOK_DELIMIT, 
+				.packed.tok  = TOK_DELIMIT, 
 				.packed.succ = succ, 
 				.packed.fail = fail,
 			};
@@ -1343,15 +1418,15 @@ NextNameChar:
 		if (cName == '\0') {
 			CHECKMSG(iNode == iEndNode, RESULT_ORDER_ERROR, "Trying to inset shorter token after longer token! %s %s", def.name, string_TOK(tok));
 			FRIE_LOG("Finish Token i%d end%d len%d %s %s\n", iNode, iEndNode, iName - delim, def.name, string_TOK(tok));
-			pFrie[iNode++] = (FrieNode){ .terminator.val = tok,    .terminator.kind = def.kind };
-			pFrie[iNode++] = (FrieNode){ .terminator.val = TOK_ERR, .terminator.kind = TOK_KIND_ERROR };
+			pFrie[iNode++] = (FrieNode){ .terminator.tok = tok,    .terminator.kind = def.kind };
+			pFrie[iNode++] = (FrieNode){ .terminator.tok = TOK_ERR, .terminator.kind = TOK_KIND_ERROR };
 			iTok++;	iEndNode = iNode;
 			goto NextTok;
 		}
 
 		// Token char succesfully match with existing trie char
-		if (cName == node.packed.val) {
-			FRIE_LOG("Char Succ i%d jump%d end%d %s %c==%c\n", iNode, node.packed.succ, iEndNode, def.name, cName, node.packed.val);
+		if (cName == node.packed.tok) {
+			FRIE_LOG("Char Succ i%d jump%d end%d %s %c==%c\n", iNode, node.packed.succ, iEndNode, def.name, cName, node.packed.tok);
 			iNodeFirstFail = TOK_KEYWORD_BEGIN;
 			iNode += node.packed.succ; iName++;
 			goto NextNameChar;
@@ -1359,7 +1434,7 @@ NextNameChar:
 
 		// Token char fail to match with existing trie char
 		if (iNode < iEndNode) {
-			FRIE_LOG("Char Fail i%d jump%d end%d %s %c==%c\n", iNode, node.packed.fail, iEndNode, def.name, cName, node.packed.val);
+			FRIE_LOG("Char Fail i%d jump%d end%d %s %c==%c\n", iNode, node.packed.fail, iEndNode, def.name, cName, node.packed.tok);
 			if (iNodeFirstFail == TOK_KEYWORD_BEGIN) iNodeFirstFail = iNode;
 			iNode += node.packed.fail;
 			goto NextNameChar;
@@ -1368,9 +1443,9 @@ NextNameChar:
 		{
 			u16 fail = (len + 1) - iName - delim; // +1 as err comes after tok
 			CHECKMSG(fail < TRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "fail offset:%d", fail);
-			FRIE_LOG("Add Char iT:%d iN:%d fail:%d end:%d delim%d len:%d %s %c\n", iNode, iName, fail, iEndNode, delim, def.len, def.name, cName);
+			FRIE_LOG("Add Char iT:%d iN:%d fail:%d end:%d delim%d len:%d %s %c\n", iNode, iName, fail, iEndNode, delim, len, def.name, cName);
 			pFrie[iNode] = (FrieNode){ 
-				.packed.val  = cName, 
+				.packed.tok  = cName, 
 				.packed.succ = 1, 
 				.packed.fail = fail,
 			};
@@ -1541,6 +1616,8 @@ static RESULT ProcessTrieMeta(CodeBox* pCode)
 		int      iT;
 		int      iN;
 		int      iTStart;
+		TOK      tok;
+		TOK      startTok;
 		TOK_KIND startKind;
 	} step;	ZERO(&step);
 
@@ -1633,58 +1710,56 @@ TOK_SPARSE_CHAR:
 
 		// Retrieve next char first to use as token for sparse jump
 		step.cT = pText[++step.iT];
-		// if (step.iT >= 32) return RESULT_SUCCESS;
+		u8   cT = step.cT < 0 ? TOK_ERR : step.cT;
 
-		// If we match stok jumps to packed to conitnue checking. Otherwise token is sparse char.
-		bool match = step.nd.sparse.succ > 0 ;
-		u8 cT = step.cT < 0 ? TOK_SPARSE_CHAR : step.cT;
-		u8 disptok = match ? step.nd.sparse.stok : cT;
-
-		// Retrieve node for next step. If we match succ is offset into packed char. 
-		step.iN = match ? step.nd.sparse.succ : step.cT;
-		step.nd = pFrie[step.iN]; 
-		FRIE_LOG("dispatch-->iN:%d %s %s\n", step.iN, string_TOK(disptok), match ? "" : string_TOK_KIND(step.nd.sparse.kind));
-		goto *disp[disptok];
+		// If we match tok jumps to packed to conitnue checking. Otherwise token is sparse char.
+		bool match    = step.nd.sparse.succ > 0 ;
+		step.iN       = match ? step.nd.sparse.succ : cT;
+		step.startTok = step.nd.sparse.tok;
+		step.nd       = pFrie[step.iN]; 
+		step.tok      = match ? TOK_PACKED_CHAR : step.nd.sparse.tok;
+		FRIE_LOG("dispatch-->iN:%d %s %s\n", step.iN, string_TOK(step.tok), match ? "" : string_TOK_KIND(step.nd.sparse.kind));
+		goto *disp[step.tok];
 	}
 
 TOK_PACKED_CHAR:
 	{
 		FRIE_LOG("TOK_PACKED_CHAR iT:%-4d iN:%-4d %4d:%s==", step.iT, step.iN, step.cT, string_CHAR(step.cT));
-		FRIE_LOG("%s:%-4d match:%d ", string_CHAR(step.nd.packed.val), step.nd.packed.val, step.nd.packed.val == step.cT);
+		FRIE_LOG("%s:%-4d match:%d ", string_CHAR(step.nd.packed.tok), step.nd.packed.tok, step.nd.packed.tok == step.cT);
 		pMeta[step.iT].kind = step.startKind; pMeta[step.iT].tok = step.cT; // TODO figure way to not need to set this each time? We set individually then overwrite if it matches.
 
 		// Load node for next step;
-		bool match = step.nd.packed.val == step.cT;
+		bool match = step.nd.packed.tok == step.cT;
 		step.iN += match ? step.nd.packed.succ : step.nd.packed.fail;
-		step.nd = pFrie[step.iN]; 
+		step.nd  = pFrie[step.iN]; 
 
 		// If match progress text index. Unless we are going to a token. This does waste an increment and pText lookup on fail condiiton.
 		step.iT += match; 
 		step.cT = pText[step.iT];
 
 		// Single char tokens can only come from sparse chars. If we are traversing packed chars treat all single char tokens as TOK_PACKED_CHAR.
-		u8 disptok = IS_TOKEN(step.nd.packed.val) ? step.nd.packed.val : TOK_PACKED_CHAR;
-		FRIE_LOG("dispatch-->%s\n", string_TOK(disptok));
-		goto *disp[disptok];
+		step.tok = IS_TOKEN(step.nd.packed.tok) ? step.nd.packed.tok : TOK_PACKED_CHAR;
+		FRIE_LOG("dispatch-->%s\n", string_TOK(step.tok));
+		goto *disp[step.tok];
 	}
 
 TOK_DELIMIT: 
 	{
-		bool delimiter = IS_DELIM_CHAR(step.cT);
 		FRIE_LOG("TOK_DELIMIT     iT:%-4d iN:%-4d %4d:%s delim:%d %s ", step.iT, step.iN, step.cT, string_CHAR(step.cT), IS_DELIM_CHAR(step.cT), string_TOK_KIND(step.nd.sparse.kind));
 		// Load node for next step;
-		step.iN += delimiter ? step.nd.packed.succ : step.nd.packed.fail;
-		step.nd = pFrie[step.iN]; 
-		u8 disptok = IS_TOKEN(step.nd.packed.val) ? step.nd.packed.val : TOK_PACKED_CHAR;
-		FRIE_LOG("dispatch-->%s\n", string_TOK(step.nd.packed.val));
-		goto *disp[disptok];
+		bool delim = IS_DELIM_CHAR(step.cT);
+		step.iN += delim ? step.nd.packed.succ : step.nd.packed.fail;
+		step.nd  = pFrie[step.iN]; 
+		step.tok = IS_TOKEN(step.nd.packed.tok) ? step.nd.packed.tok : TOK_PACKED_CHAR;
+		FRIE_LOG("dispatch-->%s\n", string_TOK(step.nd.packed.tok));
+		goto *disp[step.tok];
 	}
 
 TOK_ALL:
 	{
-		FRIE_LOG("%s iT:%d iN:%d fill:%d len:%d kind:%s \n", string_TOK(step.nd.terminator.val), step.iT, step.iN, step.iT - step.nd.terminator.len, step.nd.terminator.len, string_TOK_KIND(step.nd.terminator.kind));
+		FRIE_LOG("%s start:%d iT:%d iN:%d kind:%s \n", string_TOK(step.nd.terminator.tok), step.iTStart, step.iT, step.iN,  string_TOK_KIND(step.nd.terminator.kind));
 		for (int i = step.iTStart; i < step.iT; ++i) { 
-			pMeta[i].tok  = step.nd.terminator.val; 
+			pMeta[i].tok  = step.nd.terminator.tok; 
 			pMeta[i].kind = step.nd.terminator.kind; 
 		}
 		step.iN = step.cT < 0 ? TOK_ERR : step.cT; 
@@ -1984,9 +2059,12 @@ static CodeBox text;
 
 int main(void)
 {
-	REQUIRE(ConstructFrie(NARRAY(TOK_BASE_DEFINITIONS),    TOK_BASE_DEFINITIONS,    NARRAY(TOK_BASE_FRIE),    TOK_BASE_FRIE));
-	REQUIRE(ConstructFrie(NARRAY(TOK_QUOTE_DEFINITIONS),   TOK_QUOTE_DEFINITIONS,   NARRAY(TOK_QUOTE_FRIE),   TOK_QUOTE_FRIE));
-	REQUIRE(ConstructFrie(NARRAY(TOK_COMMENT_DEFINITIONS), TOK_COMMENT_DEFINITIONS, NARRAY(TOK_COMMENT_FRIE), TOK_COMMENT_FRIE));
+#define CONSTRUCT_TOK_DEF_FRIE(_tok) REQUIRE(ConstructFrie(NARRAY(_tok##_DEFS), _tok##_DEFS,    NARRAY(_tok##_FRIE), _tok##_FRIE))
+	CONSTRUCT_TOK_DEF_FRIE(TOK_BASE);
+	CONSTRUCT_TOK_DEF_FRIE(TOK_DECLARATION);
+	CONSTRUCT_TOK_DEF_FRIE(TOK_QUOTE);
+	CONSTRUCT_TOK_DEF_FRIE(TOK_COMMENT);
+	CONSTRUCT_TOK_DEF_FRIE(TOK_NUMBER);
 
 	/* Config */
 	SetTraceLogLevel(LOG_ALL);
