@@ -1,9 +1,12 @@
-#ifdef A
-#endif
-
-inline double Test1() { return 0; }
+inline double Test1(int testa, double b0) 
+{ 
+	testa = b0;
+	return testa; 
+}
 static char Test0() { return '0'; }
 
+#ifdef A
+#endif
 
 double T() {
 	char *str = "Hello\n\x01!\\";
@@ -455,6 +458,7 @@ DEF_ENUM(SCOPE);
 #define COLOR_HOVER       (Color){   0, 255,   0, 64  }
 #define COLOR_BACKGROUND  (Color){  48,  56,  65, 255 } 
 
+#define COLOR_HIGHLIGHT_NONE        (Color){   0,   0,   0, 255 }
 #define COLOR_HIGHLIGHT_CODE        (Color){ 216, 222, 233, 255 }
 #define COLOR_HIGHLIGHT_IDENTIFIER  (Color){  89, 180, 167, 255 }
 #define COLOR_HIGHLIGHT_ERROR       (Color){ 255,   0,   0, 255 }
@@ -499,7 +503,7 @@ DEF_ENUM(SCOPE);
 DEF_ENUM(TOK_KIND);
 
 static Color TOK_KIND_COLOR[] = {
-	[TOK_KIND_NONE]        = COLOR_HIGHLIGHT_ERROR,
+	[TOK_KIND_NONE]        = COLOR_HIGHLIGHT_NONE,
 	[TOK_KIND_ERROR]       = COLOR_HIGHLIGHT_ERROR,
 	[TOK_KIND_ALPHA]       = COLOR_HIGHLIGHT_CODE,
 	[TOK_KIND_LITERAL]     = COLOR_HIGHLIGHT_CODE,
@@ -530,6 +534,18 @@ STATIC_ASSERT(NARRAY(TOK_KIND_COLOR) == TOK_KIND_COUNT);
 #define TOK_WHITE_BEGIN 9
 #define TOK_WHITE_END   13
 #define TOK_WHITE_RANGE TOK_WHITE_BEGIN ... TOK_WHITE_END
+
+#define TOK_LOWER_ALPHA_BEGIN 'a'
+#define TOK_LOWER_ALPHA_END   'z'
+#define TOK_LOWER_ALPHA_RANGE TOK_LOWER_ALPHA_BEGIN ... TOK_LOWER_ALPHA_END
+
+#define TOK_UPPER_ALPHA_BEGIN 'A'
+#define TOK_UPPER_ALPHA_END   'Z'
+#define TOK_UPPER_ALPHA_RANGE TOK_UPPER_ALPHA_BEGIN ... TOK_UPPER_ALPHA_END
+
+#define TOK_DIGIT_BEGIN '0'
+#define TOK_DIGIT_END   '9'
+#define TOK_DIGIT_RANGE TOK_DIGIT_BEGIN ... TOK_DIGIT_END
 
 #define TOK_ASCII_BEGIN 32
 #define TOK_ASCII_END   127
@@ -781,6 +797,7 @@ STATIC_ASSERT(NARRAY(TOK_KIND_COLOR) == TOK_KIND_COUNT);
 	DEF(TOK_DECLARE_ARRAY)\
 	DEF(TOK_DECLARE_MEMBER)\
 	DEF(TOK_DECLARE_FUNCTION)\
+	DEF(TOK_FUNCTION_DECLARED)\
 	DEF(TOK_DECLARE_INITIALIZE)\
 	DEF(TOK_COUNT)
 DEF_ENUM(TOK);
@@ -934,17 +951,28 @@ STATIC_ASSERT(TOK_COUNT < TOK_CAPACITY, "Not setup to support more than 256 toke
 	DEF("uint64_t"DLM,  TOK_UINT64_T,  TOK_KIND_TYPE)\
 	DEF("ptrdiff_t"DLM, TOK_PTRDIFF_T, TOK_KIND_TYPE)
 
+#define DEF_TOK_FUNCTION_DECLARED(DEF, DEF_RANGE)\
+	DEF_RANGE(TOK_WHITE_RANGE,       TOK_KIND_WHITESPACE)\
+	DEF_RANGE(TOK_LOWER_ALPHA_RANGE, TOK_KIND_ALPHA)\
+	DEF_RANGE('(',                   TOK_KIND_ALPHA)\
+	DEF_RANGE(')',                   TOK_KIND_ALPHA)\
+	DEF_RANGE(',',                   TOK_KIND_ASSIGN)\
+	DEF(";", TOK_FUNCTION_DECLARED,  TOK_KIND_ASSIGN)\
+	DEF("{", TOK_FUNCTION_DECLARED,  TOK_KIND_SCOPE)\
+	DEF("__attribute__", TOK_FUNCTION_DECLARED, TOK_KIND_KEYWORD)
+
 #define DEF_TOK_DECLARATION(DEF, DEF_RANGE)\
-	DEF_RANGE('0' ... '9', TOK_KIND_IDENTIFIER)\
-	DEF_RANGE('a' ... 'z', TOK_KIND_IDENTIFIER)\
-	DEF_RANGE('A' ... 'Z', TOK_KIND_IDENTIFIER)\
-	DEF_RANGE('_', TOK_KIND_IDENTIFIER)\
+	DEF_RANGE(TOK_LOWER_ALPHA_RANGE, TOK_KIND_IDENTIFIER)\
+	DEF_RANGE(TOK_UPPER_ALPHA_RANGE, TOK_KIND_IDENTIFIER)\
+	DEF_RANGE(TOK_DIGIT_RANGE,       TOK_KIND_IDENTIFIER)\
+	DEF_RANGE(TOK_WHITE_RANGE,       TOK_KIND_WHITESPACE)\
+	/* Declaration Delimiter*/\
 	DEF_RANGE('*', TOK_KIND_IDENTIFIER)\
 	DEF_RANGE(',', TOK_KIND_ASSIGN)\
-	/* Declaration Delimiter*/\
 	DEF(";", TOK_DECLARE_MEMBER,     TOK_KIND_ASSIGN)\
 	DEF("=", TOK_DECLARE_INITIALIZE, TOK_KIND_ASSIGN)\
-	DEF("(", TOK_DECLARE_FUNCTION,   TOK_KIND_ASSIGN)\
+	DEF("(", TOK_LPAREN,             TOK_KIND_ASSIGN)\
+	DEF(")", TOK_DECLARE_FUNCTION,   TOK_KIND_ASSIGN)\
 	DEF("[", TOK_DECLARE_ARRAY,      TOK_KIND_ASSIGN)\
 	/* Whitespace */\
 	DEF("\t", TOK_TAB,     TOK_KIND_WHITESPACE)\
@@ -1078,7 +1106,7 @@ STATIC_ASSERT(TOK_COUNT < TOK_CAPACITY, "Not setup to support more than 256 toke
 /*
  * Flat Trie
  */
-#define FRIE_DEBUG
+// #define FRIE_DEBUG
 #ifdef FRIE_DEBUG
 	#define FRIE_LOG(...) fprintf(stderr, __VA_ARGS__)
 #else
@@ -1149,6 +1177,7 @@ typedef struct TokDef {
 
 DEF_TOK_DEFS(TOK_BASE);
 DEF_TOK_DEFS(TOK_DECLARATION);
+DEF_TOK_DEFS(TOK_FUNCTION_DECLARED);
 DEF_TOK_DEFS(TOK_QUOTE);
 DEF_TOK_DEFS(TOK_COMMENT);
 DEF_TOK_DEFS(TOK_NUMBER);
@@ -1188,13 +1217,13 @@ static TOK FrieGet(const char *pText, FrieNode *pFrie)
 
 	static void *codeDispatch[TOK_CAPACITY] = {	
 		[TOK_ALL_RANGE]     = &&TOK_ERR,
+		[TOK_NONE]          = &&TOK_NONE,
+		[TOK_PACKED_CHAR]   = &&TOK_PACKED_CHAR,
+		[TOK_SPARSE_CHAR]   = &&TOK_SPARSE_CHAR,
+		[TOK_DELIMIT]       = &&TOK_DELIMIT,
 		[TOK_WHITE_RANGE]   = &&TOK_SPARSE_CHAR,
 		[TOK_ASCII_RANGE]   = &&TOK_SPARSE_CHAR,
 		[TOK_KEYWORD_RANGE] = &&TOK_ALL,
-		[TOK_DELIMIT]       = &&TOK_DELIMIT,
-		[TOK_PACKED_CHAR]   = &&TOK_PACKED_CHAR,
-		[TOK_SPARSE_CHAR]   = &&TOK_SPARSE_CHAR,
-		[TOK_NONE]          = &&TOK_NONE,
 	};
 
 #pragma GCC diagnostic pop
@@ -1590,6 +1619,7 @@ static RESULT ProcessTrieMeta(CodeBox* pCode)
 		[TOK_WHITE_RANGE]   = &&TOK_SPARSE_CHAR,
 		[TOK_ASCII_RANGE]   = &&TOK_SPARSE_CHAR,
 		[TOK_KEYWORD_RANGE] = &&TOK_ALL,
+
 		[TOK_SQUOTE]        = &&TOK_OPEN_SQUOTE,
 		[TOK_DQUOTE]        = &&TOK_OPEN_DQUOTE,
 		[TOK_LCOMMENT]      = &&TOK_OPEN_BLOCK_COMMENT,
@@ -1599,7 +1629,8 @@ static RESULT ProcessTrieMeta(CodeBox* pCode)
 		[TOK_PACKED_CHAR]   = &&TOK_PACKED_CHAR,
 		[TOK_DELIMIT]       = &&TOK_DELIMIT,
 		[TOK_NONE]          = &&TOK_NONE,
-		[TOK_ERR]           = &&TOK_ERR,
+
+		// [TOK_DECLARE_FUNCTION] = &&TOK_DECLARE_FUNCTION,
 	};
 
 #pragma GCC diagnostic pop
@@ -1633,19 +1664,19 @@ TOK_CLOSE_QUOTE:
 	codeDispatch[TOK_SQUOTE] = &&TOK_OPEN_SQUOTE;
 	codeDispatch[TOK_DQUOTE] = &&TOK_OPEN_DQUOTE;
 	pFrie = TOK_BASE_FRIE;
-	goto TOK_SPARSE_TOKEN;
+	goto TOK_SPARSE_CHAR;
 
 TOK_OPEN_SQUOTE:
 	codeDispatch[TOK_SQUOTE] = &&TOK_CLOSE_QUOTE;
 	codeDispatch[TOK_DQUOTE] = &&TOK_ERR;
 	pFrie = TOK_QUOTE_FRIE;
-	goto TOK_SPARSE_TOKEN;
+	goto TOK_SPARSE_CHAR;
 
 TOK_OPEN_DQUOTE:
 	codeDispatch[TOK_SQUOTE] = &&TOK_ERR;
 	codeDispatch[TOK_DQUOTE] = &&TOK_CLOSE_QUOTE;
 	pFrie = TOK_QUOTE_FRIE;
-	goto TOK_SPARSE_TOKEN;
+	goto TOK_SPARSE_CHAR;
 
 TOK_CLOSE_BLOCK_COMMENT:
 	// FRIE_LOG("TOK_CLOSE_BLOCK_COMMENT\n");
@@ -1676,7 +1707,7 @@ TOK_CLOSE_LINE_COMMENT:
 	codeDispatch[TOK_SQUOTE]   = &&TOK_OPEN_SQUOTE;
 	codeDispatch[TOK_DQUOTE]   = &&TOK_OPEN_DQUOTE;
 	pFrie = TOK_BASE_FRIE;
-	goto TOK_SPARSE_TOKEN;
+	goto TOK_SPARSE_CHAR;
 
 TOK_OPEN_LINE_COMMENT:
 	// FRIE_LOG("TOK_OPEN_LINE_COMMENT\n");
@@ -1689,14 +1720,22 @@ TOK_OPEN_LINE_COMMENT:
 	pFrie = TOK_COMMENT_FRIE;
 	goto TOK_ALL;
 
-TOK_SPARSE_TOKEN:
-	pMeta[step.iT].kind = step.nd.sparse.kind;	pMeta[step.iT].tok = step.cT;
-	step.cT = pText[++step.iT]; 
-	step.iN = step.cT < 0 ? TOK_ERR : step.cT; 
-	step.nd = pFrie[step.iN]; 
-	goto *disp[step.iN];
+TOK_DECLARE_FUNCTION:	
+	FRIE_LOG("TOK_DECLARE_FUNCTION\n");
+	codeDispatch[TOK_FUNCTION_DECLARED] = &&TOK_FUNCTION_DECLARED;
+	codeDispatch[TOK_DECLARE_FUNCTION]  = &&TOK_ERR;
+	pFrie = TOK_FUNCTION_DECLARED_FRIE;
+	goto TOK_SPARSE_CHAR;
+
+TOK_FUNCTION_DECLARED:
+	FRIE_LOG("TOK_FUNCTION_DECLARED\n");
+	codeDispatch[TOK_FUNCTION_DECLARED] = &&TOK_ERR;
+	codeDispatch[TOK_DECLARE_FUNCTION]  = &&TOK_DECLARE_FUNCTION;
+	pFrie = TOK_BASE_FRIE;
+	goto TOK_SPARSE_CHAR;
 
 TOK_ERR:
+	FRIE_LOG("TK_ERR iT:%-4d iN:%-4d %4d:%s -->sparse %d kind:%s ", step.iT, step.iN, step.cT, string_CHAR(step.cT), step.nd.sparse.succ, string_TOK_KIND(step.nd.sparse.kind));
 	// If token ended up at error reset node index to sparse char and load in next node.
 	step.iN = step.cT < 0 ? TOK_ERR : step.cT; 
 	step.nd = pFrie[step.iN];
@@ -1704,18 +1743,20 @@ TOK_SPARSE_CHAR:
 	{
 		FRIE_LOG("TOK_SPARSE_CHAR iT:%-4d iN:%-4d %4d:%s -->sparse %d kind:%s ", step.iT, step.iN, step.cT, string_CHAR(step.cT), step.nd.sparse.succ, string_TOK_KIND(step.nd.sparse.kind));
 		// Apply current node meta.
-		pMeta[step.iT].kind = step.nd.sparse.kind;	pMeta[step.iT].tok = step.cT;
+		pMeta[step.iT].kind = step.nd.sparse.kind;	
+		pMeta[step.iT].tok  = step.tok;
 		step.startKind = step.nd.sparse.kind;
-		step.iTStart = step.iT;
+		step.iTStart   = step.iT;
 
 		// Retrieve next char first to use as token for sparse jump
 		step.cT = pText[++step.iT];
 		u8   cT = step.cT < 0 ? TOK_ERR : step.cT;
+		// if (step.iT > 64) return RESULT_SUCCESS;
 
 		// If we match tok jumps to packed to conitnue checking. Otherwise token is sparse char.
-		bool match    = step.nd.sparse.succ > 0 ;
-		step.iN       = match ? step.nd.sparse.succ : cT;
+		bool match    = step.nd.sparse.succ > 0;
 		step.startTok = step.nd.sparse.tok;
+		step.iN       = match ? step.nd.sparse.succ : cT;
 		step.nd       = pFrie[step.iN]; 
 		step.tok      = match ? TOK_PACKED_CHAR : step.nd.sparse.tok;
 		FRIE_LOG("dispatch-->iN:%d %s %s\n", step.iN, string_TOK(step.tok), match ? "" : string_TOK_KIND(step.nd.sparse.kind));
@@ -1726,16 +1767,17 @@ TOK_PACKED_CHAR:
 	{
 		FRIE_LOG("TOK_PACKED_CHAR iT:%-4d iN:%-4d %4d:%s==", step.iT, step.iN, step.cT, string_CHAR(step.cT));
 		FRIE_LOG("%s:%-4d match:%d ", string_CHAR(step.nd.packed.tok), step.nd.packed.tok, step.nd.packed.tok == step.cT);
-		pMeta[step.iT].kind = step.startKind; pMeta[step.iT].tok = step.cT; // TODO figure way to not need to set this each time? We set individually then overwrite if it matches.
+		pMeta[step.iT].kind = step.startKind; 
+		pMeta[step.iT].tok  = step.cT; // TODO figure way to not need to set this each time? We set individually then overwrite if it matches.
 
 		// Load node for next step;
 		bool match = step.nd.packed.tok == step.cT;
 		step.iN += match ? step.nd.packed.succ : step.nd.packed.fail;
-		step.nd  = pFrie[step.iN]; 
-
+		step.nd  = pFrie[step.iN];
+		
 		// If match progress text index. Unless we are going to a token. This does waste an increment and pText lookup on fail condiiton.
-		step.iT += match; 
-		step.cT = pText[step.iT];
+		step.iT += match;
+		step.cT  = pText[step.iT];
 
 		// Single char tokens can only come from sparse chars. If we are traversing packed chars treat all single char tokens as TOK_PACKED_CHAR.
 		step.tok = IS_TOKEN(step.nd.packed.tok) ? step.nd.packed.tok : TOK_PACKED_CHAR;
@@ -1757,7 +1799,7 @@ TOK_DELIMIT:
 
 TOK_ALL:
 	{
-		FRIE_LOG("%s start:%d iT:%d iN:%d kind:%s \n", string_TOK(step.nd.terminator.tok), step.iTStart, step.iT, step.iN,  string_TOK_KIND(step.nd.terminator.kind));
+		FRIE_LOG("TOK_ALL %s start:%d iT:%d iN:%d kind:%s \n", string_TOK(step.nd.terminator.tok), step.iTStart, step.iT, step.iN,  string_TOK_KIND(step.nd.terminator.kind));
 		for (int i = step.iTStart; i < step.iT; ++i) { 
 			pMeta[i].tok  = step.nd.terminator.tok; 
 			pMeta[i].kind = step.nd.terminator.kind; 
@@ -2059,12 +2101,16 @@ static CodeBox text;
 
 int main(void)
 {
-#define CONSTRUCT_TOK_DEF_FRIE(_tok) REQUIRE(ConstructFrie(NARRAY(_tok##_DEFS), _tok##_DEFS,    NARRAY(_tok##_FRIE), _tok##_FRIE))
+#define CONSTRUCT_TOK_DEF_FRIE(_tok) REQUIRE(ConstructFrie(NARRAY(_tok##_DEFS), _tok##_DEFS, NARRAY(_tok##_FRIE), _tok##_FRIE))
+
 	CONSTRUCT_TOK_DEF_FRIE(TOK_BASE);
 	CONSTRUCT_TOK_DEF_FRIE(TOK_DECLARATION);
 	CONSTRUCT_TOK_DEF_FRIE(TOK_QUOTE);
 	CONSTRUCT_TOK_DEF_FRIE(TOK_COMMENT);
 	CONSTRUCT_TOK_DEF_FRIE(TOK_NUMBER);
+	CONSTRUCT_TOK_DEF_FRIE(TOK_FUNCTION_DECLARED);
+
+#undef CONSTRUCT_TOK_DEF_FRIE
 
 	/* Config */
 	SetTraceLogLevel(LOG_ALL);
