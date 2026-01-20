@@ -1750,6 +1750,12 @@ static RESULT CodeBoxProcessMeta(CodeBox* pCode)
 	const int  textCount = pCode->textCount;
 	char	  *pText     = pCode->pText;
 	TextMeta  *pMeta     = pCode->pTextMeta;
+	
+	// Base dispatch is the foundational lex mode and is associated with a frie. Base dispatch can be 
+	// temporarily overriden by dispatch and will use the same frie as base dispatch.
+	// i.e Base dispatch and base frie is C11 code lex and can be overriden by number or quote dispatch
+	// for recognizing identifiers or numbers in the code. Whereas quotes and comments fully switch
+	// to a different frie, base dispatch, dispatch to recognize completely different tokens.
 	void     **basedisp  = baseDispatch;
 	void     **disp      = baseDispatch;
 	FrieNode  *pFrie     = TOK_BASE_FRIE;
@@ -1760,22 +1766,21 @@ static RESULT CodeBoxProcessMeta(CodeBox* pCode)
 	step.node  = pFrie[(u8)step.cText];
 
 	/* Sparse Char Tokens */
-	TOK_SPARSE_WHITESPACE: { 
-		// White space is most common so we rely on fallthrough.
+	TOK_SPARSE_WHITESPACE: { // White space is most common so we rely on fallthrough.
 		step.node.sparse.kind = TOK_KIND_WHITESPACE;
 		// Fallthrough
 	}
-	TOK_SPARSE_CHAR: {
+	TOK_SPARSE_CHAR: { // General entry for all sparse chars.
 		step.meta.tok = (TokMeta){ step.cText, step.node.sparse.kind };
 		// Fallthrough
 	}
-	TOK_SPARSE_META_COPY: {
+	TOK_SPARSE_META_COPY: { // Apply meta for sparse char.
 		ZERO(&step.meta.tokOffset);
 		memcpy(pMeta + step.iText, &step.meta, sizeof(TextMeta));
 		step.iTextStart  = step.iText;
 		// Fallthrough
 	}
-	TOK_SPARSE_DISP: {
+	TOK_SPARSE_DISP: { // Dispatch to Packed Char or begin Sparse Space.
 		bool jump  = step.node.sparse.succ > 0;
 		step.cText = pText[++step.iText];
 		u8 cTok    = step.cText > 0 ? step.cText : TOK_ERR;
@@ -1784,66 +1789,68 @@ static RESULT CodeBoxProcessMeta(CodeBox* pCode)
 		step.node  = pFrie[step.iPack];
 		goto *disp[step.tok];
 	}
-	TOK_SPARSE_STEP: {
+
+	/* Alternate Sparse Char Tokens */
+	TOK_SPARSE_STRING: { // Apply string kind when parsing in quotes.
+		step.meta.tok = (TokMeta){ TOK_STRING, TOK_KIND_STRING };
+		goto TOK_SPARSE_META_COPY;
+	}
+	TOK_SPARSE_COMMENT: { // Apply commend kind when parsing in comments.
+		step.meta.tok = (TokMeta){ TOK_COMMENT, TOK_KIND_COMMENT };
+		goto TOK_SPARSE_META_COPY;
+	}
+
+	/* Sparse Number Span */
+	TOK_SPARSE_NUMBER_BEGIN: {
+		static void *numberDispatch[TOK_CAPACITY] = {
+			DISPATCH_DEEFAULT
+			[TOK_WHITE_RANGE]       = &&TOK_SPARSE_SPAN_END,
+			[' ']                   = &&TOK_SPARSE_SPAN_END,
+			[TOK_ASCII_RANGE]       = &&TOK_SPARSE_SPAN_END,
+			[TOK_UPPER_ALPHA_RANGE] = &&TOK_SPARSE_SPAN_END,
+			[TOK_LOWER_ALPHA_RANGE] = &&TOK_SPARSE_SPAN_END,
+			[TOK_NUMBER_BINARY]     = &&TOK_SPARSE_SPAN_STEP,
+			[TOK_NUMBER_HEX]        = &&TOK_SPARSE_SPAN_STEP,
+			[TOK_DIGIT_RANGE]       = &&TOK_SPARSE_SPAN_STEP,
+		};
+		disp = numberDispatch;
+		step.iTextStart   = step.iText;
+		step.meta.tok = (TokMeta){ TOK_NUMBER, TOK_KIND_NUMBER };
+		goto TOK_SPARSE_DISP;
+	}
+
+	/* Sparse Identifier Span */
+	TOK_SPARSE_IDENTIFIER_BEGIN: {
+		static void *identifierDispatch[TOK_CAPACITY] = {
+			DISPATCH_DEEFAULT
+			[TOK_WHITE_RANGE]       = &&TOK_SPARSE_SPAN_END,
+			[' ']                   = &&TOK_SPARSE_SPAN_END,
+			[TOK_ASCII_RANGE]       = &&TOK_SPARSE_SPAN_END,
+			[TOK_UPPER_ALPHA_RANGE] = &&TOK_SPARSE_SPAN_STEP,
+			[TOK_LOWER_ALPHA_RANGE] = &&TOK_SPARSE_SPAN_STEP,
+			['_']                   = &&TOK_SPARSE_SPAN_STEP,
+			[TOK_DIGIT_RANGE]       = &&TOK_SPARSE_SPAN_STEP,
+		};
+		disp = identifierDispatch;
+		step.iTextStart   = step.iText;
+		step.meta.tok = (TokMeta){ TOK_IDENTIFIER, TOK_KIND_IDENTIFIER };
+		goto TOK_SPARSE_DISP;
+	}
+
+	/* Sparse Span */
+	TOK_SPARSE_SPAN_STEP: {
 		step.cText = pText[++step.iText];
 		step.tok   = step.cText < 0 ? TOK_ERR : step.cText;
 		step.node  = pFrie[step.tok];
 		goto *disp[step.tok];
 	}
-	TOK_SPARSE_END: {
+	TOK_SPARSE_SPAN_END: {
 		for (int i = step.iTextStart; i < step.iText; ++i) {
 			step.meta.tokOffset = (u8_span){ i - step.iTextStart, (step.iText-1) - i };
 			pMeta[i] = step.meta;
 		}
 		disp = baseDispatch;
 		goto *disp[step.tok];
-	}
-
-	/* Alternate Sparse Char Tokens */
-	TOK_SPARSE_STRING: {
-		step.meta.tok = (TokMeta){ TOK_STRING, TOK_KIND_STRING };
-		goto TOK_SPARSE_META_COPY;
-	}
-	TOK_SPARSE_COMMENT: {
-		step.meta.tok = (TokMeta){ TOK_COMMENT, TOK_KIND_COMMENT };
-		goto TOK_SPARSE_META_COPY;
-	}
-
-	/* Sparse Number */
-	TOK_SPARSE_NUMBER_BEGIN: {
-		static void *numberDispatch[TOK_CAPACITY] = {
-			DISPATCH_DEEFAULT
-			[TOK_WHITE_RANGE]       = &&TOK_SPARSE_END,
-			[' ']                   = &&TOK_SPARSE_END,
-			[TOK_ASCII_RANGE]       = &&TOK_SPARSE_END,
-			[TOK_UPPER_ALPHA_RANGE] = &&TOK_SPARSE_END,
-			[TOK_LOWER_ALPHA_RANGE] = &&TOK_SPARSE_END,
-			[TOK_NUMBER_BINARY]     = &&TOK_SPARSE_STEP,
-			[TOK_NUMBER_HEX]        = &&TOK_SPARSE_STEP,
-			[TOK_DIGIT_RANGE]       = &&TOK_SPARSE_STEP,
-		};
-		step.iTextStart   = step.iText;
-		step.meta.tok = (TokMeta){ TOK_NUMBER, TOK_KIND_NUMBER };
-		disp = numberDispatch;
-		goto TOK_SPARSE_DISP;
-	}
-
-	/* Sparse Identifier */
-	TOK_SPARSE_IDENTIFIER_BEGIN: {
-		static void *identifierDispatch[TOK_CAPACITY] = {
-			DISPATCH_DEEFAULT
-			[TOK_WHITE_RANGE]       = &&TOK_SPARSE_END,
-			[' ']                   = &&TOK_SPARSE_END,
-			[TOK_ASCII_RANGE]       = &&TOK_SPARSE_END,
-			[TOK_UPPER_ALPHA_RANGE] = &&TOK_SPARSE_STEP,
-			[TOK_LOWER_ALPHA_RANGE] = &&TOK_SPARSE_STEP,
-			['_']                   = &&TOK_SPARSE_STEP,
-			[TOK_DIGIT_RANGE]       = &&TOK_SPARSE_STEP,
-		};
-		step.iTextStart   = step.iText;
-		step.meta.tok = (TokMeta){ TOK_IDENTIFIER, TOK_KIND_IDENTIFIER };
-		disp = identifierDispatch;
-		goto TOK_SPARSE_DISP;
 	}
 
 	/* Scope Tokens */
@@ -1871,15 +1878,15 @@ static RESULT CodeBoxProcessMeta(CodeBox* pCode)
 
 	/* Quote Tokens */
 	TOK_SQUOTE_BEGIN: {
-		static void *squoteispatch[TOK_CAPACITY] = {
+		static void *squoteDispatch[TOK_CAPACITY] = {
 			DISPATCH_DEEFAULT
 			[TOK_ASCII_RANGE] = &&TOK_SPARSE_STRING,
 			[' ']             = &&TOK_SPARSE_WHITESPACE,
 			['\'']            = &&TOK_QUOTE_END,
 		};
-		basedisp = squoteispatch;
-		disp     = squoteispatch;
-		pFrie = TOK_QUOTE_FRIE;
+		basedisp = squoteDispatch;
+		disp     = squoteDispatch;
+		pFrie    = TOK_QUOTE_FRIE;
 		goto TOK_SPARSE_CHAR;
 	}
 	TOK_DQUOTE_BEGIN: {
@@ -1891,13 +1898,13 @@ static RESULT CodeBoxProcessMeta(CodeBox* pCode)
 		};
 		basedisp = dquoteDispatch;
 		disp     = dquoteDispatch;
-		pFrie = TOK_QUOTE_FRIE;
+		pFrie    = TOK_QUOTE_FRIE;
 		goto TOK_SPARSE_CHAR;
 	}
 	TOK_QUOTE_END: {
 		basedisp = baseDispatch;
 		disp     = baseDispatch;
-		pFrie = TOK_BASE_FRIE;
+		pFrie    = TOK_BASE_FRIE;
 		goto TOK_SPARSE_CHAR;
 	}
 
@@ -1905,7 +1912,7 @@ static RESULT CodeBoxProcessMeta(CodeBox* pCode)
 	TOK_CLOSE_BLOCK_COMMENT: {
 		basedisp = baseDispatch;
 		disp     = baseDispatch;
-		pFrie = TOK_BASE_FRIE;
+		pFrie    = TOK_BASE_FRIE;
 		goto TOK_ALL;
 	}
 	TOK_OPEN_BLOCK_COMMENT: {
@@ -1917,13 +1924,13 @@ static RESULT CodeBoxProcessMeta(CodeBox* pCode)
 		};
 		basedisp = blockCommentDispatch;
 		disp     = blockCommentDispatch;
-		pFrie = TOK_LINE_COMMENT_FRIE;
+		pFrie    = TOK_LINE_COMMENT_FRIE;
 		goto TOK_ALL;
 	}
 	TOK_CLOSE_LINE_COMMENT:	{
 		basedisp = baseDispatch;
-		disp  = baseDispatch;
-		pFrie = TOK_BASE_FRIE;
+		disp     = baseDispatch;
+		pFrie    = TOK_BASE_FRIE;
 		goto TOK_SPARSE_CHAR;
 	}
 	TOK_OPEN_LINE_COMMENT: {
@@ -1935,7 +1942,7 @@ static RESULT CodeBoxProcessMeta(CodeBox* pCode)
 		};
 		basedisp = lineCommentDispatch;
 		disp     = lineCommentDispatch;
-		pFrie = TOK_LINE_COMMENT_FRIE;
+		pFrie    = TOK_LINE_COMMENT_FRIE;
 		goto TOK_ALL;
 	}
 
@@ -2988,9 +2995,12 @@ LoopBegin:
 					input.mouseMarkActive = false;
 					if (caret.index >= pCode->textCount) break;
 					int newIndex = TextFindCharForward(pText, mark.index+1, modifiedKey);
-					CodeSetMarkIndex(pCode, newIndex);
-					CodeSyncCaretToMarkRow(pCode, 0);
-					CodeBoxFocusMark(pCode);
+					CodePushCmd(pCode, (CodeCmdData){ 
+						.cmd = CODE_CMD_MOVE_MARK, 
+						.moveMark.caretIndex    = iCaret,
+						.moveMark.fromMarkIndex = mark.index,  
+						.moveMark.toMarkIndex   = newIndex,  
+					});
 					break;
 				}
 				/* Jump Backward To Char */
@@ -3034,9 +3044,12 @@ LoopBegin:
 					input.mouseMarkActive = false;
 					if (caret.index <= 0) break;
 					int newIndex = TextFindCharBackward(pText, mark.index-2, modifiedKey) + 1;
-					CodeSetMarkIndex(pCode, newIndex);
-					CodeSyncCaretToMarkRow(pCode, 0);
-					CodeBoxFocusMark(pCode);
+					CodePushCmd(pCode, (CodeCmdData){ 
+						.cmd = CODE_CMD_MOVE_MARK, 
+						.moveMark.caretIndex    = iCaret,
+						.moveMark.fromMarkIndex = mark.index,  
+						.moveMark.toMarkIndex   = newIndex,  
+					});
 					break;
 				}
 				default: break;
@@ -3119,6 +3132,7 @@ LoopBegin:
 		Vector2 scanFoundPosition = { -1, -1}; // TODO compute deterministically
 
 		/* Mark Mouse Input */
+		int iCaret = 0;
 		bool    markPress = false;
 		CodePos mark      = pCode->mark;
 		if (boxHovering && input.mouseMarkActive) {
@@ -3186,10 +3200,12 @@ LoopBegin:
 			}
 
 			if (markPress) {
-				pCode->mark.index = mark.index;
-				pCode->mark.col = mark.col;
-				pCode->mark.row = mark.row;
-				CodeSyncCaretToMarkRow(pCode, 0);
+				CodePushCmd(pCode, (CodeCmdData){ 
+					.cmd = CODE_CMD_MOVE_MARK, 
+					.moveMark.caretIndex    = iCaret,
+					.moveMark.fromMarkIndex = pCode->mark.index,  
+					.moveMark.toMarkIndex   = mark.index,  
+				});
 			}
 		}
 
