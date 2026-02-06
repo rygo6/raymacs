@@ -174,7 +174,6 @@ Alt + " - ...
 */
 
 #include <stdio.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
@@ -367,10 +366,24 @@ STATIC_ASSERT(SMIN(i8) == -128);
 	_p;\
 })
 
+#define XALLOC(_size)\
+({\
+	void* _p = malloc(_size);\
+	if (UNLIKELY(_p == NULL)) PANIC("XALLOC FAIL!");\
+	_p;\
+})
+
 #define XCALLOC(_count, _type)\
 ({\
 	void* _p = calloc(_count, sizeof(_type));\
 	if (UNLIKELY(_p == NULL)) PANIC("XCALLOC FAIL!");\
+	_p;\
+})
+
+#define XREALLOC(_oldp, _size)\
+({\
+	void* _p = realloc(_oldp, _size);\
+	if (UNLIKELY(_p == NULL)) PANIC("XREALLOC FAIL!");\
 	_p;\
 })
 
@@ -639,9 +652,6 @@ DEF_SCHEME(DEF_COLOR)
 #define TOK_ALL_END   255
 #define TOK_ALL_RANGE TOK_ALL_BEGIN ... TOK_ALL_END
 
-#define TOK_RANGE_NAME "\005"
-#define TOK_DELIM_STR  "\003"
-
 #define IS_DELIM_TOKEN(_c)   (_c == TOK_DELIMIT)
 #define IS_SPECIAL_TOKEN(_c) (_c <= TOK_FRIE_SECIAL_END)
 #define IS_KEYWORD_TOKEN(_c) (_c >= TOK_KEYWORD_BEGIN)
@@ -750,7 +760,7 @@ static const Color TOK_SCOPE_COLORS[] = {
 	DEF(TOK_DELIMIT,     /*ETX*/'\003')\
 	DEF(TOK_MUNCH,              '\006')\
 	DEF(TOK_ERR,         /*ENQ*/'\004')\
-	DEF(TOK_RANGE,              '\005')\
+	DEF(TOK_KEY_CHAR,           '\005')\
 	/* White Spaces */\
 	DEF(TOK_TAB,          /* 9*/'\t')\
 	DEF(TOK_VERTICAL_TAB, /*10*/'\v')\
@@ -982,6 +992,8 @@ static const Color TOK_SCOPE_COLORS[] = {
 DEF_ENUM(TOK);
 STATIC_ASSERT(TOK_COUNT < TOK_CAPACITY, "Not setup to support more than 256 tokens!");
 
+#define TOK_KEY_CHAR_NAME "\005"
+#define TOK_DELIM_STR     "\003"
 #define DLM TOK_DELIM_STR
 
 #define DEF_TOK_BASE(DEF, DEF_RANGE)\
@@ -1023,6 +1035,7 @@ STATIC_ASSERT(TOK_COUNT < TOK_CAPACITY, "Not setup to support more than 256 toke
 	DEF("->"  , TOK_ARROW         , TOK_KIND_OPERATOR)\
 	DEF("<<=" , TOK_LSHIFT_ASSIGN , TOK_KIND_OPERATOR)\
 	DEF("<<"  , TOK_LSHIFT        , TOK_KIND_OPERATOR)\
+	DEF(">>=" , TOK_RSHIFT_ASSIGN , TOK_KIND_OPERATOR)\
 	DEF(">>"  , TOK_RSHIFT        , TOK_KIND_OPERATOR)\
 	DEF("<="  , TOK_LE            , TOK_KIND_OPERATOR)\
 	DEF(">="  , TOK_GE            , TOK_KIND_OPERATOR)\
@@ -1038,7 +1051,6 @@ STATIC_ASSERT(TOK_COUNT < TOK_CAPACITY, "Not setup to support more than 256 toke
 	DEF("&="  , TOK_AND_ASSIGN    , TOK_KIND_OPERATOR)\
 	DEF("|="  , TOK_OR_ASSIGN     , TOK_KIND_OPERATOR)\
 	DEF("^="  , TOK_XOR_ASSIGN    , TOK_KIND_OPERATOR)\
-	DEF(">>=" , TOK_RSHIFT_ASSIGN , TOK_KIND_OPERATOR)\
 	/* Statement */\
 	DEF("?"   , TOK_QUESTION  , TOK_KIND_STATEMENT)\
 	DEF(":"   , TOK_COLON     , TOK_KIND_STATEMENT)\
@@ -1166,6 +1178,8 @@ STATIC_ASSERT(TOK_COUNT < TOK_CAPACITY, "Not setup to support more than 256 toke
 	DEF(TOK_QUOTE)\
 	DEF(TOK_LINE_COMMENT)
 
+
+	
 /*
  * Flat Trie Data Structure
  */
@@ -1188,22 +1202,36 @@ typedef union PACKED FrieNode {
 	struct PACKED {
 		u32   tok  : 8;  // Token Value. 0-7 Special Frie Token. 32-128 ASCII Tokens. >128 Keyword Tokens
 		u32   kind : 8;  // Token kind.
-		u32   pad  : 16; // 10 more bits available
+		u32   pad  : 16; // 16 more bits available
 	} terminator;
 	u32 raw; // Must use u32 for everything to ensure union packs to 4 bytes. Differing types makes the compiler add arbitrary packing.
 } FrieNode;
 STATIC_ASSERT(sizeof(FrieNode) == 4);
 
-typedef struct FrieTokDef {
+typedef union PACKED FrieNode2 {
+	/* All tokens past first 128 ASCII chars are packed nodes. Can contain TOK_DELIMIT or TOK_MUNCH nodes. */
+	struct PACKED {
+		u32  tok  : 8;  // Token Value. 0-7 Special Frie Token. 32-128 ASCII Tokens. >128 Keyword Tokens
+		u32  fail : 12; // offset to jump on fail.
+	} packed;
+	/* Endpoint token node. Error or Keword token. Frie exits when ecnountering these. */
+	struct PACKED {
+		u32   tok  : 8;  // Token Value. 0-7 Special Frie Token. 32-128 ASCII Tokens. >128 Keyword Tokens
+		u32   kind : 8;  // Token kind.
+		u32   pad  : 16; // 10 more bits available
+	} terminator;
+} FrieNode2;
+
+typedef struct TokDef {
 	char* name;
 	u16 kind;
-} FrieTokDef;
+} TokDef;
 
 #define STR_LEN(_str) (sizeof(_str) - 1)
-#define DEF_TOK_DEF_ITEM(_name, _tok, _kind)  [_tok]   = (FrieTokDef){ _name,          _kind },
-#define DEF_TOK_RANGE_DEF_ITEM(_range, _kind) [_range] = (FrieTokDef){ TOK_RANGE_NAME, _kind },
+#define DEF_TOK_DEF_ITEM(_name, _tok, _kind)     [_tok]   = (TokDef){ _name,          _kind },
+#define DEF_TOK_KEY_CHAR_DEF_ITEM(_range, _kind) [_range] = (TokDef){ TOK_KEY_CHAR_NAME, _kind },
 #define DEF_TOK_DEFINITIONS(_tok)\
-	static const FrieTokDef _tok##_DEFS[] = { DEF_##_tok(DEF_TOK_DEF_ITEM, DEF_TOK_RANGE_DEF_ITEM) };\
+	static const TokDef _tok##_DEFS[] = { DEF_##_tok(DEF_TOK_DEF_ITEM, DEF_TOK_KEY_CHAR_DEF_ITEM) };\
 	static FrieNode _tok##_FRIE[1024];
 
 #pragma GCC diagnostic push
@@ -1211,6 +1239,196 @@ typedef struct FrieTokDef {
 #define DEF_TOK_DEFINITIONS_ALL(_defs) _defs(DEF_TOK_DEFINITIONS)
 	DEF_TOK_DEFINITIONS_ALL(DEF_TOK_ALL_DEFINITIONS)
 #pragma GCC diagnostic pop // ignored "-Woverride-init"
+
+/*
+ * CharLen Lookup
+ */
+
+ /*
+	sint8  0
+	uint8  1
+	int8   2
+	uint16  3
+	uint32  4
+	int8a   5
+
+	T = special char
+   
+
+ L0 sint8 T 16 T 32 T int8 T0 16 T3 32 T4
+
+ nextC:
+	token = match && n == T;
+	disp = token ? T : nextC;
+	match = c == n;
+	iC += match;
+	iN++;
+	disp();
+
+
+    all in u16? no., intermittent jump toks. no just scan is better 
+	u16 could let you have gaps.u16 ultimately simplifies. offsets first tags to scan is a tradeoff between more overhead during add or more overhead during lookup, and more during add is better
+
+	yes u16 per char. gives us better jumps. 
+	i16 - is jump
+	> 128 is token
+	== 0 is end
+
+
+	start with 32 char gaps. Increased gaps can decrease shifts
+
+                           o1              o2                  o3         o4      o5
+ L0 s -1 u -2 i n t 8 T2 /0 i n t 8 T0 /0 i n t 8 -3 1 -4 3 -5 T1 a T5 /0 6 T3 /0 2 T4
+
+	uint328T1/0
+
+yes we want 0 as maximal munch because it can try to maximal munch on a smaller frie, but when it knows the exact length can fiond that on a smaller frie, ultimately it will deal with two much smaller fries
+
+
+ nextChar:
+	n = node[iN];
+	t = test[iT];
+	// if prior was match and we are now on a jump token then jump! If last was a jump keep jumping!
+ 	jump  = n < 0 && (match || jump) : -n : 1;
+ 	match = t == n || jump;
+	iC += match;
+	iN += jump
+	disp(t);
+
+ nexTok:
+	u32 token = *(u32*)pText;
+	return token;
+	
+
+	uint8Tint8T16T32T
+ 
+ 
+ 
+ */
+
+struct PACKED TokTerm {
+	u16  term : 1; 
+	u16  tok  : 15;
+} TokTerm;
+STATIC_ASSERT(sizeof(TokTerm) == 2);
+
+static u32 pow2(u32 n) {
+    if (n == 0) return 1;
+    return 1U << (32 - __builtin_clz(n - 1));
+}
+
+#define DEF_FRIE_LOOKUP(DEF)\
+	DEF(FRIE_LOOKUP_EXACT)\
+	DEF(FRIE_LOOKUP_MAXIMAL_MUNCH)
+DEF_ENUM(FRIE_LOOKUP);
+
+typedef struct FrieEntry {
+	int   length;
+	int   capacity;
+	i16  *pBuf;
+} FrieEntry;
+
+static FrieEntry frie2[128][32];
+
+#define JUMP_MASK    0b1000000000000000
+#define TOK_MASK     0b0000000010000000
+#define A_CHAR_MASK  0b0111111100000000
+#define B_CHAR_MASK  0b0000000001111111
+
+#define IS_TOK(_i16)     (_i16 > TOK_ASCII_END)
+#define IS_JUMP(_i16)    (_i16 < 0)
+#define JUMP_VALUE(_i16) (-_i16)
+
+static RESULT FrieInsert2(FrieEntry pFrie[128][32], FRIE_LOOKUP lookup, int keyLen, const char* key, u16 value)
+{
+	ASSERT(pFrie != NULL); ASSERT(keyLen > 0); ASSERT(key != 0);
+	
+	LOG("Inserting key:%s length:%d\n", key, keyLen);
+	int count = 0;
+
+	int iLen = lookup == FRIE_LOOKUP_MAXIMAL_MUNCH ? 0 : keyLen;
+	int iKey = 0;
+	i16 cKey  = key[iKey];
+
+	FrieEntry *pEntry = &pFrie[cKey][iLen];
+	int capacityEstimate = pEntry->length + keyLen + 2;
+	if (pEntry->capacity < capacityEstimate) {
+		int newCapacity = pow2(capacityEstimate);
+		fprintf(stderr, "Expanded Frie from %d to %d\n", pEntry->capacity, newCapacity);
+		pEntry->pBuf = XREALLOC(pEntry->pBuf, newCapacity * sizeof(u16));
+		memset(pEntry->pBuf + pEntry->capacity, 0, newCapacity - pEntry->capacity);
+		pEntry->capacity = newCapacity;
+	}
+	int  bufLen = pEntry->length;
+	int  iBuf = 0;
+	i16 *pBuf = pEntry->pBuf;
+	i16  cBuf = pBuf[iBuf];
+	cKey = key[++iKey];
+
+	/* First Entry */
+	if (bufLen == 0) {
+		int keyRemain = keyLen - iKey;
+		for (int i = 0; i < keyRemain; ++i) pBuf[iBuf++] = key[iKey++];
+		pBuf[iBuf++] = value;
+		pBuf[iBuf++] = '\0';
+		pEntry->length = bufLen + keyRemain+2;
+		goto RESULT_SUCCESS;
+	}
+
+NextChar:
+	if (count++ > 100) goto RESULT_SUCCESS;
+	fprintf(stderr, "iBuf:%d iKey:%d cBuf:%c:%d cKey:%c:%d... ", iBuf, iKey,  cBuf, cBuf, cKey, cKey);
+
+	bool match = cKey == cBuf;
+	if (match) {
+		fprintf(stderr, "Match\n");
+		cKey = key[++iKey];
+		cBuf = pBuf[++iBuf];
+		goto NextChar;
+	}
+
+	bool jump = IS_JUMP(cBuf);
+	if (jump) {
+		fprintf(stderr, "Jump\n");
+		iBuf += JUMP_VALUE(cBuf);
+		cBuf = pBuf[iBuf];
+		goto NextChar;
+	}
+
+	{
+		fprintf(stderr, "Insert: iBuf:%d bufLen:%d Remain:%d %s\n", iBuf, bufLen, keyLen - iKey, key + iKey);
+		memmove(pBuf + iBuf + 2, pBuf + iBuf, (bufLen - iBuf) * sizeof(u16)); bufLen += 2;
+		pBuf[iBuf++] = key[iKey++];
+		pBuf[iBuf] = -(bufLen - iBuf); 
+		iBuf = bufLen;
+		int keyRemain = keyLen - iKey;
+		for (int i = 0; i < keyRemain; ++i)	{
+			fprintf(stderr, "Char: iBuf:%d iKey:%d %c\n", iBuf, iKey, key[iKey]);
+			pBuf[iBuf++] = key[iKey++];
+		}
+		fprintf(stderr, "Token: iBuf:%d value:%d\n", iBuf, value);
+		pBuf[iBuf++] = value;
+		pBuf[iBuf++] = '\0';
+		pEntry->length = bufLen + keyRemain+2;
+		goto RESULT_SUCCESS;
+	}
+
+RESULT_SUCCESS:
+	LOG("Success: length:%d capacity:%d\n", pEntry->length, pEntry->capacity);
+	for (int i = 0; i < pEntry->length; ++i) {
+		if (IS_TOK(pBuf[i]))
+			fprintf(stderr, ANSI_YELLOW "%d" ANSI_MAGENTA "%d" ANSI_WHITE ANSI_DIM "|" ANSI_RESET, i, pBuf[i]);
+		else if (IS_JUMP(pBuf[i]))
+			fprintf(stderr, ANSI_YELLOW "%d" ANSI_GREEN "%d" ANSI_WHITE ANSI_DIM "|" ANSI_RESET, i, (-pBuf[i])+i);
+		else 
+			fprintf(stderr, ANSI_YELLOW "%d" ANSI_CYAN "%d" ANSI_WHITE "%c" ANSI_DIM "|" ANSI_RESET, i, pBuf[i], pBuf[i]);
+	}	
+	fprintf(stderr, "\n");
+
+	return RESULT_SUCCESS;
+}
+ 
+
 
 /*
  * Flat Trie Functions
@@ -1235,6 +1453,7 @@ static void FrieLog(FrieNode* trie)
 			ANSI_BRIGHT_BLACK "|"
 			ANSI_RESET,
 			iNode, string_CHAR(iNode), node.sparse.succ, string_TOK(node.sparse.tok));
+		if (iNode % 16 == 0) fprintf(stderr, "\n");
 		node = trie[++iNode];
 	}
 	fprintf(stderr,
@@ -1343,15 +1562,15 @@ TOK_NONE:
 	return step.startTok;
 }
 
-static void FrieValidate(int tokCount, const FrieTokDef* tokDefs, FrieNode* pFrie)
+static void FrieValidate(int tokCount, const TokDef* tokDefs, FrieNode* pFrie)
 {
 	char sparseCharBuf[2] = { '\0', '\0' };
 	for (int iTok = TOK_ASCII_BEGIN; iTok < tokCount; ++iTok) {
-		FrieTokDef def = tokDefs[iTok];
+		TokDef def = tokDefs[iTok];
 		if (def.name == NULL) continue;
-		if (def.name[0] == TOK_RANGE) {	def.name = sparseCharBuf; def.name[0] = iTok; }
+		if (def.name[0] == TOK_KEY_CHAR) {	def.name = sparseCharBuf; def.name[0] = iTok; }
 		TOK tok = FrieGet(def.name, pFrie);
-		LOG("%s  %d:%s expected:%d:%s\n", def.name, tok, string_TOK(tok), iTok, string_TOK(iTok));
+		// LOG("%s  %d:%s expected:%d:%s\n", def.name, tok, string_TOK(tok), iTok, string_TOK(iTok));
 		MUST(tok == iTok);
 	}
 }
@@ -1378,9 +1597,27 @@ static void FrieShift(FrieNode* pFrie, int iInsertNode, int iEndNode)
 	}
 }
 
-static RESULT ConstructFrie(int tokCount, const FrieTokDef* tokDefs, int frieCapacity, FrieNode* pFrie)
+static RESULT FrieInitialize(int frieCapacity, FrieNode* pFrie)
 {
-	FrieTokDef def = { .name = "\0" };
+	CHECK(frieCapacity > 256, RESULT_CAPACITY_ERROR);
+	ZERO_RANGE(pFrie, frieCapacity);
+	for (int i = 1; i < TOK_KEYWORD_BEGIN; ++i) {
+		pFrie[i].sparse.tok  = TOK_ERR;
+		pFrie[i].sparse.kind = TOK_KIND_ERROR;
+	}
+	goto RESULT_SUCCESS;
+
+RESULT_CAPACITY_ERROR:
+	LOG_ERR("Frie capacityt too small %d! Expected > 256.\n", frieCapacity);
+	return RESULT_CAPACITY_ERROR;
+
+RESULT_SUCCESS:
+	return RESULT_SUCCESS;
+}
+
+static RESULT FrieInsert(int tokCount, const TokDef* tokDefs, int frieCapacity, FrieNode* pFrie)
+{
+	TokDef def = { .name = "\0" };
 	int iEndNode = TOK_KEYWORD_BEGIN;
 	int iNodeFirstFail = 0;
 	int iTok   = 0;
@@ -1391,19 +1628,13 @@ static RESULT ConstructFrie(int tokCount, const FrieTokDef* tokDefs, int frieCap
 	bool delim = false;
 	TOK tok    = TOK_NONE;
 	char sparseCharBuf[2] = { '\0', '\0' };
-
-	CHECK(frieCapacity > 256, RESULT_CAPACITY_ERROR);
-	ZERO_RANGE(pFrie, frieCapacity);
-	for (int i = 1; i < TOK_KEYWORD_BEGIN; ++i) {
-		pFrie[i].sparse.tok  = TOK_ERR;
-		pFrie[i].sparse.kind = TOK_KIND_ERROR;
-	}
+	double buildTimeStart = GetTime();
 
 NextTok:
 	if (iTok == tokCount) goto RESULT_SUCCESS;
 	def = tokDefs[iTok];
 	if (def.name == NULL) {	iTok++; goto NextTok; }
-	if (def.name[0] == TOK_RANGE) {	def.name = sparseCharBuf; def.name[0] = iTok; }
+	if (def.name[0] == TOK_KEY_CHAR) {	def.name = sparseCharBuf; def.name[0] = iTok; }
 	iNodeFirstFail = TOK_KEYWORD_BEGIN;
 	iNode = 0;
 	iName = 0;
@@ -1411,6 +1642,7 @@ NextTok:
 	munch = false;
 	delim = def.name[len-1] == TOK_DELIMIT;
 	tok = iTok;
+	LOG("Insert Token: %s\n", def.name);
 
 NextNameChar:
 	char cName = def.name[iName];
@@ -1428,7 +1660,7 @@ NextNameChar:
 		// One char token
 		if (cNameNext == '\0') {
 			pNode->sparse.kind = def.kind;
-			CHECKMSG(pNode->sparse.tok != TOK_SPARSE_CHAR, RESULT_DUPLICATE_ERROR, "Trying to insert single char token twice! %s %s %s", def.name, string_CHAR(cName), string_TOK(tok));
+			CHECKMSG(pNode->sparse.tok != TOK_SPARSE_CHAR, RESULT_DUPLICATE_ERROR, "Inserting single char token twice! %s %s %s", def.name, string_CHAR(cName), string_TOK(tok));
 			pNode->sparse.tok = tok;
 			iTok++;
 			goto NextTok;
@@ -1443,7 +1675,7 @@ NextNameChar:
 		}
 
 		// Set succ on sparse token to signal a match
-		CHECKMSG(iEndNode < FRIE_MAX_SPARSE_OFFSET, RESULT_OFFSET_ERROR, "end offset:%d", iEndNode);
+		CHECKMSG(iEndNode < FRIE_MAX_SPARSE_OFFSET, RESULT_OFFSET_ERROR, "end:%d", iEndNode);
 		if (node.sparse.tok != TOK_ERR) munch = true;
 		pNode->sparse.succ = iEndNode;
 		iNode = iEndNode;
@@ -1454,13 +1686,13 @@ NextNameChar:
 	/* Token Subsequent Chars */
 	{
 		FrieNode node  = pFrie[iNode];
-		// Encounter a token, must shift to the right and fill in new token.
+		// Encounter a token in frie, must shift to the right and fill in new token.
 		if (IS_KEYWORD_TOKEN(node.packed.tok) || node.packed.tok == TOK_ERR || node.packed.tok == TOK_MUNCH) {
 			if (iNodeFirstFail != TOK_KEYWORD_BEGIN) iNode = iNodeFirstFail;
 			FrieShift(pFrie, iNode, iEndNode);
 			iEndNode++; CHECK(iEndNode < frieCapacity, RESULT_CAPACITY_ERROR);
 			u16 succ = iEndNode - iNode;
-			CHECKMSG(succ < FRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "succ offset:%d", succ);
+			CHECKMSG(succ < FRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "succ:%d", succ);
 			pFrie[iNode] = (FrieNode){
 				.packed.tok  = cName,
 				.packed.succ = succ,
@@ -1472,15 +1704,15 @@ NextNameChar:
 			goto NextNameChar;
 		}
 
-		// Encounter delimit char, must shift to the right and fill in new token.
+		// Encounter delimit char in tokdef name, must shift to the right and fill in new token.
 		if (cName == TOK_DELIMIT) {
 			FrieShift(pFrie, iNode, iEndNode);
 			bool insertingAtEnd = iEndNode == iNode;
 			iEndNode++; CHECK(iEndNode < frieCapacity, RESULT_CAPACITY_ERROR);
 			u16 succ = iEndNode - iNode;
-			CHECKMSG(succ < FRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "succ offset:%d", succ);
+			CHECKMSG(succ < FRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "succ:%d", succ);
 			u16 fail = insertingAtEnd ? succ + 1 : 1; // If inserting at end ERR token is 1 after succ, otherwise fail to next node
-			CHECKMSG(fail < FRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "fail offset:%d", fail);
+			CHECKMSG(fail < FRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "fail:%d", fail);
 			pFrie[iNode] = (FrieNode){
 				.packed.tok  = TOK_DELIMIT,
 				.packed.succ = succ,
@@ -1493,7 +1725,7 @@ NextNameChar:
 
 		// End of Token Name. Write token go to next token!
 		if (cName == '\0') {
-			CHECKMSG(iNode == iEndNode, RESULT_ORDER_ERROR, "Trying to inset shorter token after longer token! %s %s", def.name, string_TOK(tok));
+			CHECK(iNode == iEndNode, RESULT_ORDER_ERROR);
 			pFrie[iNode++] = (FrieNode){ .terminator.tok = tok, .terminator.kind = def.kind };
 			// If the token has a delimiter it will have an explicit end delimit node to signal match. If it gets past the delimiter node it's because there was no match and thus an error.
 			// If there is no delimiter it runs on maximal munch and whatever muched thus far should be the token.
@@ -1519,7 +1751,7 @@ NextNameChar:
 
 		{
 			u16 fail = (len + 1) - iName - delim; // +1 as err comes after tok
-			CHECKMSG(fail < FRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "fail offset:%d", fail);
+			CHECKMSG(fail < FRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "fail:%d", fail);
 			pFrie[iNode] = (FrieNode){
 				.packed.tok  = cName,
 				.packed.succ = 1,
@@ -1531,26 +1763,25 @@ NextNameChar:
 	}
 
 RESULT_ORDER_ERROR:
-	LOG_ERR("Trie capacity reached! %d %s\n", iNode, def.name);
+	LOG_ERR("Trying to inset shorter token after longer token! %s %s", def.name, string_TOK(tok));
 	FrieLog(pFrie);
-	return RESULT_CAPACITY_ERROR;
+	return RESULT_ORDER_ERROR;
 
 RESULT_CAPACITY_ERROR:
 	LOG_ERR("Trie capacity reached! %d %s\n", iNode, def.name);
-	FrieLog(pFrie);
 	return RESULT_CAPACITY_ERROR;
 
 RESULT_DUPLICATE_ERROR:
 	LOG_ERR("Trying insert the same token twice! %d %s\n", iNode, def.name);
-	FrieLog(pFrie);
 	return RESULT_DUPLICATE_ERROR;
 
 RESULT_OFFSET_ERROR:
 	LOG_ERR("Trying to add offset greater than FRIE_MAX_OFFSET. %d %s\n", iNode, def.name);
-	FrieLog(pFrie);
 	return RESULT_OFFSET_ERROR;
 
 RESULT_SUCCESS:
+	double buildTimeEnd = GetTime();
+	LOG("Frie Build Time: %f %f %fms\n", buildTimeEnd, buildTimeStart, (buildTimeEnd - buildTimeStart) * 1000.0);
 	FrieLog(pFrie);
 	FrieValidate(tokCount, tokDefs, pFrie);
 	return RESULT_SUCCESS;
@@ -1850,6 +2081,12 @@ static RESULT CodeBoxProcessMeta(CodeBox* pCode)
 			pMeta[i] = step.meta;
 		}
 		disp = baseDispatch;
+		// LOG("Sparse Span End: %.*s %s %s\n", step.iText - step.iTextStart, pText + step.iTextStart, string_TOK(step.meta.tok.val), string_TOK_KIND(step.meta.tok.kind));
+		// if (step.meta.tok.kind == TOK_KIND_IDENTIFIER) {
+		// 	static char buf[64];
+		// 	snprintf(buf, 64, "%.*s", step.iText - step.iTextStart, pText + step.iTextStart);
+		// 	FrieInsert(1, &(TokDef){ .kind = step.meta.tok.kind, .name = buf }, 1024, TOK_BASE_FRIE);
+		// }
 		goto *disp[step.tok];
 	}
 
@@ -2446,7 +2683,14 @@ static struct {
 
 int main(void)
 {
-	#define CONSTRUCT_TOK_DEF_FRIE(_tok) REQUIRE(ConstructFrie(NARRAY(_tok##_DEFS), _tok##_DEFS, NARRAY(_tok##_FRIE), _tok##_FRIE));
+	FrieInsert2(frie2, FRIE_LOOKUP_MAXIMAL_MUNCH, sizeof("uint32")-1, "uint32", 10032);
+	FrieInsert2(frie2, FRIE_LOOKUP_MAXIMAL_MUNCH, sizeof("uint8")-1, "uint8", 10008);
+	FrieInsert2(frie2, FRIE_LOOKUP_MAXIMAL_MUNCH, sizeof("uint16")-1, "uint16", 10016);
+	return 0;
+	
+	#define CONSTRUCT_TOK_DEF_FRIE(_tok)\
+		REQUIRE(FrieInitialize(NARRAY(_tok##_FRIE), _tok##_FRIE));\
+		REQUIRE(FrieInsert(NARRAY(_tok##_DEFS), _tok##_DEFS, NARRAY(_tok##_FRIE), _tok##_FRIE));
 	#define CONSTRUCT_TOK_DEF_FRIE_ALL(_defs) _defs(CONSTRUCT_TOK_DEF_FRIE)
 
 		CONSTRUCT_TOK_DEF_FRIE_ALL(DEF_TOK_ALL_DEFINITIONS)
