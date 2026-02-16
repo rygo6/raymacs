@@ -348,7 +348,7 @@ typedef unsigned char utf8;
 
 #define NBYTES(_v)     (sizeof(_v))
 #define NBITS(_v)      (sizeof(_v) * CHAR_BIT)
-#define NARRAY(_array) (sizeof((_array)) / sizeof((_array)[0]))
+#define NARRAY(_array) (int)(sizeof((_array)) / sizeof((_array)[0]))
 
 #define UMAX(_t) (1 << NBITS(_t))
 #define UMIN(_t) ((_t)0)
@@ -416,23 +416,29 @@ STATIC_ASSERT(SMIN(i8) == -128);
 	__builtin_trap();\
 })
 
-/* Check will goto RESULT_ERROR label on fail. */
+/* Check will goto RESULT_ERROR label on fail. */ // TODO these should be TRY ?
 #define CHECK(_condition, _errorResult)\
 	if (UNLIKELY(!(_condition))) {\
-		fprintf(stderr, "\n" ANSI_YELLOW __FILE__ ":%d TRY! " #_condition " == false! %s\n" ANSI_RESET, __LINE__, string_RESULT(_errorResult));\
+		fprintf(stderr, "\n" ANSI_YELLOW __FILE__ ":%d CHECK FAIL! " #_condition " == false! %s\n" ANSI_RESET, __LINE__, string_RESULT(_errorResult));\
 		goto _errorResult;\
 	}
 
 /* Check will goto RESULT_ERROR label on fail. */
 #define CHECKMSG(_condition, _errorResult, _format, ...)\
 	if (UNLIKELY(!(_condition))) {\
-		fprintf(stderr, "\n" ANSI_YELLOW __FILE__ ":%d TRY! " #_condition " == false! %s " _format "\n" ANSI_RESET, __LINE__, string_RESULT(_errorResult), ##__VA_ARGS__);\
+		fprintf(stderr, "\n" ANSI_YELLOW __FILE__ ":%d CHECK FAIL! " #_condition " == false! %s " _format "\n" ANSI_RESET, __LINE__, string_RESULT(_errorResult), ##__VA_ARGS__);\
 		goto _errorResult;\
 	}
 
 #define MUST(_condition)\
 	if (UNLIKELY(!(_condition))) {\
-		fprintf(stderr, "\n" ANSI_RED __FILE__ ":%d MUST! " #_condition " == false!\n" ANSI_RESET, __LINE__);\
+		fprintf(stderr, "\n" ANSI_RED __FILE__ ":%d MUST FAIL! " #_condition " == false!\n" ANSI_RESET, __LINE__);\
+		__builtin_trap();\
+	}
+
+#define MUSTMSG(_condition, _format, ...)\
+	if (UNLIKELY(!(_condition))) {\
+		fprintf(stderr, "\n" ANSI_RED __FILE__ ":%d MUST FAIL! " #_condition " == false! " _format "\n" ANSI_RESET, __LINE__, ##__VA_ARGS__);\
 		__builtin_trap();\
 	}
 
@@ -468,7 +474,8 @@ STATIC_ASSERT(SMIN(i8) == -128);
 	DEF(RESULT_PARSE_ERROR,     -3)\
 	DEF(RESULT_COLLISION_ERROR, -2)\
 	DEF(RESULT_ERROR,           -1)\
-	DEF(RESULT_SUCCESS,          0)
+	DEF(RESULT_SUCCESS,          0)\
+	DEF(RESULT_NOT_FOUND,        1)
 DEF_ENUM(RESULT);
 
 #define DEF_DIRECTION(DEF)\
@@ -652,7 +659,8 @@ DEF_SCHEME(DEF_COLOR)
 #define TOK_ALL_END   255
 #define TOK_ALL_RANGE TOK_ALL_BEGIN ... TOK_ALL_END
 
-#define IS_DELIM_TOKEN(_c)   (_c == TOK_DELIMIT)
+#define DELIM_WILDCARD '\003'
+#define IS_DELIM_TOKEN(_c)   (_c == DELIM_WILDCARD)
 #define IS_SPECIAL_TOKEN(_c) (_c <= TOK_FRIE_SECIAL_END)
 #define IS_KEYWORD_TOKEN(_c) (_c >= TOK_KEYWORD_BEGIN)
 #define IS_KEYWORD_OR_SPECIAL_TOKEN(_c) (((i8)_c) <= TOK_SPECIAL_END)
@@ -664,9 +672,8 @@ static const bool IDENT_CHAR[128] = {
 	['_'] = 1,
 };
 
-#define IS_IDENT_CHAR(_c) IDENT_CHAR[(u8)(_c)]
+#define IS_IDENT_CHAR(_c)  IDENT_CHAR[(u8)(_c)]
 #define IS_DELIM_CHAR(_c) !IDENT_CHAR[(u8)(_c)]
-
 #define IS_DIGIT_CHAR(_c) (CHAR_FLAGS[(u8)(_c)] & CHAR_DIGIT)
 #define IS_SPACE_CHAR(_c) (CHAR_FLAGS[(u8)(_c)] & CHAR_SPACE)
 
@@ -719,7 +726,6 @@ static const Color TOK_KIND_COLOR[] = {
 	[TOK_KIND_COMMENT]     = COLOR_COMMENT,
 };
 STATIC_ASSERT(NARRAY(TOK_KIND_COLOR) == TOK_KIND_COUNT);
-
 static const Color TOK_KIND_HIGHLIGHT_COLOR[] = {
 	[TOK_KIND_NONE]        = COLOR_NONE,
 	[TOK_KIND_ERROR]       = COLOR_ERROR_HIGHLIGHT,
@@ -741,6 +747,7 @@ static const Color TOK_KIND_HIGHLIGHT_COLOR[] = {
 	[TOK_KIND_ESCAPE]      = COLOR_ESCAPE_HIGHLIGHT,
 	[TOK_KIND_COMMENT]     = COLOR_CLEAR,
 };
+
 STATIC_ASSERT(NARRAY(TOK_KIND_HIGHLIGHT_COLOR) == TOK_KIND_COUNT);
 
 
@@ -755,12 +762,8 @@ static const Color TOK_SCOPE_COLORS[] = {
 #define DEF_TOK(DEF)\
 	/* Special */\
 	DEF(TOK_NONE,        /*NUL*/'\000')\
-	DEF(TOK_SPARSE_CHAR, /*SOH*/'\001')\
-	DEF(TOK_PACKED_CHAR, /*STX*/'\002')\
-	DEF(TOK_DELIMIT,     /*ETX*/'\003')\
-	DEF(TOK_MUNCH,              '\006')\
-	DEF(TOK_ERR,         /*ENQ*/'\004')\
-	DEF(TOK_KEY_CHAR,           '\005')\
+	DEF(TOK_ERR,         /*ENQ*/'\001')\
+	DEF(TOK_DELIM,      DELIM_WILDCARD)\
 	/* White Spaces */\
 	DEF(TOK_TAB,          /* 9*/'\t')\
 	DEF(TOK_VERTICAL_TAB, /*10*/'\v')\
@@ -864,8 +867,9 @@ static const Color TOK_SCOPE_COLORS[] = {
 	DEF(TOK_RBRACE,    /*125*/'}' )\
 	DEF(TOK_TILDE,     /*126*/'~' )\
 	/* Keywords 128+ */\
+	DEF(TOK_SINGLE_CHAR, TOK_KEYWORD_BEGIN)\
 	/* PreProcess */\
-	DEF(TOK_PP_INCLUDE, TOK_KEYWORD_BEGIN)\
+	DEF(TOK_PP_INCLUDE)\
 	DEF(TOK_PP_DEFINE)\
 	DEF(TOK_PP_IFNDEF)\
 	DEF(TOK_PP_IFDEF)\
@@ -995,6 +999,22 @@ STATIC_ASSERT(TOK_COUNT < TOK_CAPACITY, "Not setup to support more than 256 toke
 #define TOK_KEY_CHAR_NAME "\005"
 #define TOK_DELIM_STR     "\003"
 #define DLM TOK_DELIM_STR
+#define DEF_TOK_TEST(DEF, DEF_RANGE)\
+	DEF("<"   , TOK_LT            , TOK_KIND_OPERATOR)\
+	DEF("<<=" , TOK_LSHIFT_ASSIGN , TOK_KIND_OPERATOR)\
+	DEF("<<"  , TOK_LSHIFT        , TOK_KIND_OPERATOR)\
+	DEF("<="  , TOK_LE            , TOK_KIND_OPERATOR)\
+	DEF("#ifndef"DLM  , TOK_PP_IFNDEF , TOK_KIND_PP)\
+	DEF("#elif"DLM    , TOK_PP_ELIF   , TOK_KIND_PP)\
+	DEF("#endif"DLM   , TOK_PP_ENDIF  , TOK_KIND_PP)\
+	DEF("##"          , TOK_HASH_HASH , TOK_KIND_PP)\
+	DEF("#"           , TOK_HASH      , TOK_KIND_PP)\
+	DEF("#line"DLM    , TOK_PP_LINE   , TOK_KIND_PP)\
+	DEF("#else"DLM    , TOK_PP_ELSE   , TOK_KIND_PP)\
+	DEF("#error"DLM   , TOK_PP_ERROR  , TOK_KIND_PP)\
+	DEF("#undef"DLM   , TOK_PP_UNDEF  , TOK_KIND_PP)\
+	DEF("#endif"DLM   , TOK_PP_ENDIF  , TOK_KIND_PP)\
+	DEF("#define"DLM  , TOK_PP_DEFINE , TOK_KIND_PP)
 
 #define DEF_TOK_BASE(DEF, DEF_RANGE)\
 	/* Number */\
@@ -1174,9 +1194,13 @@ STATIC_ASSERT(TOK_COUNT < TOK_CAPACITY, "Not setup to support more than 256 toke
 	DEF("\n", TOK_NEWLINE,  TOK_KIND_WHITESPACE)
 
 #define DEF_TOK_ALL_DEFINITIONS(DEF)\
-	DEF(TOK_BASE)\
+	DEF(TOK_BASE)
+
+	/*
 	DEF(TOK_QUOTE)\
-	DEF(TOK_LINE_COMMENT)
+	DEF(TOK_LINE_COMMENT)\
+	DEF(TOK_TEST)
+	*/
 
 
 	
@@ -1192,7 +1216,7 @@ typedef union PACKED FrieNode {
 		u32  succ : 16; // Amount to jump into packed tokens.
 		u32  kind : 8;  // Token Kind if it is a token.
 	} sparse;
-	/* All tokens past first 128 ASCII chars are packed nodes. Can contain TOK_DELIMIT or TOK_MUNCH nodes. */
+	/* All tokens past first 128 ASCII chars are packed nodes. Can contain TOK_DELIM or TOK_MUNCH nodes. */
 	struct PACKED {
 		u32  tok  : 8;  // Token Value. 0-7 Special Frie Token. 32-128 ASCII Tokens. >128 Keyword Tokens
 		u32  succ : 12; // Offset to jump on success.
@@ -1208,19 +1232,23 @@ typedef union PACKED FrieNode {
 } FrieNode;
 STATIC_ASSERT(sizeof(FrieNode) == 4);
 
-typedef union PACKED FrieNode2 {
-	/* All tokens past first 128 ASCII chars are packed nodes. Can contain TOK_DELIMIT or TOK_MUNCH nodes. */
-	struct PACKED {
-		u32  tok  : 8;  // Token Value. 0-7 Special Frie Token. 32-128 ASCII Tokens. >128 Keyword Tokens
-		u32  fail : 12; // offset to jump on fail.
-	} packed;
-	/* Endpoint token node. Error or Keword token. Frie exits when ecnountering these. */
-	struct PACKED {
-		u32   tok  : 8;  // Token Value. 0-7 Special Frie Token. 32-128 ASCII Tokens. >128 Keyword Tokens
-		u32   kind : 8;  // Token kind.
-		u32   pad  : 16; // 10 more bits available
-	} terminator;
-} FrieNode2;
+#define MAXIMAL_MUNCH_LEN 0
+#define FRIE_ASCII_ENTRY_CAPACITY 128
+#define FRIE_LEN_ENTRY_CAPACITY 32
+typedef i16 frie_char;
+typedef struct FrieLenEntry {
+	u16 length;
+	u16 capacity;
+	frie_char startValue;
+	frie_char *pBuf;
+} FrieLenEntry;
+typedef struct FrieAsciiEntry {
+	FrieLenEntry len[FRIE_LEN_ENTRY_CAPACITY];
+} FrieAsciiEntry;
+typedef struct FrieRoot {
+	FrieAsciiEntry ascii[FRIE_ASCII_ENTRY_CAPACITY]; 
+} FrieRoot;
+// typedef FrieEntry FrieRoot[FRIE_ASCII_ENTRY_CAPACITY][FRIE_LENGTH_ENTRY_CAPACITY];
 
 typedef struct TokDef {
 	char* name;
@@ -1228,11 +1256,11 @@ typedef struct TokDef {
 } TokDef;
 
 #define STR_LEN(_str) (sizeof(_str) - 1)
-#define DEF_TOK_DEF_ITEM(_name, _tok, _kind)     [_tok]   = (TokDef){ _name,          _kind },
+#define DEF_TOK_DEF_ITEM(_name, _tok, _kind)     [_tok]   = (TokDef){ _name, _kind },
 #define DEF_TOK_KEY_CHAR_DEF_ITEM(_range, _kind) [_range] = (TokDef){ TOK_KEY_CHAR_NAME, _kind },
 #define DEF_TOK_DEFINITIONS(_tok)\
 	static const TokDef _tok##_DEFS[] = { DEF_##_tok(DEF_TOK_DEF_ITEM, DEF_TOK_KEY_CHAR_DEF_ITEM) };\
-	static FrieNode _tok##_FRIE[1024];
+	static FrieRoot _tok##_FRIE;
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Woverride-init"
@@ -1306,12 +1334,6 @@ yes we want 0 as maximal munch because it can try to maximal munch on a smaller 
  
  */
 
-struct PACKED TokTerm {
-	u16  term : 1; 
-	u16  tok  : 15;
-} TokTerm;
-STATIC_ASSERT(sizeof(TokTerm) == 2);
-
 static u32 pow2(u32 n) {
     if (n == 0) return 1;
     return 1U << (32 - __builtin_clz(n - 1));
@@ -1322,470 +1344,590 @@ static u32 pow2(u32 n) {
 	DEF(FRIE_LOOKUP_MAXIMAL_MUNCH)
 DEF_ENUM(FRIE_LOOKUP);
 
-typedef struct FrieEntry {
-	int   length;
-	int   capacity;
-	i16  *pBuf;
-} FrieEntry;
+#define VAL_INDEX_BEGIN 128
+#define IS_END(_i16)  (_i16 == 0)
+#define IS_VAL(_i16)  (_i16 >= VAL_INDEX_BEGIN)
+#define IS_JUMP(_i16) (_i16 < 0)
+#define JUMP_OFFSET(_i16) (-_i16)
 
-static FrieEntry frie2[128][32];
-
-#define JUMP_MASK    0b1000000000000000
-#define TOK_MASK     0b0000000010000000
-#define A_CHAR_MASK  0b0111111100000000
-#define B_CHAR_MASK  0b0000000001111111
-
-#define IS_TOK(_i16)     (_i16 > TOK_ASCII_END)
-#define IS_JUMP(_i16)    (_i16 < 0)
-#define JUMP_VALUE(_i16) (-_i16)
-
-static RESULT FrieInsert2(FrieEntry pFrie[128][32], FRIE_LOOKUP lookup, int keyLen, const char* key, u16 value)
+static void FrieLenEntryPrint(FrieLenEntry *pEntry) 
 {
-	ASSERT(pFrie != NULL); ASSERT(keyLen > 0); ASSERT(key != 0);
-	
-	LOG("Inserting key:%s length:%d\n", key, keyLen);
-	int count = 0;
+	fprintf(stderr, "length:%-2d capacity:%-2d ", pEntry->length, pEntry->capacity);
+	i16 *pBuf = pEntry->pBuf;
+	fprintf(stderr, ANSI_YELLOW "Start" ANSI_MAGENTA "%d:%s" ANSI_WHITE ANSI_DIM "|" ANSI_RESET, pEntry->startValue, string_TOK(pEntry->startValue));
+	for (int i = 0; i < pEntry->length; ++i) {
+		if      (IS_END(pBuf[i]))      fprintf(stderr, ANSI_YELLOW "%d" ANSI_RED          "%d"  ANSI_WHITE ANSI_DIM       "|" ANSI_RESET, i,  pBuf[i]);
+		else if (pBuf[i] == TOK_DELIM) fprintf(stderr, ANSI_YELLOW "%d" ANSI_BLUE         "DLM" ANSI_WHITE ANSI_DIM       "|" ANSI_RESET, i);
+		else if (IS_VAL(pBuf[i]))      fprintf(stderr, ANSI_YELLOW "%d" ANSI_MAGENTA      "%s"  ANSI_DIM "%d"  ANSI_WHITE "|" ANSI_RESET, i, string_TOK(pBuf[i]), pBuf[i]);
+		else if (IS_JUMP(pBuf[i]))     fprintf(stderr, ANSI_YELLOW "%d" ANSI_GREEN        "%d"  ANSI_WHITE ANSI_DIM       "|" ANSI_RESET, i, -pBuf[i]+i);
+		else                           fprintf(stderr, ANSI_YELLOW "%d" ANSI_BRIGHT_WHITE "%c"  ANSI_DIM "%d|" ANSI_RESET, i, pBuf[i], pBuf[i]);
+	}
+}
 
-	int iLen = lookup == FRIE_LOOKUP_MAXIMAL_MUNCH ? 0 : keyLen;
+static void FrieRootPrint(FrieRoot *pRoot) 
+{
+	for (int iASCII = 0; iASCII < FRIE_ASCII_ENTRY_CAPACITY; ++iASCII)
+	for (int iLen   = 0; iLen   < FRIE_LEN_ENTRY_CAPACITY;   ++iLen) {
+		FrieLenEntry *pEntry = &pRoot->ascii[iASCII].len[iLen];
+		if (pEntry->startValue == 0 && pEntry->pBuf == NULL) continue;;
+		LOG("Frie:" ANSI_DIM  "ASCII:" ANSI_RESET "%-2s " ANSI_DIM "Len:" ANSI_RESET "%-2d ", string_CHAR(iASCII), iLen);
+		FrieLenEntryPrint(pEntry);
+		fprintf(stderr, "\n");
+	}
+}
+
+static RESULT FrieInsert2(FrieRoot* pRoot, int keyLen, const char* key, i16 value)
+{
+	LOG("Inserting key:%s length:%d value:%d\n", key, keyLen, value);
+	ASSERT(pRoot != NULL); ASSERT(keyLen > 0); ASSERT(key != 0); ASSERT(value > 0);
+
+	/* Find FrieEntry */
+	bool delim = key[keyLen-1] == TOK_DELIM;
+	int iLen = delim ? keyLen : 0;
 	int iKey = 0;
-	i16 cKey  = key[iKey];
+	frie_char cKey = key[iKey];
+	FrieLenEntry *pEntry = &pRoot->ascii[cKey].len[iLen];
 
-	FrieEntry *pEntry = &pFrie[cKey][iLen];
-	int capacityEstimate = pEntry->length + keyLen + 2;
+	/* Add Single Char Token */
+	if (keyLen == 1) {
+		// fprintf(stderr, "Single Char Insert: iBuf:%d %s\n", iBuf, key);
+		pEntry->startValue = value;
+		goto RESULT_SUCCESS;
+	}
+
+	/* Expand Capacity*/
+	int capacityEstimate = pEntry->length + keyLen + 4;
 	if (pEntry->capacity < capacityEstimate) {
 		int newCapacity = pow2(capacityEstimate);
-		fprintf(stderr, "Expanded Frie from %d to %d\n", pEntry->capacity, newCapacity);
+		// fprintf(stderr, "Expanded Frie from %d to %d\n", pEntry->capacity, newCapacity);
 		pEntry->pBuf = XREALLOC(pEntry->pBuf, newCapacity * sizeof(u16));
 		memset(pEntry->pBuf + pEntry->capacity, 0, newCapacity - pEntry->capacity);
 		pEntry->capacity = newCapacity;
 	}
-	int  bufLen = pEntry->length;
-	int  iBuf = 0;
-	i16 *pBuf = pEntry->pBuf;
-	i16  cBuf = pBuf[iBuf];
+
+	/* Iteration State */
+	bool match     = false;
+	bool nextJump  = false;
+	bool nextToken = false;
+	int len   = pEntry->length;
+	int iFrie = 0;
+	frie_char *pFrie    = pEntry->pBuf;
+	frie_char  cFrie    = pFrie[iFrie];
+	frie_char  cNextBuf = pFrie[iFrie+1];
 	cKey = key[++iKey];
 
 	/* First Entry */
-	if (bufLen == 0) {
+	if (len == 0 || len == 1) {
+		// fprintf(stderr, "First Insert: iBuf:%d Remain:%d %s\n", iBuf, keyLen - iKey, key + iKey);
 		int keyRemain = keyLen - iKey;
-		for (int i = 0; i < keyRemain; ++i) pBuf[iBuf++] = key[iKey++];
-		pBuf[iBuf++] = value;
-		pBuf[iBuf++] = '\0';
-		pEntry->length = bufLen + keyRemain+2;
+		while ((cKey = key[iKey++])) pFrie[iFrie++] = cKey;
+		pFrie[iFrie++] = value;
+		pFrie[iFrie++] = '\0';
+		pEntry->length = keyRemain+2;
 		goto RESULT_SUCCESS;
 	}
 
 NextChar:
-	if (count++ > 100) goto RESULT_SUCCESS;
-	fprintf(stderr, "iBuf:%d iKey:%d cBuf:%c:%d cKey:%c:%d... ", iBuf, iKey,  cBuf, cBuf, cKey, cKey);
+	// fprintf(stderr, "iBuf:%d iKey:%d | cBuf:%c:%d == cKey:%c:%d... ", iBuf, iKey,  cBuf, cBuf, cKey, cKey);
 
-	bool match = cKey == cBuf;
-	if (match) {
-		fprintf(stderr, "Match\n");
-		cKey = key[++iKey];
-		cBuf = pBuf[++iBuf];
-		goto NextChar;
-	}
-
-	bool jump = IS_JUMP(cBuf);
-	if (jump) {
-		fprintf(stderr, "Jump\n");
-		iBuf += JUMP_VALUE(cBuf);
-		cBuf = pBuf[iBuf];
-		goto NextChar;
-	}
-
-	{
-		fprintf(stderr, "Insert: iBuf:%d bufLen:%d Remain:%d %s\n", iBuf, bufLen, keyLen - iKey, key + iKey);
-		memmove(pBuf + iBuf + 2, pBuf + iBuf, (bufLen - iBuf) * sizeof(u16)); bufLen += 2;
-		pBuf[iBuf++] = key[iKey++];
-		pBuf[iBuf] = -(bufLen - iBuf); 
-		iBuf = bufLen;
-		int keyRemain = keyLen - iKey;
-		for (int i = 0; i < keyRemain; ++i)	{
-			fprintf(stderr, "Char: iBuf:%d iKey:%d %c\n", iBuf, iKey, key[iKey]);
-			pBuf[iBuf++] = key[iKey++];
+	match = cKey == cFrie;
+	nextJump  = IS_JUMP(cNextBuf);
+	nextToken = IS_VAL(cNextBuf);
+	if (nextJump) {
+		if (match) {
+			// fprintf(stderr, "Jump %d\n", JUMP_VALUE(cNextBuf));
+			iFrie     += JUMP_OFFSET(cNextBuf)+1;
+			cFrie      = pFrie[iFrie];
+			cNextBuf  = pFrie[iFrie+1];
+			cKey      = key[++iKey];
+			goto NextChar;
 		}
-		fprintf(stderr, "Token: iBuf:%d value:%d\n", iBuf, value);
-		pBuf[iBuf++] = value;
-		pBuf[iBuf++] = '\0';
-		pEntry->length = bufLen + keyRemain+2;
-		goto RESULT_SUCCESS;
+		// fprintf(stderr, "No Match. Skip Jump.\n");
+		iFrie     += 2; 
+		cFrie      = pFrie[iFrie];
+		cNextBuf  = pFrie[iFrie+1];
+		goto NextChar;
 	}
+	if (match) {
+		// fprintf(stderr, "Match\n");
+		iFrie    += nextToken ? 2 : 1;
+		cFrie     = pFrie[iFrie];
+		cNextBuf = pFrie[iFrie+1];
+		cKey     = key[++iKey];
+		goto NextChar;
+	}
+
+	/* Insert Jump */
+	// fprintf(stderr, "Insert: iBuf:%d bufLen:%d Remain:%d %s\n", iBuf, bufLen, keyLen - iKey, key + iKey);
+	memmove(pFrie + iFrie + 2, pFrie + iFrie, (len - iFrie) * sizeof(u16));	len += 2;
+	// Increment prior jumps by two if they were to jump past this insertion
+	for (int i = 0; i < iFrie; ++i) pFrie[i] -= 2 * (JUMP_OFFSET(pFrie[i]) > (iFrie - i));
+	pFrie[iFrie++] = key[iKey++];
+	i16 jumpOffset = len - iFrie;
+	pFrie[iFrie++] = -jumpOffset;
+
+	/* Insert Key and Token */
+	iFrie = len;
+	i16 keyRemain = keyLen - iKey;
+	while ((cKey = key[iKey++])) pFrie[iFrie++] = cKey;
+	pFrie[iFrie++] = value;
+	pFrie[iFrie++] = '\0';
+	pEntry->length = len + keyRemain + 2;
+	goto RESULT_SUCCESS;
 
 RESULT_SUCCESS:
-	LOG("Success: length:%d capacity:%d\n", pEntry->length, pEntry->capacity);
-	for (int i = 0; i < pEntry->length; ++i) {
-		if (IS_TOK(pBuf[i]))
-			fprintf(stderr, ANSI_YELLOW "%d" ANSI_MAGENTA "%d" ANSI_WHITE ANSI_DIM "|" ANSI_RESET, i, pBuf[i]);
-		else if (IS_JUMP(pBuf[i]))
-			fprintf(stderr, ANSI_YELLOW "%d" ANSI_GREEN "%d" ANSI_WHITE ANSI_DIM "|" ANSI_RESET, i, (-pBuf[i])+i);
-		else 
-			fprintf(stderr, ANSI_YELLOW "%d" ANSI_CYAN "%d" ANSI_WHITE "%c" ANSI_DIM "|" ANSI_RESET, i, pBuf[i], pBuf[i]);
-	}	
-	fprintf(stderr, "\n");
-
+	// FrieEntryPrint(pEntry);
 	return RESULT_SUCCESS;
 }
- 
+
+
+static i16 FrieGet2(FrieRoot *pRoot, int keyLen, const char* key)
+{
+	LOG("FrieGet key:'%.*s' length:%d\n", keyLen, key, keyLen);
+	int iLen  = keyLen;
+	u16 iKey  = 0;
+	u16 iFrie = 0;
+	frie_char cKey = key[iKey];
+	FrieLenEntry *pEntry = &pRoot->ascii[cKey].len[iLen];
+	frie_char *pFrie = pEntry->pBuf;
+	i16 value = pEntry->startValue;
+	if (pFrie == NULL) goto RESULT_SUCCESS;
+
+	bool prevmatch = true; // Start true for TOK_SINGLE_CHAR
+	frie_char cFrie = pFrie[iFrie];
+	cKey = key[++iKey];
+
+NextChar:
+	fprintf(stderr, "iBuf:%d iKey:%d cBuf:%c:%d cKey:%c:%d... ", iFrie, iKey,  cFrie, cFrie, cKey, cKey);
+	if (cFrie == 0) goto RESULT_SUCCESS;
+
+	// switch (IS_TOK(cFrie)<<3 | IS_JUMP(cFrie)<<2 | prevmatch<<1 | (cKey == cFrie)) 
+	// {
+	// 	// Only accept JUMP or TOK if prev matched
+	// 	case        true<<3 |       /*false<<2*/      true<<1       /*fasle*/: {
+	// 		// fprintf(stderr, "Tok %d\n", cBuf);
+	// 		value = cFrie;
+	// 		cFrie = pFrie[++iFrie];
+	// 		goto NextChar;
+	// 	}
+	// 	case 	 /*fasle<<3*/          true<<2 |      true<<1       /*fasle*/: {
+	// 		// fprintf(stderr, "Jump %d\n", JUMP_VALUE(cBuf)+iBuf);
+	// 		iFrie += JUMP_VALUE(cFrie);
+	// 		cFrie = pFrie[iFrie];
+	// 		goto NextChar;
+	// 	}
+	// 	case     /*fasle<<3 |         false<<2*/      true<<1 |         true :
+	// 	case     /*fasle<<3 |         false<<2 |     false<<1*/         true : {
+	// 		// fprintf(stderr, "Match\n");
+	// 		prevmatch = true;
+	// 		cKey = key[++iKey];
+	// 		cFrie = pFrie[++iFrie];
+	// 		goto NextChar;
+	// 	}
+	// 	default: {
+	// 		prevmatch = false;
+	// 		// fprintf(stderr, "Skip\n");
+	// 		cFrie = pFrie[++iFrie];
+	// 		goto NextChar;
+	// 	}
+	// }
+
+	// TODO Benchmark if vs switch
+	// Only accept JUMP or TOK if prev matched
+	if (prevmatch && IS_VAL(cFrie)) {
+		fprintf(stderr, "Tok %d\n", cFrie);
+		value = cFrie;
+		cFrie = pFrie[++iFrie];
+		goto NextChar;
+	}
+	if (prevmatch && IS_JUMP(cFrie)) {
+		fprintf(stderr, "Jump\n");
+		iFrie += JUMP_OFFSET(cFrie);
+		cFrie = pFrie[iFrie];
+		goto NextChar;
+	}
+	if (cKey == cFrie) {
+		fprintf(stderr, "Match\n");
+		prevmatch = true;
+		cKey = key[++iKey];
+		cFrie = pFrie[++iFrie];
+		goto NextChar;
+	}
+	if (cKey == TOK_DELIM && IS_DELIM_CHAR(cFrie)) {
+		fprintf(stderr, "Delim Match\n");
+		prevmatch = true;
+		cKey = key[++iKey];
+		cFrie = pFrie[++iFrie];
+		goto NextChar;
+	}
+
+	fprintf(stderr, "Skip\n");
+	prevmatch = false;
+	cFrie = pFrie[++iFrie];
+	goto NextChar;
+
+RESULT_SUCCESS:
+	// fprintf(stderr, "Found:%d\n", value);
+	return value == TOK_SINGLE_CHAR ? key[0] : value;
+}
 
 
 /*
  * Flat Trie Functions
  */
 
-static void FrieLog(FrieNode* trie)
-{
-	LOG("Frie:\n");
-	int iNode = 0; FrieNode node = trie[iNode];
-	fprintf(stderr,
-		"Sparse Table: "
-		ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "index"
-		ANSI_RESET ANSI_WHITE "char"
-		ANSI_DIM ANSI_ITALIC ANSI_YELLOW "SuccessTarget\n "
-		ANSI_RESET);
-	while ( iNode < TOK_KEYWORD_BEGIN) {
-		fprintf(stderr,
-			ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "%d"
-			ANSI_RESET ANSI_WHITE "%s"
-			ANSI_DIM ANSI_ITALIC ANSI_YELLOW "%d"
-			ANSI_WHITE "%s"
-			ANSI_BRIGHT_BLACK "|"
-			ANSI_RESET,
-			iNode, string_CHAR(iNode), node.sparse.succ, string_TOK(node.sparse.tok));
-		if (iNode % 16 == 0) fprintf(stderr, "\n");
-		node = trie[++iNode];
-	}
-	fprintf(stderr,
-		"\nPacked Trie: " ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE
-		"index" ANSI_RESET ANSI_WHITE "char/token"
-		ANSI_DIM ANSI_GREEN "SuccessOffset"
-		ANSI_ITALIC ANSI_YELLOW "SuccessTarget"
-		ANSI_RESET ANSI_DIM ANSI_RED "FailOffset"
-		ANSI_RESET ANSI_ITALIC ANSI_DIM ANSI_YELLOW
-		"FailTarget\n"
-		ANSI_RESET);
-	while (node.packed.tok != '\0' || iNode < 128) {
-		if (IS_DELIM_TOKEN(node.packed.tok))
-			fprintf(stderr,
-				ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "%d"
-				ANSI_RESET ANSI_DIM ANSI_WHITE ANSI_ITALIC "%s"
-				ANSI_DIM ANSI_GREEN "%d"
-				ANSI_ITALIC ANSI_YELLOW "%d"
-				ANSI_RESET ANSI_DIM ANSI_RED "%d"
-				ANSI_RESET ANSI_ITALIC ANSI_DIM ANSI_YELLOW "%d"
-				ANSI_BRIGHT_BLACK "|"
-				ANSI_RESET,
-				iNode, string_TOK(node.packed.tok), node.packed.succ, node.packed.succ+iNode, node.packed.fail, node.packed.fail+iNode);
-		else if (IS_KEYWORD_OR_SPECIAL_TOKEN(node.packed.tok))
-			fprintf(stderr,
-				ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "%d"
-				ANSI_RESET ANSI_DIM ANSI_WHITE ANSI_ITALIC "%s"
-				ANSI_BRIGHT_BLACK "%c"
-				ANSI_RESET,
-				iNode, string_TOK(node.terminator.tok), node.terminator.tok == TOK_ERR ? '\n' : '|');
-		else
-			fprintf(stderr,
-				ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "%d"
-				ANSI_RESET ANSI_WHITE "%c"
-				ANSI_DIM ANSI_GREEN "%d"
-				ANSI_ITALIC ANSI_YELLOW "%d"
-				ANSI_RESET ANSI_DIM ANSI_RED "%d"
-				ANSI_RESET ANSI_ITALIC ANSI_DIM ANSI_YELLOW "%d"
-				ANSI_BRIGHT_BLACK "|"
-				ANSI_RESET,
-				iNode, node.packed.tok, node.packed.succ, node.packed.succ+iNode, node.packed.fail, node.packed.fail+iNode);
-		node = trie[++iNode];
-	}
-	fprintf(stderr, "\n");
-}
+// static void FrieLog(FrieNode* trie)
+// {
+// 	LOG("Frie:\n");
+// 	int iNode = 0; FrieNode node = trie[iNode];
+// 	fprintf(stderr,
+// 		"Sparse Table: "
+// 		ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "index"
+// 		ANSI_RESET ANSI_WHITE "char"
+// 		ANSI_DIM ANSI_ITALIC ANSI_YELLOW "SuccessTarget\n "
+// 		ANSI_RESET);
+// 	while ( iNode < TOK_KEYWORD_BEGIN) {
+// 		fprintf(stderr,
+// 			ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "%d"
+// 			ANSI_RESET ANSI_WHITE "%s"
+// 			ANSI_DIM ANSI_ITALIC ANSI_YELLOW "%d"
+// 			ANSI_WHITE "%s"
+// 			ANSI_BRIGHT_BLACK "|"
+// 			ANSI_RESET,
+// 			iNode, string_CHAR(iNode), node.sparse.succ, string_TOK(node.sparse.tok));
+// 		if (iNode % 16 == 0) fprintf(stderr, "\n");
+// 		node = trie[++iNode];
+// 	}
+// 	fprintf(stderr,
+// 		"\nPacked Trie: " ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE
+// 		"index" ANSI_RESET ANSI_WHITE "char/token"
+// 		ANSI_DIM ANSI_GREEN "SuccessOffset"
+// 		ANSI_ITALIC ANSI_YELLOW "SuccessTarget"
+// 		ANSI_RESET ANSI_DIM ANSI_RED "FailOffset"
+// 		ANSI_RESET ANSI_ITALIC ANSI_DIM ANSI_YELLOW
+// 		"FailTarget\n"
+// 		ANSI_RESET);
+// 	while (node.packed.tok != '\0' || iNode < 128) {
+// 		if (IS_DELIM_TOKEN(node.packed.tok))
+// 			fprintf(stderr,
+// 				ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "%d"
+// 				ANSI_RESET ANSI_DIM ANSI_WHITE ANSI_ITALIC "%s"
+// 				ANSI_DIM ANSI_GREEN "%d"
+// 				ANSI_ITALIC ANSI_YELLOW "%d"
+// 				ANSI_RESET ANSI_DIM ANSI_RED "%d"
+// 				ANSI_RESET ANSI_ITALIC ANSI_DIM ANSI_YELLOW "%d"
+// 				ANSI_BRIGHT_BLACK "|"
+// 				ANSI_RESET,
+// 				iNode, string_TOK(node.packed.tok), node.packed.succ, node.packed.succ+iNode, node.packed.fail, node.packed.fail+iNode);
+// 		else if (IS_KEYWORD_OR_SPECIAL_TOKEN(node.packed.tok))
+// 			fprintf(stderr,
+// 				ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "%d"
+// 				ANSI_RESET ANSI_DIM ANSI_WHITE ANSI_ITALIC "%s"
+// 				ANSI_BRIGHT_BLACK "%c"
+// 				ANSI_RESET,
+// 				iNode, string_TOK(node.terminator.tok), node.terminator.tok == TOK_ERR ? '\n' : '|');
+// 		else
+// 			fprintf(stderr,
+// 				ANSI_DIM ANSI_YELLOW ANSI_UNDERLINE "%d"
+// 				ANSI_RESET ANSI_WHITE "%c"
+// 				ANSI_DIM ANSI_GREEN "%d"
+// 				ANSI_ITALIC ANSI_YELLOW "%d"
+// 				ANSI_RESET ANSI_DIM ANSI_RED "%d"
+// 				ANSI_RESET ANSI_ITALIC ANSI_DIM ANSI_YELLOW "%d"
+// 				ANSI_BRIGHT_BLACK "|"
+// 				ANSI_RESET,
+// 				iNode, node.packed.tok, node.packed.succ, node.packed.succ+iNode, node.packed.fail, node.packed.fail+iNode);
+// 		node = trie[++iNode];
+// 	}
+// 	fprintf(stderr, "\n");
+// }
 
-static TOK FrieGet(const char *pText, FrieNode *pFrie)
-{
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Woverride-init"
+// static TOK FrieGet(const char *pText, FrieNode *pFrie)
+// {
+// #pragma GCC diagnostic push
+// #pragma GCC diagnostic ignored "-Woverride-init"
 
-	static void *dispatch[TOK_CAPACITY] = {
-		[TOK_ALL_RANGE]     = &&TOK_NONE,
-		[TOK_PACKED_CHAR]   = &&TOK_PACKED_CHAR,
-		[TOK_DELIMIT]       = &&TOK_DELIMIT,
-		[TOK_ASCII_RANGE]   = &&TOK_ALL,
-		[TOK_KEYWORD_RANGE] = &&TOK_ALL,
-	};
+// 	static void *dispatch[TOK_CAPACITY] = {
+// 		[TOK_ALL_RANGE]     = &&TOK_NONE,
+// 		[TOK_PACKED_CHAR]   = &&TOK_PACKED_CHAR,
+// 		[TOK_DELIM]       = &&TOK_DELIM,
+// 		[TOK_ASCII_RANGE]   = &&TOK_ALL,
+// 		[TOK_KEYWORD_RANGE] = &&TOK_ALL,
+// 	};
 
-#pragma GCC diagnostic pop
+// #pragma GCC diagnostic pop
 
-	struct PACKED {
-		int      iText;
-		int      iPack;
-		int      startTok;
-		int      tok;
-		FrieNode node;
-		char     cText;
-	} step; ZERO(&step);
+// 	struct PACKED {
+// 		int      iText;
+// 		int      iPack;
+// 		int      startTok;
+// 		int      tok;
+// 		FrieNode node;
+// 		char     cText;
+// 	} step; ZERO(&step);
 
-	{
-		step.cText = pText[0];
-		step.node = pFrie[(u8)step.cText];
-		step.startTok = step.node.sparse.tok;
-		bool jump = step.node.sparse.succ > 0;
-		step.iPack  = step.node.sparse.succ;
-		step.tok = jump ? TOK_PACKED_CHAR :step.node.sparse.tok;
-		step.cText  = pText[++step.iText];
-		step.node  = pFrie[step.iPack];
-		goto *dispatch[step.tok];
-	}
+// 	{
+// 		step.cText = pText[0];
+// 		step.node = pFrie[(u8)step.cText];
+// 		step.startTok = step.node.sparse.tok;
+// 		bool jump = step.node.sparse.succ > 0;
+// 		step.iPack  = step.node.sparse.succ;
+// 		step.tok = jump ? TOK_PACKED_CHAR :step.node.sparse.tok;
+// 		step.cText  = pText[++step.iText];
+// 		step.node  = pFrie[step.iPack];
+// 		goto *dispatch[step.tok];
+// 	}
 
-TOK_PACKED_CHAR:
-	{
-		bool match = step.node.packed.tok == step.cText;
-		step.iPack += match ? step.node.packed.succ : step.node.packed.fail;
-		step.node   = pFrie[step.iPack];
-		step.iText += match; step.cText = pText[step.iText];
-		step.tok = IS_KEYWORD_OR_SPECIAL_TOKEN(step.node.packed.tok) ? step.node.packed.tok : TOK_PACKED_CHAR;
-		goto *dispatch[step.tok];
-	}
+// TOK_PACKED_CHAR:
+// 	{
+// 		bool match = step.node.packed.tok == step.cText;
+// 		step.iPack += match ? step.node.packed.succ : step.node.packed.fail;
+// 		step.node   = pFrie[step.iPack];
+// 		step.iText += match; step.cText = pText[step.iText];
+// 		step.tok = IS_KEYWORD_OR_SPECIAL_TOKEN(step.node.packed.tok) ? step.node.packed.tok : TOK_PACKED_CHAR;
+// 		goto *dispatch[step.tok];
+// 	}
 
-TOK_DELIMIT:
-	{
-		bool delim = IS_DELIM_CHAR(step.cText);
-		step.iPack += delim ? step.node.packed.succ : step.node.packed.fail;
-		step.node  = pFrie[step.iPack];
-		step.tok = IS_KEYWORD_OR_SPECIAL_TOKEN(step.node.packed.tok) ? step.node.packed.tok : TOK_PACKED_CHAR;
-		goto *dispatch[step.tok];
-	}
+// TOK_DELIM:
+// 	{
+// 		bool delim = IS_DELIM_CHAR(step.cText);
+// 		step.iPack += delim ? step.node.packed.succ : step.node.packed.fail;
+// 		step.node  = pFrie[step.iPack];
+// 		step.tok = IS_KEYWORD_OR_SPECIAL_TOKEN(step.node.packed.tok) ? step.node.packed.tok : TOK_PACKED_CHAR;
+// 		goto *dispatch[step.tok];
+// 	}
 
-TOK_ALL:
-	return step.tok;
+// TOK_ALL:
+// 	return step.tok;
 
-TOK_NONE:
-	return step.startTok;
-}
+// TOK_NONE:
+// 	return step.startTok;
+// }
 
-static void FrieValidate(int tokCount, const TokDef* tokDefs, FrieNode* pFrie)
-{
-	char sparseCharBuf[2] = { '\0', '\0' };
-	for (int iTok = TOK_ASCII_BEGIN; iTok < tokCount; ++iTok) {
-		TokDef def = tokDefs[iTok];
-		if (def.name == NULL) continue;
-		if (def.name[0] == TOK_KEY_CHAR) {	def.name = sparseCharBuf; def.name[0] = iTok; }
-		TOK tok = FrieGet(def.name, pFrie);
-		// LOG("%s  %d:%s expected:%d:%s\n", def.name, tok, string_TOK(tok), iTok, string_TOK(iTok));
-		MUST(tok == iTok);
-	}
-}
+// static void FrieValidate(int tokCount, const TokDef* tokDefs, FrieNode* pFrie)
+// {
+// 	char sparseCharBuf[2] = { '\0', '\0' };
+// 	for (int iTok = TOK_ASCII_BEGIN; iTok < tokCount; ++iTok) {
+// 		TokDef def = tokDefs[iTok];
+// 		if (def.name == NULL) continue;
+// 		if (def.name[0] == TOK_KEY_CHAR) {	def.name = sparseCharBuf; def.name[0] = iTok; }
+// 		TOK tok = FrieGet(def.name, pFrie);
+// 		// LOG("%s  %d:%s expected:%d:%s\n", def.name, tok, string_TOK(tok), iTok, string_TOK(iTok));
+// 		MUST(tok == iTok);
+// 	}
+// }
 
 /* Shift all frie nodes right by 1 updating all offsets. */
-static void FrieShift(FrieNode* pFrie, int iInsertNode, int iEndNode)
-{
-	// Shift all to right by 1 to make room for new char condition.
-	memmove(pFrie + iInsertNode + 1, pFrie + iInsertNode, (iEndNode - iInsertNode) * sizeof(FrieNode));
+// static void FrieShift(FrieNode* pFrie, int iInsertNode, int iEndNode)
+// {
+// 	// Shift all to right by 1 to make room for new char condition.
+// 	memmove(pFrie + iInsertNode + 1, pFrie + iInsertNode, (iEndNode - iInsertNode) * sizeof(FrieNode));
 
-	// Increment sparse ascii jump values if they would have jumped past current insertion
-	for (int iNodePrev = 0; iNodePrev < TOK_KEYWORD_BEGIN; iNodePrev++) {
-		FrieNode *pPrevNode = pFrie + iNodePrev;
-		if (pPrevNode->sparse.succ > iInsertNode) pPrevNode->sparse.succ++;
-	}
+// 	// Increment sparse ascii jump values if they would have jumped past current insertion
+// 	for (int iNodePrev = 0; iNodePrev < TOK_KEYWORD_BEGIN; iNodePrev++) {
+// 		FrieNode *pPrevNode = pFrie + iNodePrev;
+// 		if (pPrevNode->sparse.succ > iInsertNode) pPrevNode->sparse.succ++;
+// 	}
 
-	// Increment all fail succ values in prior trie steps if they would have jumped past current insertion
-	for (int iNodePrev = TOK_KEYWORD_BEGIN; iNodePrev < iInsertNode; iNodePrev++) {
-		FrieNode *pPrevNode = pFrie + iNodePrev;
-		int diff = iInsertNode - iNodePrev;
-		if (IS_KEYWORD_TOKEN(pPrevNode->packed.tok)) continue;
-		if (pPrevNode->packed.succ > diff) pPrevNode->packed.succ++;
-		if (pPrevNode->packed.fail > diff) pPrevNode->packed.fail++;
-	}
-}
+// 	// Increment all fail succ values in prior trie steps if they would have jumped past current insertion
+// 	for (int iNodePrev = TOK_KEYWORD_BEGIN; iNodePrev < iInsertNode; iNodePrev++) {
+// 		FrieNode *pPrevNode = pFrie + iNodePrev;
+// 		int diff = iInsertNode - iNodePrev;
+// 		if (IS_KEYWORD_TOKEN(pPrevNode->packed.tok)) continue;
+// 		if (pPrevNode->packed.succ > diff) pPrevNode->packed.succ++;
+// 		if (pPrevNode->packed.fail > diff) pPrevNode->packed.fail++;
+// 	}
+// }
 
-static RESULT FrieInitialize(int frieCapacity, FrieNode* pFrie)
-{
-	CHECK(frieCapacity > 256, RESULT_CAPACITY_ERROR);
-	ZERO_RANGE(pFrie, frieCapacity);
-	for (int i = 1; i < TOK_KEYWORD_BEGIN; ++i) {
-		pFrie[i].sparse.tok  = TOK_ERR;
-		pFrie[i].sparse.kind = TOK_KIND_ERROR;
-	}
-	goto RESULT_SUCCESS;
+// static RESULT FrieInitialize(int frieCapacity, FrieNode* pFrie)
+// {
+// 	CHECK(frieCapacity > 256, RESULT_CAPACITY_ERROR);
+// 	ZERO_RANGE(pFrie, frieCapacity);
+// 	for (int i = 1; i < TOK_KEYWORD_BEGIN; ++i) {
+// 		pFrie[i].sparse.tok  = TOK_ERR;
+// 		pFrie[i].sparse.kind = TOK_KIND_ERROR;
+// 	}
+// 	goto RESULT_SUCCESS;
 
-RESULT_CAPACITY_ERROR:
-	LOG_ERR("Frie capacityt too small %d! Expected > 256.\n", frieCapacity);
-	return RESULT_CAPACITY_ERROR;
+// RESULT_CAPACITY_ERROR:
+// 	LOG_ERR("Frie capacityt too small %d! Expected > 256.\n", frieCapacity);
+// 	return RESULT_CAPACITY_ERROR;
 
-RESULT_SUCCESS:
-	return RESULT_SUCCESS;
-}
+// RESULT_SUCCESS:
+// 	return RESULT_SUCCESS;
+// }
 
-static RESULT FrieInsert(int tokCount, const TokDef* tokDefs, int frieCapacity, FrieNode* pFrie)
-{
-	TokDef def = { .name = "\0" };
-	int iEndNode = TOK_KEYWORD_BEGIN;
-	int iNodeFirstFail = 0;
-	int iTok   = 0;
-	int iNode  = 0;
-	int iName  = 0;
-	int len    = 0;
-	bool munch = false;
-	bool delim = false;
-	TOK tok    = TOK_NONE;
-	char sparseCharBuf[2] = { '\0', '\0' };
-	double buildTimeStart = GetTime();
+// static RESULT FrieInsert(int tokCount, const TokDef* tokDefs, int frieCapacity, FrieNode* pFrie)
+// {
+// 	TokDef def = { .name = "\0" };
+// 	int iEndNode = TOK_KEYWORD_BEGIN;
+// 	int iNodeFirstFail = 0;
+// 	int iTok   = 0;
+// 	int iNode  = 0;
+// 	int iName  = 0;
+// 	int len    = 0;
+// 	bool munch = false;
+// 	bool delim = false;
+// 	TOK tok    = TOK_NONE;
+// 	char sparseCharBuf[2] = { '\0', '\0' };
+// 	double buildTimeStart = GetTime();
 
-NextTok:
-	if (iTok == tokCount) goto RESULT_SUCCESS;
-	def = tokDefs[iTok];
-	if (def.name == NULL) {	iTok++; goto NextTok; }
-	if (def.name[0] == TOK_KEY_CHAR) {	def.name = sparseCharBuf; def.name[0] = iTok; }
-	iNodeFirstFail = TOK_KEYWORD_BEGIN;
-	iNode = 0;
-	iName = 0;
-	len = strlen(def.name);
-	munch = false;
-	delim = def.name[len-1] == TOK_DELIMIT;
-	tok = iTok;
-	LOG("Insert Token: %s\n", def.name);
+// NextTok:
+// 	if (iTok == tokCount) goto RESULT_SUCCESS;
+// 	def = tokDefs[iTok];
+// 	if (def.name == NULL) {	iTok++; goto NextTok; }
+// 	if (def.name[0] == TOK_KEY_CHAR) {	def.name = sparseCharBuf; def.name[0] = iTok; }
+// 	iNodeFirstFail = TOK_KEYWORD_BEGIN;
+// 	iNode = 0;
+// 	iName = 0;
+// 	len = strlen(def.name);
+// 	munch = false;
+// 	delim = def.name[len-1] == TOK_DELIM;
+// 	tok = iTok;
+// 	LOG("Insert Token: %s\n", def.name);
 
-NextNameChar:
-	char cName = def.name[iName];
-	if (cName == '\0' && iName == 0) {
-		LOG_WARN("Trying to add empty token!\n");
-		iTok++; goto NextTok;
-	}
-	char cNameNext= def.name[iName+1];
+// NextNameChar:
+// 	char cName = def.name[iName];
+// 	if (cName == '\0' && iName == 0) {
+// 		LOG_WARN("Trying to add empty token!\n");
+// 		iTok++; goto NextTok;
+// 	}
+// 	char cNameNext= def.name[iName+1];
 
-	/* Token First Char */
-	if (iName == 0) {
-		FrieNode *pNode = pFrie + cName;
-		FrieNode node = *pNode;
+// 	/* Token First Char */
+// 	if (iName == 0) {
+// 		FrieNode *pNode = pFrie + cName;
+// 		FrieNode node = *pNode;
 
-		// One char token
-		if (cNameNext == '\0') {
-			pNode->sparse.kind = def.kind;
-			CHECKMSG(pNode->sparse.tok != TOK_SPARSE_CHAR, RESULT_DUPLICATE_ERROR, "Inserting single char token twice! %s %s %s", def.name, string_CHAR(cName), string_TOK(tok));
-			pNode->sparse.tok = tok;
-			iTok++;
-			goto NextTok;
-		}
+// 		// One char token
+// 		if (cNameNext == '\0') {
+// 			pNode->sparse.kind = def.kind;
+// 			CHECKMSG(pNode->sparse.tok != TOK_SPARSE_CHAR, RESULT_DUPLICATE_ERROR, "Inserting single char token twice! %s %s %s", def.name, string_CHAR(cName), string_TOK(tok));
+// 			pNode->sparse.tok = tok;
+// 			iTok++;
+// 			goto NextTok;
+// 		}
 
-		// Already added. Jump.
-		if (node.sparse.succ > 0) {
-			if (node.sparse.tok != TOK_ERR) munch = true;
-			iNode = node.sparse.succ;
-			iName++;
-			goto NextNameChar;
-		}
+// 		// Already added. Jump.
+// 		if (node.sparse.succ > 0) {
+// 			if (node.sparse.tok != TOK_ERR) munch = true;
+// 			iNode = node.sparse.succ;
+// 			iName++;
+// 			goto NextNameChar;
+// 		}
 
-		// Set succ on sparse token to signal a match
-		CHECKMSG(iEndNode < FRIE_MAX_SPARSE_OFFSET, RESULT_OFFSET_ERROR, "end:%d", iEndNode);
-		if (node.sparse.tok != TOK_ERR) munch = true;
-		pNode->sparse.succ = iEndNode;
-		iNode = iEndNode;
-		iName++;
-		goto NextNameChar;
-	}
+// 		// Set succ on sparse token to signal a match
+// 		CHECKMSG(iEndNode < FRIE_MAX_SPARSE_OFFSET, RESULT_OFFSET_ERROR, "end:%d", iEndNode);
+// 		if (node.sparse.tok != TOK_ERR) munch = true;
+// 		pNode->sparse.succ = iEndNode;
+// 		iNode = iEndNode;
+// 		iName++;
+// 		goto NextNameChar;
+// 	}
 
-	/* Token Subsequent Chars */
-	{
-		FrieNode node  = pFrie[iNode];
-		// Encounter a token in frie, must shift to the right and fill in new token.
-		if (IS_KEYWORD_TOKEN(node.packed.tok) || node.packed.tok == TOK_ERR || node.packed.tok == TOK_MUNCH) {
-			if (iNodeFirstFail != TOK_KEYWORD_BEGIN) iNode = iNodeFirstFail;
-			FrieShift(pFrie, iNode, iEndNode);
-			iEndNode++; CHECK(iEndNode < frieCapacity, RESULT_CAPACITY_ERROR);
-			u16 succ = iEndNode - iNode;
-			CHECKMSG(succ < FRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "succ:%d", succ);
-			pFrie[iNode] = (FrieNode){
-				.packed.tok  = cName,
-				.packed.succ = succ,
-				// When non-delim, fail = 1 ends up pointing to the token to be munched
-				// whereas with delim fail will point to a delim token, which will then go to err token
-				.packed.fail = 1
-			};
-			iName++; iNode = iEndNode;
-			goto NextNameChar;
-		}
+// 	/* Token Subsequent Chars */
+// 	{
+// 		FrieNode node  = pFrie[iNode];
+// 		// Encounter a token in frie, must shift to the right and fill in new token.
+// 		if (IS_KEYWORD_TOKEN(node.packed.tok) || node.packed.tok == TOK_ERR || node.packed.tok == TOK_MUNCH) {
+// 			if (iNodeFirstFail != TOK_KEYWORD_BEGIN) iNode = iNodeFirstFail;
+// 			FrieShift(pFrie, iNode, iEndNode);
+// 			iEndNode++; CHECK(iEndNode < frieCapacity, RESULT_CAPACITY_ERROR);
+// 			u16 succ = iEndNode - iNode;
+// 			CHECKMSG(succ < FRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "succ:%d", succ);
+// 			pFrie[iNode] = (FrieNode){
+// 				.packed.tok  = cName,
+// 				.packed.succ = succ,
+// 				// When non-delim, fail = 1 ends up pointing to the token to be munched
+// 				// whereas with delim fail will point to a delim token, which will then go to err token
+// 				.packed.fail = 1
+// 			};
+// 			iName++; iNode = iEndNode;
+// 			goto NextNameChar;
+// 		}
 
-		// Encounter delimit char in tokdef name, must shift to the right and fill in new token.
-		if (cName == TOK_DELIMIT) {
-			FrieShift(pFrie, iNode, iEndNode);
-			bool insertingAtEnd = iEndNode == iNode;
-			iEndNode++; CHECK(iEndNode < frieCapacity, RESULT_CAPACITY_ERROR);
-			u16 succ = iEndNode - iNode;
-			CHECKMSG(succ < FRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "succ:%d", succ);
-			u16 fail = insertingAtEnd ? succ + 1 : 1; // If inserting at end ERR token is 1 after succ, otherwise fail to next node
-			CHECKMSG(fail < FRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "fail:%d", fail);
-			pFrie[iNode] = (FrieNode){
-				.packed.tok  = TOK_DELIMIT,
-				.packed.succ = succ,
-				.packed.fail = fail,
-			};
-			delim = true;
-			iName++; iNode = iEndNode;
-			goto NextNameChar;
-		}
+// 		// Encounter delimit char in tokdef name, must shift to the right and fill in new token.
+// 		if (cName == TOK_DELIM) {
+// 			FrieShift(pFrie, iNode, iEndNode);
+// 			bool insertingAtEnd = iEndNode == iNode;
+// 			iEndNode++; CHECK(iEndNode < frieCapacity, RESULT_CAPACITY_ERROR);
+// 			u16 succ = iEndNode - iNode;
+// 			CHECKMSG(succ < FRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "succ:%d", succ);
+// 			u16 fail = insertingAtEnd ? succ + 1 : 1; // If inserting at end ERR token is 1 after succ, otherwise fail to next node
+// 			CHECKMSG(fail < FRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "fail:%d", fail);
+// 			pFrie[iNode] = (FrieNode){
+// 				.packed.tok  = TOK_DELIM,
+// 				.packed.succ = succ,
+// 				.packed.fail = fail,
+// 			};
+// 			delim = true;
+// 			iName++; iNode = iEndNode;
+// 			goto NextNameChar;
+// 		}
 
-		// End of Token Name. Write token go to next token!
-		if (cName == '\0') {
-			CHECK(iNode == iEndNode, RESULT_ORDER_ERROR);
-			pFrie[iNode++] = (FrieNode){ .terminator.tok = tok, .terminator.kind = def.kind };
-			// If the token has a delimiter it will have an explicit end delimit node to signal match. If it gets past the delimiter node it's because there was no match and thus an error.
-			// If there is no delimiter it runs on maximal munch and whatever muched thus far should be the token.
-			if (munch) pFrie[iNode++] = (FrieNode){ .terminator.tok = TOK_MUNCH, .terminator.kind = TOK_KIND_ERROR };
-			else       pFrie[iNode++] = (FrieNode){ .terminator.tok = TOK_ERR,   .terminator.kind = TOK_KIND_ERROR };
-			iTok++;	iEndNode = iNode;
-			goto NextTok;
-		}
+// 		// End of Token Name. Write token go to next token!
+// 		if (cName == '\0') {
+// 			CHECK(iNode == iEndNode, RESULT_ORDER_ERROR);
+// 			pFrie[iNode++] = (FrieNode){ .terminator.tok = tok, .terminator.kind = def.kind };
+// 			// If the token has a delimiter it will have an explicit end delimit node to signal match. If it gets past the delimiter node it's because there was no match and thus an error.
+// 			// If there is no delimiter it runs on maximal munch and whatever muched thus far should be the token.
+// 			if (munch) pFrie[iNode++] = (FrieNode){ .terminator.tok = TOK_MUNCH, .terminator.kind = TOK_KIND_ERROR };
+// 			else       pFrie[iNode++] = (FrieNode){ .terminator.tok = TOK_ERR,   .terminator.kind = TOK_KIND_ERROR };
+// 			iTok++;	iEndNode = iNode;
+// 			goto NextTok;
+// 		}
 
-		// Token char succesfully match with existing trie char
-		if (cName == node.packed.tok) {
-			iNodeFirstFail = TOK_KEYWORD_BEGIN;
-			iNode += node.packed.succ; iName++;
-			goto NextNameChar;
-		}
+// 		// Token char succesfully match with existing trie char
+// 		if (cName == node.packed.tok) {
+// 			iNodeFirstFail = TOK_KEYWORD_BEGIN;
+// 			iNode += node.packed.succ; iName++;
+// 			goto NextNameChar;
+// 		}
 
-		// Token char fail to match with existing trie char
-		if (iNode < iEndNode) {
-			if (iNodeFirstFail == TOK_KEYWORD_BEGIN) iNodeFirstFail = iNode;
-			iNode += node.packed.fail;
-			goto NextNameChar;
-		}
+// 		// Token char fail to match with existing trie char
+// 		if (iNode < iEndNode) {
+// 			if (iNodeFirstFail == TOK_KEYWORD_BEGIN) iNodeFirstFail = iNode;
+// 			iNode += node.packed.fail;
+// 			goto NextNameChar;
+// 		}
 
-		{
-			u16 fail = (len + 1) - iName - delim; // +1 as err comes after tok
-			CHECKMSG(fail < FRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "fail:%d", fail);
-			pFrie[iNode] = (FrieNode){
-				.packed.tok  = cName,
-				.packed.succ = 1,
-				.packed.fail = fail,
-			};
-			iNode++; iEndNode++; iName++;
-			goto NextNameChar;
-		}
-	}
+// 		{
+// 			u16 fail = (len + 1) - iName - delim; // +1 as err comes after tok
+// 			CHECKMSG(fail < FRIE_MAX_PACKED_OFFSET, RESULT_OFFSET_ERROR, "fail:%d", fail);
+// 			pFrie[iNode] = (FrieNode){
+// 				.packed.tok  = cName,
+// 				.packed.succ = 1,
+// 				.packed.fail = fail,
+// 			};
+// 			iNode++; iEndNode++; iName++;
+// 			goto NextNameChar;
+// 		}
+// 	}
 
-RESULT_ORDER_ERROR:
-	LOG_ERR("Trying to inset shorter token after longer token! %s %s", def.name, string_TOK(tok));
-	FrieLog(pFrie);
-	return RESULT_ORDER_ERROR;
+// RESULT_ORDER_ERROR:
+// 	LOG_ERR("Trying to inset shorter token after longer token! %s %s", def.name, string_TOK(tok));
+// 	FrieLog(pFrie);
+// 	return RESULT_ORDER_ERROR;
 
-RESULT_CAPACITY_ERROR:
-	LOG_ERR("Trie capacity reached! %d %s\n", iNode, def.name);
-	return RESULT_CAPACITY_ERROR;
+// RESULT_CAPACITY_ERROR:
+// 	LOG_ERR("Trie capacity reached! %d %s\n", iNode, def.name);
+// 	return RESULT_CAPACITY_ERROR;
 
-RESULT_DUPLICATE_ERROR:
-	LOG_ERR("Trying insert the same token twice! %d %s\n", iNode, def.name);
-	return RESULT_DUPLICATE_ERROR;
+// RESULT_DUPLICATE_ERROR:
+// 	LOG_ERR("Trying insert the same token twice! %d %s\n", iNode, def.name);
+// 	return RESULT_DUPLICATE_ERROR;
 
-RESULT_OFFSET_ERROR:
-	LOG_ERR("Trying to add offset greater than FRIE_MAX_OFFSET. %d %s\n", iNode, def.name);
-	return RESULT_OFFSET_ERROR;
+// RESULT_OFFSET_ERROR:
+// 	LOG_ERR("Trying to add offset greater than FRIE_MAX_OFFSET. %d %s\n", iNode, def.name);
+// 	return RESULT_OFFSET_ERROR;
 
-RESULT_SUCCESS:
-	double buildTimeEnd = GetTime();
-	LOG("Frie Build Time: %f %f %fms\n", buildTimeEnd, buildTimeStart, (buildTimeEnd - buildTimeStart) * 1000.0);
-	FrieLog(pFrie);
-	FrieValidate(tokCount, tokDefs, pFrie);
-	return RESULT_SUCCESS;
-}
+// RESULT_SUCCESS:
+// 	double buildTimeEnd = GetTime();
+// 	LOG("Frie Build Time: %f %f %fms\n", buildTimeEnd, buildTimeStart, (buildTimeEnd - buildTimeStart) * 1000.0);
+// 	FrieLog(pFrie);
+// 	FrieValidate(tokCount, tokDefs, pFrie);
+// 	return RESULT_SUCCESS;
+// }
 
 /*
  * CodeBox
@@ -1929,6 +2071,97 @@ static inline Vector2 GetBoxLocalToWorld(Vector2 point, Rectangle rect) {
 	return (Vector2){ point.x + rect.x, point.y + rect.y };
 }
 
+static RESULT CodeBoxProcessMeta2(CodeBox* pCode)
+{
+	/* State */
+	const int  textCount = pCode->textCount;
+	char	  *pText     = pCode->pText;
+	TextMeta  *pMeta     = pCode->pTextMeta;
+	FrieRoot  *pRoot     = &TOK_BASE_FRIE;
+
+	bool prevmatch = true; 
+	i16 val  = 0;
+	int iLen = 0;
+	int iFrie = 0;
+	int iText = 0;
+	int iTextStart = 0;
+	frie_char cFrie = 0;
+	frie_char cText = pText[iText];
+
+	FrieLenEntry *pEntry = &pRoot->ascii[cText].len[MAXIMAL_MUNCH_LEN];
+	frie_char    *pFrie  =  pEntry->pBuf;
+
+	cFrie = pFrie != NULL ? pFrie[iFrie] : 0;
+	cText = pText[++iText];
+
+	// for (int i = 0; i < textCount; ++i) {
+	// 	pMeta[i].tok.val  = pText[i];
+	// 	pMeta[i].tok.kind = TOK_KIND_IDENTIFIER;
+	// }
+	
+	int count = 10;
+
+NextChar:
+	if (iText == 100 || count--<0) goto RESULT_SUCCESS;;
+
+	fprintf(stderr, "iText:%d iFrie:%d cText:%c:%d cFrie:%c:%d...\n", iText, iFrie,  cText, cText, cFrie, cFrie);
+
+	if (cFrie == 0 && val == 0) {
+		while (!IS_DELIM_CHAR(cText)) cText = pText[++iText];
+		int len = (iText - iTextStart) + 1; // + 1 delim
+		fprintf(stderr, "Delim `%.*s` len:%d\n", len, pText + iTextStart, len);
+		val = FrieGet2(pRoot, len, pText + iTextStart);
+		fprintf(stderr, "Found %d\n", val);
+		cText = pText[++iText];
+		iTextStart = iText;
+
+		pEntry = &pRoot->ascii[cText].len[MAXIMAL_MUNCH_LEN];
+		pFrie  =  pEntry->pBuf;
+		cFrie  =  pFrie != NULL ? pFrie[iFrie] : 0;
+		goto NextChar;
+	}
+
+
+	if (cFrie == 0) {
+		fprintf(stderr, "Final Val %d\n", cFrie);
+		cText = pText[++iText];
+		goto NextChar;
+	}
+
+	if (pFrie == NULL) {
+		goto RESULT_SUCCESS;
+	}
+
+	// Only accept JUMP or TOK if prev matched
+	if (prevmatch && IS_VAL(cFrie)) {
+		fprintf(stderr, "Tok %d\n", cFrie);
+		val = cFrie;
+		cFrie = pFrie[++iFrie];
+		goto NextChar;
+	}
+	if (prevmatch && IS_JUMP(cFrie)) {
+		fprintf(stderr, "Jump\n");
+		iFrie += JUMP_OFFSET(cFrie);
+		cFrie = pFrie[iFrie];
+		goto NextChar;
+	}
+	if (cText == cFrie) {
+		fprintf(stderr, "Match\n");
+		prevmatch = true;
+		cText = pText[++iText];
+		cFrie = pFrie[++iFrie];
+		goto NextChar;
+	}
+
+	fprintf(stderr, "Skip\n");
+	prevmatch = false;
+	cFrie = pFrie[++iFrie];
+	goto NextChar;
+
+RESULT_SUCCESS:
+	return RESULT_SUCCESS;
+}
+
 static RESULT CodeBoxProcessMeta(CodeBox* pCode)
 {
 // Dispatch tables are built by filling in ranges of defaults
@@ -1943,152 +2176,152 @@ static RESULT CodeBoxProcessMeta(CodeBox* pCode)
 		[TOK_MUNCH]         = &&TOK_MUNCH,\
 		[TOK_SPARSE_CHAR]   = &&TOK_SPARSE_CHAR,\
 		[TOK_PACKED_CHAR]   = &&TOK_PACKED_CHAR,\
-		[TOK_DELIMIT]       = &&TOK_DELIMIT,\
+		[TOK_DELIM]         = &&TOK_DELIM,\
 		[TOK_ASCII_RANGE]   = &&TOK_SPARSE_CHAR,\
 		[TOK_WHITE_RANGE]   = &&TOK_SPARSE_WHITESPACE,\
 		[' ']               = &&TOK_SPARSE_WHITESPACE,\
 		[TOK_KEYWORD_RANGE] = &&TOK_ALL,
 
-	static void *baseDispatch[TOK_CAPACITY] = {
-		DISPATCH_DEEFAULT
-		[TOK_SQUOTE]            = &&TOK_SQUOTE_BEGIN,
-		[TOK_DQUOTE]            = &&TOK_DQUOTE_BEGIN,
-		[TOK_LBLOCK_COMMENT]    = &&TOK_OPEN_BLOCK_COMMENT,
-		[TOK_LINE_COMMENT]      = &&TOK_OPEN_LINE_COMMENT,
-		[TOK_UPPER_ALPHA_RANGE] = &&TOK_SPARSE_IDENTIFIER_BEGIN,
-		[TOK_LOWER_ALPHA_RANGE] = &&TOK_SPARSE_IDENTIFIER_BEGIN,
-		['_']                   = &&TOK_SPARSE_IDENTIFIER_BEGIN,
-		[TOK_DIGIT_RANGE]       = &&TOK_SPARSE_NUMBER_BEGIN,
-		['{']                   = &&TOK_LBRACE,
-		['}']                   = &&TOK_RBRACE,
-		['[']                   = &&TOK_LBRACKET,
-		[']']                   = &&TOK_RBRACKET,
-		['(']                   = &&TOK_LPAREN,
-		[')']                   = &&TOK_RPAREN,
-	};
+	// static void *baseDispatch[TOK_CAPACITY] = {
+	// 	DISPATCH_DEEFAULT
+	// 	[TOK_SQUOTE]            = &&TOK_SQUOTE_BEGIN,
+	// 	[TOK_DQUOTE]            = &&TOK_DQUOTE_BEGIN,
+	// 	[TOK_LBLOCK_COMMENT]    = &&TOK_OPEN_BLOCK_COMMENT,
+	// 	[TOK_LINE_COMMENT]      = &&TOK_OPEN_LINE_COMMENT,
+	// 	[TOK_UPPER_ALPHA_RANGE] = &&TOK_SPARSE_IDENTIFIER_BEGIN,
+	// 	[TOK_LOWER_ALPHA_RANGE] = &&TOK_SPARSE_IDENTIFIER_BEGIN,
+	// 	['_']                   = &&TOK_SPARSE_IDENTIFIER_BEGIN,
+	// 	[TOK_DIGIT_RANGE]       = &&TOK_SPARSE_NUMBER_BEGIN,
+	// 	['{']                   = &&TOK_LBRACE,
+	// 	['}']                   = &&TOK_RBRACE,
+	// 	['[']                   = &&TOK_LBRACKET,
+	// 	[']']                   = &&TOK_RBRACKET,
+	// 	['(']                   = &&TOK_LPAREN,
+	// 	[')']                   = &&TOK_RPAREN,
+	// };
 
-	/* State */
-	struct PACKED {
-		FrieNode node;
-		char     cText;
-		int      iText;
-		int      iPack;
-		int      iTextStart;
-		TOK      tok;
-		TextMeta meta;
-	} step;	ZERO(&step);
+// 	/* State */
+// 	struct PACKED {
+// 		FrieNode node;
+// 		char     cText;
+// 		int      iText;
+// 		int      iPack;
+// 		int      iTextStart;
+// 		TOK      tok;
+// 		TextMeta meta;
+// 	} step;	ZERO(&step);
 
-	const int  textCount = pCode->textCount;
-	char	  *pText     = pCode->pText;
-	TextMeta  *pMeta     = pCode->pTextMeta;
+// 	const int  textCount = pCode->textCount;
+// 	char	  *pText     = pCode->pText;
+// 	TextMeta  *pMeta     = pCode->pTextMeta;
 	
-	// Base dispatch is the foundational lex mode and is associated with a frie. Base dispatch can be 
-	// temporarily overriden by dispatch and will use the same frie as base dispatch.
-	// i.e Base dispatch and base frie is C11 code lex and can be overriden by number or quote dispatch
-	// for recognizing identifiers or numbers in the code. Whereas quotes and comments fully switch
-	// to a different frie, base dispatch, dispatch to recognize completely different tokens.
-	void     **basedisp  = baseDispatch;
-	void     **disp      = baseDispatch;
-	FrieNode  *pFrie     = TOK_BASE_FRIE;
+// 	// Base dispatch is the foundational lex mode and is associated with a frie. Base dispatch can be 
+// 	// temporarily overriden by dispatch and will use the same frie as base dispatch.
+// 	// i.e Base dispatch and base frie is C11 code lex and can be overriden by number or quote dispatch
+// 	// for recognizing identifiers or numbers in the code. Whereas quotes and comments fully switch
+// 	// to a different frie, base dispatch, dispatch to recognize completely different tokens.
+// 	void     **basedisp  = baseDispatch;
+// 	void     **disp      = baseDispatch;
+// 	FrieNode  *pFrie     = TOK_BASE_FRIE;
 
-	/* Entry */
-	step.iText = 0;
-	step.cText = pText[step.iText];
-	step.node  = pFrie[(u8)step.cText];
+// 	/* Entry */
+// 	step.iText = 0;
+// 	step.cText = pText[step.iText];
+// 	step.node  = pFrie[(u8)step.cText];
 
-	/* Sparse Char Tokens */
-	TOK_SPARSE_WHITESPACE: { // White space is most common so we rely on fallthrough.
-		step.node.sparse.kind = TOK_KIND_WHITESPACE;
-		// Fallthrough
-	}
-	TOK_SPARSE_CHAR: { // General entry for all sparse chars.
-		step.meta.tok = (TokMeta){ step.cText, step.node.sparse.kind };
-		// Fallthrough
-	}
-	TOK_SPARSE_META_COPY: { // Apply meta for sparse char.
-		ZERO(&step.meta.tokOffset);
-		memcpy(pMeta + step.iText, &step.meta, sizeof(TextMeta));
-		step.iTextStart  = step.iText;
-		// Fallthrough
-	}
-	TOK_SPARSE_DISP: { // Dispatch to Packed Char or begin Sparse Space.
-		bool jump  = step.node.sparse.succ > 0;
-		step.cText = pText[++step.iText];
-		u8 cTok    = step.cText > 0 ? step.cText : TOK_ERR;
-		step.tok   = jump ? TOK_PACKED_CHAR : cTok;
-		step.iPack = jump ? step.node.sparse.succ : cTok;
-		step.node  = pFrie[step.iPack];
-		goto *disp[step.tok];
-	}
+// 	/* Sparse Char Tokens */
+// 	TOK_SPARSE_WHITESPACE: { // White space is most common so we rely on fallthrough.
+// 		step.node.sparse.kind = TOK_KIND_WHITESPACE;
+// 		// Fallthrough
+// 	}
+// 	TOK_SPARSE_CHAR: { // General entry for all sparse chars.
+// 		step.meta.tok = (TokMeta){ step.cText, step.node.sparse.kind };
+// 		// Fallthrough
+// 	}
+// 	TOK_SPARSE_META_COPY: { // Apply meta for sparse char.
+// 		ZERO(&step.meta.tokOffset);
+// 		memcpy(pMeta + step.iText, &step.meta, sizeof(TextMeta));
+// 		step.iTextStart  = step.iText;
+// 		// Fallthrough
+// 	}
+// 	TOK_SPARSE_DISP: { // Dispatch to Packed Char or begin Sparse Space.
+// 		bool jump  = step.node.sparse.succ > 0;
+// 		step.cText = pText[++step.iText];
+// 		u8 cTok    = step.cText > 0 ? step.cText : TOK_ERR;
+// 		step.tok   = jump ? TOK_PACKED_CHAR : cTok;
+// 		step.iPack = jump ? step.node.sparse.succ : cTok;
+// 		step.node  = pFrie[step.iPack];
+// 		goto *disp[step.tok];
+// 	}
 
-	/* Alternate Sparse Char Tokens */
-	TOK_SPARSE_STRING: { // Apply string kind when parsing in quotes.
-		step.meta.tok = (TokMeta){ TOK_STRING, TOK_KIND_STRING };
-		goto TOK_SPARSE_META_COPY;
-	}
-	TOK_SPARSE_COMMENT: { // Apply commend kind when parsing in comments.
-		step.meta.tok = (TokMeta){ TOK_COMMENT, TOK_KIND_COMMENT };
-		goto TOK_SPARSE_META_COPY;
-	}
+// 	/* Alternate Sparse Char Tokens */
+// 	TOK_SPARSE_STRING: { // Apply string kind when parsing in quotes.
+// 		step.meta.tok = (TokMeta){ TOK_STRING, TOK_KIND_STRING };
+// 		goto TOK_SPARSE_META_COPY;
+// 	}
+// 	TOK_SPARSE_COMMENT: { // Apply commend kind when parsing in comments.
+// 		step.meta.tok = (TokMeta){ TOK_COMMENT, TOK_KIND_COMMENT };
+// 		goto TOK_SPARSE_META_COPY;
+// 	}
 
-	/* Sparse Number Span */
-	TOK_SPARSE_NUMBER_BEGIN: {
-		static void *numberDispatch[TOK_CAPACITY] = {
-			DISPATCH_DEEFAULT
-			[TOK_WHITE_RANGE]       = &&TOK_SPARSE_SPAN_END,
-			[' ']                   = &&TOK_SPARSE_SPAN_END,
-			[TOK_ASCII_RANGE]       = &&TOK_SPARSE_SPAN_END,
-			[TOK_UPPER_ALPHA_RANGE] = &&TOK_SPARSE_SPAN_END,
-			[TOK_LOWER_ALPHA_RANGE] = &&TOK_SPARSE_SPAN_END,
-			[TOK_NUMBER_BINARY]     = &&TOK_SPARSE_SPAN_STEP,
-			[TOK_NUMBER_HEX]        = &&TOK_SPARSE_SPAN_STEP,
-			[TOK_DIGIT_RANGE]       = &&TOK_SPARSE_SPAN_STEP,
-		};
-		disp = numberDispatch;
-		step.iTextStart   = step.iText;
-		step.meta.tok = (TokMeta){ TOK_NUMBER, TOK_KIND_NUMBER };
-		goto TOK_SPARSE_DISP;
-	}
+// 	/* Sparse Number Span */
+// 	TOK_SPARSE_NUMBER_BEGIN: {
+// 		static void *numberDispatch[TOK_CAPACITY] = {
+// 			DISPATCH_DEEFAULT
+// 			[TOK_WHITE_RANGE]       = &&TOK_SPARSE_SPAN_END,
+// 			[' ']                   = &&TOK_SPARSE_SPAN_END,
+// 			[TOK_ASCII_RANGE]       = &&TOK_SPARSE_SPAN_END,
+// 			[TOK_UPPER_ALPHA_RANGE] = &&TOK_SPARSE_SPAN_END,
+// 			[TOK_LOWER_ALPHA_RANGE] = &&TOK_SPARSE_SPAN_END,
+// 			[TOK_NUMBER_BINARY]     = &&TOK_SPARSE_SPAN_STEP,
+// 			[TOK_NUMBER_HEX]        = &&TOK_SPARSE_SPAN_STEP,
+// 			[TOK_DIGIT_RANGE]       = &&TOK_SPARSE_SPAN_STEP,
+// 		};
+// 		disp = numberDispatch;
+// 		step.iTextStart = step.iText;
+// 		step.meta.tok = (TokMeta){ TOK_NUMBER, TOK_KIND_NUMBER };
+// 		goto TOK_SPARSE_DISP;
+// 	}
 
-	/* Sparse Identifier Span */
-	TOK_SPARSE_IDENTIFIER_BEGIN: {
-		static void *identifierDispatch[TOK_CAPACITY] = {
-			DISPATCH_DEEFAULT
-			[TOK_WHITE_RANGE]       = &&TOK_SPARSE_SPAN_END,
-			[' ']                   = &&TOK_SPARSE_SPAN_END,
-			[TOK_ASCII_RANGE]       = &&TOK_SPARSE_SPAN_END,
-			[TOK_UPPER_ALPHA_RANGE] = &&TOK_SPARSE_SPAN_STEP,
-			[TOK_LOWER_ALPHA_RANGE] = &&TOK_SPARSE_SPAN_STEP,
-			['_']                   = &&TOK_SPARSE_SPAN_STEP,
-			[TOK_DIGIT_RANGE]       = &&TOK_SPARSE_SPAN_STEP,
-		};
-		disp = identifierDispatch;
-		step.iTextStart   = step.iText;
-		step.meta.tok = (TokMeta){ TOK_IDENTIFIER, TOK_KIND_IDENTIFIER };
-		goto TOK_SPARSE_DISP;
-	}
+// 	/* Sparse Identifier Span */
+// 	TOK_SPARSE_IDENTIFIER_BEGIN: {
+// 		static void *identifierDispatch[TOK_CAPACITY] = {
+// 			DISPATCH_DEEFAULT
+// 			[TOK_WHITE_RANGE]       = &&TOK_SPARSE_SPAN_END,
+// 			[' ']                   = &&TOK_SPARSE_SPAN_END,
+// 			[TOK_ASCII_RANGE]       = &&TOK_SPARSE_SPAN_END,
+// 			[TOK_UPPER_ALPHA_RANGE] = &&TOK_SPARSE_SPAN_STEP,
+// 			[TOK_LOWER_ALPHA_RANGE] = &&TOK_SPARSE_SPAN_STEP,
+// 			['_']                   = &&TOK_SPARSE_SPAN_STEP,
+// 			[TOK_DIGIT_RANGE]       = &&TOK_SPARSE_SPAN_STEP,
+// 		};
+// 		disp = identifierDispatch;
+// 		step.iTextStart   = step.iText;
+// 		step.meta.tok = (TokMeta){ TOK_IDENTIFIER, TOK_KIND_IDENTIFIER };
+// 		goto TOK_SPARSE_DISP;
+// 	}
 
-	/* Sparse Span */
-	TOK_SPARSE_SPAN_STEP: {
-		step.cText = pText[++step.iText];
-		step.tok   = step.cText < 0 ? TOK_ERR : step.cText;
-		step.node  = pFrie[step.tok];
-		goto *disp[step.tok];
-	}
-	TOK_SPARSE_SPAN_END: {
-		for (int i = step.iTextStart; i < step.iText; ++i) {
-			step.meta.tokOffset = (u8_span){ i - step.iTextStart, (step.iText-1) - i };
-			pMeta[i] = step.meta;
-		}
-		disp = baseDispatch;
-		// LOG("Sparse Span End: %.*s %s %s\n", step.iText - step.iTextStart, pText + step.iTextStart, string_TOK(step.meta.tok.val), string_TOK_KIND(step.meta.tok.kind));
-		// if (step.meta.tok.kind == TOK_KIND_IDENTIFIER) {
-		// 	static char buf[64];
-		// 	snprintf(buf, 64, "%.*s", step.iText - step.iTextStart, pText + step.iTextStart);
-		// 	FrieInsert(1, &(TokDef){ .kind = step.meta.tok.kind, .name = buf }, 1024, TOK_BASE_FRIE);
-		// }
-		goto *disp[step.tok];
-	}
+// 	/* Sparse Span */
+// 	TOK_SPARSE_SPAN_STEP: {
+// 		step.cText = pText[++step.iText];
+// 		step.tok   = step.cText < 0 ? TOK_ERR : step.cText;
+// 		step.node  = pFrie[step.tok];
+// 		goto *disp[step.tok];
+// 	}
+// 	TOK_SPARSE_SPAN_END: {
+// 		for (int i = step.iTextStart; i < step.iText; ++i) {
+// 			step.meta.tokOffset = (u8_span){ i - step.iTextStart, (step.iText-1) - i };
+// 			pMeta[i] = step.meta;
+// 		}
+// 		disp = baseDispatch;
+// 		// LOG("Sparse Span End: %.*s %s %s\n", step.iText - step.iTextStart, pText + step.iTextStart, string_TOK(step.meta.tok.val), string_TOK_KIND(step.meta.tok.kind));
+// 		// if (step.meta.tok.kind == TOK_KIND_IDENTIFIER) {
+// 		// 	static char buf[64];
+// 		// 	snprintf(buf, 64, "%.*s", step.iText - step.iTextStart, pText + step.iTextStart);
+// 		// 	FrieInsert(1, &(TokDef){ .kind = step.meta.tok.kind, .name = buf }, 1024, TOK_BASE_FRIE);
+// 		// }
+// 		goto *disp[step.tok];
+// 	}
 
 	/* Scope Tokens */
 #define TOK_SCOPE(_ltok, _rtok, _level)\
@@ -2107,128 +2340,128 @@ static RESULT CodeBoxProcessMeta(CodeBox* pCode)
 		goto TOK_SPARSE_DISP;\
 	}
 
-	TOK_SCOPE(TOK_LPAREN,   TOK_RPAREN,   parenLevel)
-	TOK_SCOPE(TOK_LBRACKET, TOK_RBRACKET, bracketLevel)
-	TOK_SCOPE(TOK_LBRACE,   TOK_RBRACE,   braceLevel)
+// 	TOK_SCOPE(TOK_LPAREN,   TOK_RPAREN,   parenLevel)
+// 	TOK_SCOPE(TOK_LBRACKET, TOK_RBRACKET, bracketLevel)
+// 	TOK_SCOPE(TOK_LBRACE,   TOK_RBRACE,   braceLevel)
 
-#undef TOK_SCOPE
+// #undef TOK_SCOPE
 
-	/* Quote Tokens */
-	TOK_SQUOTE_BEGIN: {
-		static void *squoteDispatch[TOK_CAPACITY] = {
-			DISPATCH_DEEFAULT
-			[TOK_ASCII_RANGE] = &&TOK_SPARSE_STRING,
-			[' ']             = &&TOK_SPARSE_WHITESPACE,
-			['\'']            = &&TOK_QUOTE_END,
-		};
-		basedisp = squoteDispatch;
-		disp     = squoteDispatch;
-		pFrie    = TOK_QUOTE_FRIE;
-		goto TOK_SPARSE_CHAR;
-	}
-	TOK_DQUOTE_BEGIN: {
-		static void *dquoteDispatch[TOK_CAPACITY] = {
-			DISPATCH_DEEFAULT
-			[TOK_ASCII_RANGE] = &&TOK_SPARSE_STRING,
-			[' ']             = &&TOK_SPARSE_WHITESPACE,
-			['"']             = &&TOK_QUOTE_END,
-		};
-		basedisp = dquoteDispatch;
-		disp     = dquoteDispatch;
-		pFrie    = TOK_QUOTE_FRIE;
-		goto TOK_SPARSE_CHAR;
-	}
-	TOK_QUOTE_END: {
-		basedisp = baseDispatch;
-		disp     = baseDispatch;
-		pFrie    = TOK_BASE_FRIE;
-		goto TOK_SPARSE_CHAR;
-	}
+// 	/* Quote Tokens */
+// 	TOK_SQUOTE_BEGIN: {
+// 		static void *squoteDispatch[TOK_CAPACITY] = {
+// 			DISPATCH_DEEFAULT
+// 			[TOK_ASCII_RANGE] = &&TOK_SPARSE_STRING,
+// 			[' ']             = &&TOK_SPARSE_WHITESPACE,
+// 			['\'']            = &&TOK_QUOTE_END,
+// 		};
+// 		basedisp = squoteDispatch;
+// 		disp     = squoteDispatch;
+// 		pFrie    = TOK_QUOTE_FRIE;
+// 		goto TOK_SPARSE_CHAR;
+// 	}
+// 	TOK_DQUOTE_BEGIN: {
+// 		static void *dquoteDispatch[TOK_CAPACITY] = {
+// 			DISPATCH_DEEFAULT
+// 			[TOK_ASCII_RANGE] = &&TOK_SPARSE_STRING,
+// 			[' ']             = &&TOK_SPARSE_WHITESPACE,
+// 			['"']             = &&TOK_QUOTE_END,
+// 		};
+// 		basedisp = dquoteDispatch;
+// 		disp     = dquoteDispatch;
+// 		pFrie    = TOK_QUOTE_FRIE;
+// 		goto TOK_SPARSE_CHAR;
+// 	}
+// 	TOK_QUOTE_END: {
+// 		basedisp = baseDispatch;
+// 		disp     = baseDispatch;
+// 		pFrie    = TOK_BASE_FRIE;
+// 		goto TOK_SPARSE_CHAR;
+// 	}
 
-	/* Comment Tokens */
-	TOK_CLOSE_BLOCK_COMMENT: {
-		basedisp = baseDispatch;
-		disp     = baseDispatch;
-		pFrie    = TOK_BASE_FRIE;
-		goto TOK_ALL;
-	}
-	TOK_OPEN_BLOCK_COMMENT: {
-		static void *blockCommentDispatch[TOK_CAPACITY] = {
-			DISPATCH_DEEFAULT
-			[TOK_RBLOCK_COMMENT] = &&TOK_CLOSE_BLOCK_COMMENT,
-			[TOK_ASCII_RANGE]    = &&TOK_SPARSE_COMMENT,
-			[' ']                = &&TOK_SPARSE_WHITESPACE,
-		};
-		basedisp = blockCommentDispatch;
-		disp     = blockCommentDispatch;
-		pFrie    = TOK_LINE_COMMENT_FRIE;
-		goto TOK_ALL;
-	}
-	TOK_CLOSE_LINE_COMMENT:	{
-		basedisp = baseDispatch;
-		disp     = baseDispatch;
-		pFrie    = TOK_BASE_FRIE;
-		goto TOK_SPARSE_CHAR;
-	}
-	TOK_OPEN_LINE_COMMENT: {
-		static void *lineCommentDispatch[TOK_CAPACITY] = {
-			DISPATCH_DEEFAULT
-			[TOK_NEWLINE]     = &&TOK_CLOSE_LINE_COMMENT,
-			[TOK_ASCII_RANGE] = &&TOK_SPARSE_COMMENT,
-			[' ']             = &&TOK_SPARSE_WHITESPACE,
-		};
-		basedisp = lineCommentDispatch;
-		disp     = lineCommentDispatch;
-		pFrie    = TOK_LINE_COMMENT_FRIE;
-		goto TOK_ALL;
-	}
+// 	/* Comment Tokens */
+// 	TOK_CLOSE_BLOCK_COMMENT: {
+// 		basedisp = baseDispatch;
+// 		disp     = baseDispatch;
+// 		pFrie    = TOK_BASE_FRIE;
+// 		goto TOK_ALL;
+// 	}
+// 	TOK_OPEN_BLOCK_COMMENT: {
+// 		static void *blockCommentDispatch[TOK_CAPACITY] = {
+// 			DISPATCH_DEEFAULT
+// 			[TOK_RBLOCK_COMMENT] = &&TOK_CLOSE_BLOCK_COMMENT,
+// 			[TOK_ASCII_RANGE]    = &&TOK_SPARSE_COMMENT,
+// 			[' ']                = &&TOK_SPARSE_WHITESPACE,
+// 		};
+// 		basedisp = blockCommentDispatch;
+// 		disp     = blockCommentDispatch;
+// 		pFrie    = TOK_LINE_COMMENT_FRIE;
+// 		goto TOK_ALL;
+// 	}
+// 	TOK_CLOSE_LINE_COMMENT:	{
+// 		basedisp = baseDispatch;
+// 		disp     = baseDispatch;
+// 		pFrie    = TOK_BASE_FRIE;
+// 		goto TOK_SPARSE_CHAR;
+// 	}
+// 	TOK_OPEN_LINE_COMMENT: {
+// 		static void *lineCommentDispatch[TOK_CAPACITY] = {
+// 			DISPATCH_DEEFAULT
+// 			[TOK_NEWLINE]     = &&TOK_CLOSE_LINE_COMMENT,
+// 			[TOK_ASCII_RANGE] = &&TOK_SPARSE_COMMENT,
+// 			[' ']             = &&TOK_SPARSE_WHITESPACE,
+// 		};
+// 		basedisp = lineCommentDispatch;
+// 		disp     = lineCommentDispatch;
+// 		pFrie    = TOK_LINE_COMMENT_FRIE;
+// 		goto TOK_ALL;
+// 	}
 
-	/* Packed Tokens */
-	TOK_PACKED_CHAR: {
-		bool match = step.node.packed.tok == step.cText;
-		step.iPack += match ? step.node.packed.succ : step.node.packed.fail;
-		step.iText += match;
-		step.node  = pFrie[step.iPack];
-		step.cText = pText[step.iText];
-		// Single char tokens are dispatched from SPARSE_DISP. Continue as PACKED if in single char ASCII range.
-		step.tok = IS_KEYWORD_OR_SPECIAL_TOKEN(step.node.packed.tok) ? step.node.packed.tok : TOK_PACKED_CHAR;
-		goto *disp[step.tok];
-	}
+// 	/* Packed Tokens */
+// 	TOK_PACKED_CHAR: {
+// 		bool match = step.node.packed.tok == step.cText;
+// 		step.iPack += match ? step.node.packed.succ : step.node.packed.fail;
+// 		step.iText += match;
+// 		step.node  = pFrie[step.iPack];
+// 		step.cText = pText[step.iText];
+// 		// Single char tokens are dispatched from SPARSE_DISP. Continue as PACKED if in single char ASCII range.
+// 		step.tok = IS_KEYWORD_OR_SPECIAL_TOKEN(step.node.packed.tok) ? step.node.packed.tok : TOK_PACKED_CHAR;
+// 		goto *disp[step.tok];
+// 	}
 
-	/* End Tokens */
-	TOK_ALL: {
-		step.meta.tok = (TokMeta){ step.node.terminator.tok, step.node.terminator.kind };
-		// fallthrough
-	}
-	TOK_MUNCH: {
-		for (int i = step.iTextStart; i < step.iText; ++i) {
-			step.meta.tokOffset = (u8_span){ i - step.iTextStart, (step.iText-1) - i };
-			pMeta[i] = step.meta;
-		}
-		disp = basedisp;
-		step.tok  = step.cText < 0 ? TOK_ERR : step.cText;
-		step.node = pFrie[step.tok];
-		goto *disp[step.tok];
-	}
+// 	/* End Tokens */
+// 	TOK_ALL: {
+// 		step.meta.tok = (TokMeta){ step.node.terminator.tok, step.node.terminator.kind };
+// 		// fallthrough
+// 	}
+// 	TOK_MUNCH: {
+// 		for (int i = step.iTextStart; i < step.iText; ++i) {
+// 			step.meta.tokOffset = (u8_span){ i - step.iTextStart, (step.iText-1) - i };
+// 			pMeta[i] = step.meta;
+// 		}
+// 		disp = basedisp;
+// 		step.tok  = step.cText < 0 ? TOK_ERR : step.cText;
+// 		step.node = pFrie[step.tok];
+// 		goto *disp[step.tok];
+// 	}
 
-	/* Continue Tokens */
-	TOK_DELIMIT: {
-		disp = basedisp;
-		step.iPack += IS_DELIM_CHAR(step.cText) ? step.node.packed.succ : step.node.packed.fail;
-		step.node   = pFrie[step.iPack];
-		// Single char tokens are dispatched from SPARSE_DISP. Continue as PACKED if in single char ASCII range.
-		step.tok = IS_KEYWORD_OR_SPECIAL_TOKEN(step.node.packed.tok) ? step.node.packed.tok : TOK_PACKED_CHAR;
-		goto *disp[step.tok];
-	}
-	TOK_ERR: {
-		step.tok  = step.cText < 0 ? TOK_SPARSE_CHAR : step.cText;
-		step.node = pFrie[step.tok];
-		goto *disp[step.tok];
-	}
+// 	/* Continue Tokens */
+// 	TOK_DELIM: {
+// 		disp = basedisp;
+// 		step.iPack += IS_DELIM_CHAR(step.cText) ? step.node.packed.succ : step.node.packed.fail;
+// 		step.node   = pFrie[step.iPack];
+// 		// Single char tokens are dispatched from SPARSE_DISP. Continue as PACKED if in single char ASCII range.
+// 		step.tok = IS_KEYWORD_OR_SPECIAL_TOKEN(step.node.packed.tok) ? step.node.packed.tok : TOK_PACKED_CHAR;
+// 		goto *disp[step.tok];
+// 	}
+// 	TOK_ERR: {
+// 		step.tok  = step.cText < 0 ? TOK_SPARSE_CHAR : step.cText;
+// 		step.node = pFrie[step.tok];
+// 		goto *disp[step.tok];
+// 	}
 
-	/* End Of File */
-	TOK_NONE:
-		goto RESULT_SUCCESS;
+// 	/* End Of File */
+// 	TOK_NONE:
+// 		goto RESULT_SUCCESS;
 
 #pragma GCC diagnostic pop // ignored "-Woverride-init"
 
@@ -2681,16 +2914,28 @@ static struct {
 	.windowSize.y = DEFAULT_HEIGHT,
 };
 
+static void InitializeTokDefs(int count, const TokDef* pDefs, FrieRoot *pRoot)
+{
+	for (i16 token = 0; token < count; ++token) {
+		if (pDefs[token].name == NULL) continue;
+		int len = strlen(pDefs[token].name);
+		FrieInsert2(pRoot, len, pDefs[token].name, token);
+	}
+
+	for (i16 token = 0; token < count; ++token) {
+		if (pDefs[token].name == NULL) continue;
+		int len = strlen(pDefs[token].name);
+		bool delim = pDefs[token].name[len-1] == TOK_DELIM;
+		i16 foundToken = FrieGet2(pRoot, delim ? len : 0, pDefs[token].name);
+		MUSTMSG(foundToken == token, "Got: %d Expected %d\n", foundToken, token);
+	}
+
+	FrieRootPrint(pRoot);
+}
+
 int main(void)
 {
-	FrieInsert2(frie2, FRIE_LOOKUP_MAXIMAL_MUNCH, sizeof("uint32")-1, "uint32", 10032);
-	FrieInsert2(frie2, FRIE_LOOKUP_MAXIMAL_MUNCH, sizeof("uint8")-1, "uint8", 10008);
-	FrieInsert2(frie2, FRIE_LOOKUP_MAXIMAL_MUNCH, sizeof("uint16")-1, "uint16", 10016);
-	return 0;
-	
-	#define CONSTRUCT_TOK_DEF_FRIE(_tok)\
-		REQUIRE(FrieInitialize(NARRAY(_tok##_FRIE), _tok##_FRIE));\
-		REQUIRE(FrieInsert(NARRAY(_tok##_DEFS), _tok##_DEFS, NARRAY(_tok##_FRIE), _tok##_FRIE));
+	#define CONSTRUCT_TOK_DEF_FRIE(_tok)	  InitializeTokDefs(NARRAY(_tok##_DEFS), _tok##_DEFS, &_tok##_FRIE);
 	#define CONSTRUCT_TOK_DEF_FRIE_ALL(_defs) _defs(CONSTRUCT_TOK_DEF_FRIE)
 
 		CONSTRUCT_TOK_DEF_FRIE_ALL(DEF_TOK_ALL_DEFINITIONS)
@@ -2712,7 +2957,7 @@ int main(void)
 	SetTextLineSpacing(0);
 
 	/* State */
-	LOG("Command Queue Size: %llu array: %llu\n", sizeof(CodeCmdData), CODE_CMD_CAPACITY * sizeof(CodeCmdData));
+	LOG("Command Queue Size: %zu array: %zu\n", sizeof(CodeCmdData), CODE_CMD_CAPACITY * sizeof(CodeCmdData));
 	CodeBox* pCode = &rayde.codeboxes[0];
 
 	struct {
@@ -2761,7 +3006,7 @@ int main(void)
 		memcpy(pCode->pText, loadedFile, pCode->textCount + 1);
 		free(loadedFile);
 
-		REQUIRE(CodeBoxProcessMeta(pCode));
+		MUST(CodeBoxProcessMeta2(pCode) == RESULT_SUCCESS);
 	}
 
 /*
