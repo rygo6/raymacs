@@ -9,7 +9,7 @@ endif
 CC := gcc
 CSTD := -std=gnu11
 PLATFORM := PLATFORM_DESKTOP_SDL
-RAYLIB_LIBTYPE := SHARED
+RAYLIB_LIBTYPE := STATIC
 GRAPHICS := GRAPHICS_API_OPENGL_33
 
 # Paths
@@ -58,11 +58,36 @@ else
     # Linux
     OUTPUT := $(BIN_DIR)/rayDE
     RAYLIB_LIB := $(RAYLIB_SRC)/libraylib.a
+
+    # Auto-detect display server
+    HAS_WAYLAND := $(shell pkg-config --exists wayland-client 2>/dev/null && echo TRUE || echo FALSE)
+    HAS_X11     := $(shell pkg-config --exists x11 2>/dev/null && echo TRUE || echo FALSE)
+
+    ifeq ($(HAS_WAYLAND),TRUE)
+        ifeq ($(HAS_X11),TRUE)
+            # Both installed: prefer current session
+            ifneq ($(WAYLAND_DISPLAY),)
+                DISPLAY_SERVER := Wayland
+            else
+                DISPLAY_SERVER := X11
+            endif
+        else
+            DISPLAY_SERVER := Wayland
+        endif
+    else
+        DISPLAY_SERVER := X11
+    endif
+
+    # Common Linux linker flags
     LDFLAGS += -lGL -lpthread -ldl -lrt
     LIBS := -lraylib -lm
-    # SDL3 static linking (uncomment to use)
-    # LIBS := -lSDL3 -lraylib -lm
-    RAYLIB_MAKE := make -C $(RAYLIB_SRC)
+
+    ifeq ($(DISPLAY_SERVER),Wayland)
+        LDFLAGS += -lwayland-client -lwayland-cursor -lwayland-egl -lxkbcommon
+        RAYLIB_MAKE := make -C $(RAYLIB_SRC) RAYLIB_LIBTYPE=$(RAYLIB_LIBTYPE) GRAPHICS=$(GRAPHICS) GLFW_LINUX_ENABLE_WAYLAND=TRUE GLFW_LINUX_ENABLE_X11=FALSE
+    else
+        RAYLIB_MAKE := make -C $(RAYLIB_SRC) RAYLIB_LIBTYPE=$(RAYLIB_LIBTYPE) GRAPHICS=$(GRAPHICS)
+    endif
 endif
 
 # Default target - build only
@@ -143,6 +168,7 @@ compile_commands:
 .PHONY: info
 info:
 	@echo Detected OS: $(DETECTED_OS)
+	@echo Display server: $(DISPLAY_SERVER)
 	@echo Compiler: $(CC)
 	@echo C Standard: $(CSTD)
 	@echo Output: $(OUTPUT)
