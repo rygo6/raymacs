@@ -179,6 +179,7 @@ Alt + " - ...
 #include <string.h>
 #include <assert.h>
 #include <limits.h>
+#include <time.h>
 
 #include "raylib.h"
 #include "raymath.h"
@@ -1553,7 +1554,7 @@ NextChar:
 		cFrie = pFrie[++iFrie];
 		goto NextChar;
 	}
-	if (cKey == TOK_DELIM && IS_DELIM_CHAR(cFrie)) {
+	if (cFrie == TOK_DELIM && IS_DELIM_CHAR(cKey)) {
 		fprintf(stderr, "Delim Match\n");
 		prevmatch = true;
 		cKey = key[++iKey];
@@ -2073,91 +2074,542 @@ static inline Vector2 GetBoxLocalToWorld(Vector2 point, Rectangle rect) {
 
 static RESULT CodeBoxProcessMeta2(CodeBox* pCode)
 {
-	/* State */
-	const int  textCount = pCode->textCount;
-	char	  *pText     = pCode->pText;
+	const int  textCount = pCode->textCount; (void)textCount;
+	char      *pText     = pCode->pText;
 	TextMeta  *pMeta     = pCode->pTextMeta;
 	FrieRoot  *pRoot     = &TOK_BASE_FRIE;
 
-	bool prevmatch = true; 
-	i16 val  = 0;
-	int iLen = 0;
-	int iFrie = 0;
-	int iText = 0;
-	int iTextStart = 0;
-	frie_char cFrie = 0;
-	frie_char cText = pText[iText];
+	u8 braceLevel   = 0;
+	u8 bracketLevel = 0;
+	u8 parenLevel   = 0;
 
-	FrieLenEntry *pEntry = &pRoot->ascii[cText].len[MAXIMAL_MUNCH_LEN];
-	frie_char    *pFrie  =  pEntry->pBuf;
+	#define WRITEMETA(_iStart, _len, _tok, _kind) \
+		for (int _wi = 0; _wi < (_len); ++_wi) \
+			pMeta[(_iStart) + _wi] = (TextMeta){ \
+				.tok       = { (TOK)(_tok), (TOK_KIND)(_kind) }, \
+				.tokOffset = { (u8)_wi, (u8)((_len) - 1 - _wi) }, \
+				.braceLevel   = braceLevel, \
+				.bracketLevel = bracketLevel, \
+				.parenLevel   = parenLevel, \
+			}
 
-	cFrie = pFrie != NULL ? pFrie[iFrie] : 0;
-	cText = pText[++iText];
+	/* Frie traversal state */
+	frie_char *pFrie        = NULL;
+	int        iFrie        = 0;
+	frie_char  cFrie        = 0;
+	i16        frieVal      = 0;
+	int        iScan        = 0;
+	int        frieMatchEnd = 0;
+	bool       isPP         = false;
 
-	// for (int i = 0; i < textCount; ++i) {
-	// 	pMeta[i].tok.val  = pText[i];
-	// 	pMeta[i].tok.kind = TOK_KIND_IDENTIFIER;
-	// }
-	
-	int count = 10;
+	/* Op scratch (set before PreEmitScope) */
+	TOK      opTok  = (TOK)0;
+	TOK_KIND opKind = (TOK_KIND)0;
+	int      opLen  = 0;
 
-NextChar:
-	if (iText == 100 || count--<0) goto RESULT_SUCCESS;;
+	/* Scan-done target (set before entering ScanLoop) */
+	void *scanDoneTarget = NULL;
 
-	fprintf(stderr, "iText:%d iFrie:%d cText:%c:%d cFrie:%c:%d...\n", iText, iFrie,  cText, cText, cFrie, cFrie);
+	int   iText  = 0;
+	int   iStart = 0;
+	void **disp  = NULL;
 
-	if (cFrie == 0 && val == 0) {
-		while (!IS_DELIM_CHAR(cText)) cText = pText[++iText];
-		int len = (iText - iTextStart) + 1; // + 1 delim
-		fprintf(stderr, "Delim `%.*s` len:%d\n", len, pText + iTextStart, len);
-		val = FrieGet2(pRoot, len, pText + iTextStart);
-		fprintf(stderr, "Found %d\n", val);
-		cText = pText[++iText];
-		iTextStart = iText;
+	/* ================================================================
+	 * Dispatch tables
+	 * All indexed by character or cFrie-derived index.
+	 * Static locals: GCC initialises them with &&label relocations.
+	 * Range designators that override a prior range entry emit
+	 * -Woverride-init; suppress it since that is intentional here.
+	 * ================================================================ */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Woverride-init"
 
-		pEntry = &pRoot->ascii[cText].len[MAXIMAL_MUNCH_LEN];
-		pFrie  =  pEntry->pBuf;
-		cFrie  =  pFrie != NULL ? pFrie[iFrie] : 0;
-		goto NextChar;
+	/* Code mode */
+	static void *codeDisp[128] = {
+		['\0']        = &&CodeEnd,
+		[1 ... 8]     = &&CodeOp,
+		['\t']        = &&CodeWhite,
+		['\n']        = &&CodeWhite,
+		['\v']        = &&CodeWhite,
+		['\f']        = &&CodeWhite,
+		['\r']        = &&CodeWhite,
+		[14 ... 31]   = &&CodeOp,
+		[' ']         = &&CodeWhite,
+		['!' ... '/'] = &&CodeOp,    /* 33-47; '#' overridden below */
+		['0' ... '9'] = &&CodeNum,
+		[':' ... '@'] = &&CodeOp,    /* 58-64 */
+		['A' ... 'Z'] = &&CodeIdent,
+		['[' ... '^'] = &&CodeOp,    /* 91-94 */
+		['_']         = &&CodeIdent,
+		['`']         = &&CodeOp,
+		['a' ... 'z'] = &&CodeIdent,
+		['{' ... '~'] = &&CodeOp,    /* 123-126 */
+		[127]         = &&CodeOp,
+		['#']         = &&CodeHash,  /* override within '!'-'/' */
+	};
+	/* Line comment mode */
+	static void *lineComDisp[128] = {
+		[0 ... 127] = &&LineComChar,
+		['\0']      = &&CodeEnd,
+		['\n']      = &&LineComEnd,
+	};
+	/* Block comment mode */
+	static void *blkComDisp[128] = {
+		[0 ... 127] = &&BlkComChar,
+		['\0']      = &&CodeEnd,
+		['\n']      = &&BlkComNewline,
+		['*']       = &&BlkComStar,
+	};
+	/* Inside block comment after '*': is next char '/'? */
+	static void *blkComStarDisp[128] = {
+		[0 ... 127] = &&BlkComStarNoEnd,
+		['/']       = &&BlkComEnd,
+	};
+	/* Double-quote string mode */
+	static void *dquoteDisp[128] = {
+		[0 ... 127] = &&DquoteChar,
+		['\0']      = &&CodeEnd,
+		['"']       = &&DquoteClose,
+		['\n']      = &&DquoteNewline,
+		['\\']      = &&DquoteEscape,
+	};
+	/* Single-quote char-literal mode */
+	static void *squoteDisp[128] = {
+		[0 ... 127] = &&SquoteChar,
+		['\0']      = &&CodeEnd,
+		['\'']      = &&SquoteClose,
+		['\n']      = &&SquoteNewline,
+		['\\']      = &&SquoteEscape,
+	};
+	/* Shared ident/num/PP scan: ident chars continue, others stop */
+	static void *scanDisp[128] = {
+		[0 ... 127]   = &&ScanDone,
+		['a' ... 'z'] = &&ScanCont,
+		['A' ... 'Z'] = &&ScanCont,
+		['0' ... '9'] = &&ScanCont,
+		['_']         = &&ScanCont,
+	};
+	/* CodeHash: is the char after '#' an ident char? */
+	static void *hashNextDisp[2] = { &&CodeOp, &&PPStart };
+
+	/* ---- Exact-length frie: match state ---- */
+	/* Sign bit of cFrie: [0]=non-negative → pos dispatch, [1]=negative → jump */
+	static void *exactSignDisp[2]     = { &&ExactMatchPos, &&ExactJump };
+	/* Low-byte dispatch for non-negative cFrie */
+	static void *exactPosDisp[256]    = {
+		[0]           = &&ExactEnd,
+		[1 ... 2]     = &&ExactChar,
+		[TOK_DELIM]   = &&ExactDelim,   /* == 3 */
+		[4 ... 127]   = &&ExactChar,
+		[128 ... 255] = &&ExactVal,
+	};
+	/* After char comparison: [0]=mismatch→fail, [1]=match→continue */
+	static void *exactCharResult[2]   = { &&ExactFailStep, &&ExactMatchStep };
+	/* ---- Exact-length frie: fail state ---- */
+	static void *exactFailSign[2]     = { &&ExactFailByByte, &&ExactFailAdv };
+	static void *exactFailByByte[256] = {
+		[0]           = &&ExactEnd,
+		[1 ... 2]     = &&ExactFailChar,
+		[TOK_DELIM]   = &&ExactFailDelim,   /* == 3 */
+		[4 ... 127]   = &&ExactFailChar,
+		[128 ... 255] = &&ExactFailAdv,     /* skip VAL without recording */
+	};
+	/* Exact-frie start: pBuf NULL → emit immediately, else setup */
+	static void *exactStartDisp[2]   = { &&ExactEnd,      &&ExactSetup    };
+	/* Exact emit: frieVal < kw_begin → fallback, else emit keyword */
+	static void *exactKwDisp[2]      = { &&ExactFallback, &&ExactEmitKw   };
+	/* Fallback: ident or PP hash+ident */
+	static void *ppFallbackDisp[2]   = { &&EmitIdent,     &&EmitPP        };
+	/* PP fallback ident part: skip if length <= 1 */
+	static void *ppIdentDisp[2]      = { &&NextToken,     &&EmitPPIdent   };
+
+	/* ---- Maximal-munch frie: match state ---- */
+	static void *munchSignDisp[2]     = { &&MunchMatchPos, &&MunchJump     };
+	static void *munchPosDisp[256]    = {
+		[0]           = &&MunchEnd,
+		[1 ... 127]   = &&MunchChar,
+		[128 ... 255] = &&MunchVal,
+	};
+	static void *munchCharResult[2]   = { &&MunchFailStep, &&MunchMatchStep };
+	/* ---- Maximal-munch frie: fail state ---- */
+	static void *munchFailSign[2]     = { &&MunchFailByByte, &&MunchFailAdv };
+	static void *munchFailByByte[256] = {
+		[0]           = &&MunchEnd,
+		[1 ... 127]   = &&MunchFailChar,
+		[128 ... 255] = &&MunchFailAdv,     /* skip VAL without recording */
+	};
+	/* Munch start: pBuf NULL → emit immediately, else setup */
+	static void *munchStartDisp[2]   = { &&MunchEnd,        &&MunchSetup   };
+	/* Munch emit: frieVal==0 → error, else emit matched token */
+	static void *munchEmitDisp[2]    = { &&MunchEmitNoMatch, &&MunchEmitMatch };
+
+	/* ---- Scope and mode dispatch (indexed by (u8)opTok) ---- */
+	static void *preEmitDisp[256] = {
+		[0 ... 255]    = &&PreEmitDefault,
+		[TOK_LBRACE]   = &&PreEmitLBrace,
+		[TOK_LBRACKET] = &&PreEmitLBracket,
+		[TOK_LPAREN]   = &&PreEmitLParen,
+	};
+	static void *postEmitDisp[256] = {
+		[0 ... 255]    = &&PostEmitDefault,
+		[TOK_RBRACE]   = &&PostEmitRBrace,
+		[TOK_RBRACKET] = &&PostEmitRBracket,
+		[TOK_RPAREN]   = &&PostEmitRParen,
+	};
+	static void *modeDisp[256] = {
+		[0 ... 255]          = &&ModeNoChange,
+		[TOK_DQUOTE]         = &&ModeDquote,
+		[TOK_SQUOTE]         = &&ModeSquote,
+		[TOK_LINE_COMMENT]   = &&ModeLineComment,
+		[TOK_LBLOCK_COMMENT] = &&ModeBlockComment,
+	};
+#pragma GCC diagnostic pop
+
+	/* ================================================================
+	 * Entry
+	 * ================================================================ */
+	disp = codeDisp;
+
+/* ---- Main token dispatch ---- */
+NextToken:
+	iStart = iText;
+	goto *disp[(u8)pText[iText] & 0x7F];
+
+CodeEnd:
+	goto RESULT_SUCCESS;
+
+/* ---- Code: whitespace ---- */
+CodeWhite:
+	WRITEMETA(iStart, 1, pText[iText], TOK_KIND_WHITESPACE);
+	iText++;
+	goto NextToken;
+
+/* ---- Code: identifier start ---- */
+CodeIdent:
+	iText++;
+	scanDoneTarget = &&IdentDone;
+	goto ScanLoop;
+
+/* ---- Code: number start ---- */
+CodeNum:
+	iText++;
+	scanDoneTarget = &&NumDone;
+	goto ScanLoop;
+
+/* ---- Code: '#' — PP directive or operator ---- */
+CodeHash:
+	goto *hashNextDisp[IS_IDENT_CHAR(pText[iText + 1])];
+PPStart:
+	iText++;  /* skip '#' */
+	scanDoneTarget = &&PPDone;
+	goto ScanLoop;
+
+/* ---- Code: operator / punctuation — maximal munch ---- */
+CodeOp:
+	{
+		FrieLenEntry *pE = &pRoot->ascii[(u8)pText[iStart]].len[0];
+		pFrie        = pE->pBuf;
+		frieVal      = pE->startValue;
+		frieMatchEnd = iStart + 1;
 	}
+	goto *munchStartDisp[pFrie != NULL];
 
+/* ================================================================
+ * Shared scan loop  (ident / number / PP name)
+ * scanDoneTarget must be set before jumping here.
+ * ================================================================ */
+ScanCont:
+	iText++;
+ScanLoop:
+	goto *scanDisp[(u8)pText[iText] & 0x7F];
+ScanDone:
+	goto *scanDoneTarget;
 
-	if (cFrie == 0) {
-		fprintf(stderr, "Final Val %d\n", cFrie);
-		cText = pText[++iText];
-		goto NextChar;
+IdentDone:
+	isPP = false;
+	{
+		int keyLen  = (iText - iStart) + 1;
+		int over    = (unsigned)keyLen >= (unsigned)FRIE_LEN_ENTRY_CAPACITY;
+		int safeLen = keyLen * !over + (FRIE_LEN_ENTRY_CAPACITY - 1) * over;
+		FrieLenEntry *pE = &pRoot->ascii[(u8)pText[iStart]].len[safeLen];
+		pFrie   = pE->pBuf;
+		frieVal = pE->startValue;
 	}
+	goto *exactStartDisp[pFrie != NULL];
 
-	if (pFrie == NULL) {
-		goto RESULT_SUCCESS;
-	}
+NumDone:
+	WRITEMETA(iStart, iText - iStart, TOK_NUMBER, TOK_KIND_NUMBER);
+	goto NextToken;
 
-	// Only accept JUMP or TOK if prev matched
-	if (prevmatch && IS_VAL(cFrie)) {
-		fprintf(stderr, "Tok %d\n", cFrie);
-		val = cFrie;
-		cFrie = pFrie[++iFrie];
-		goto NextChar;
+PPDone:
+	isPP = true;
+	{
+		int keyLen  = (iText - iStart) + 1;
+		int over    = (unsigned)keyLen >= (unsigned)FRIE_LEN_ENTRY_CAPACITY;
+		int safeLen = keyLen * !over + (FRIE_LEN_ENTRY_CAPACITY - 1) * over;
+		FrieLenEntry *pE = &pRoot->ascii[(u8)pText[iStart]].len[safeLen];
+		pFrie   = pE->pBuf;
+		frieVal = pE->startValue;
 	}
-	if (prevmatch && IS_JUMP(cFrie)) {
-		fprintf(stderr, "Jump\n");
-		iFrie += JUMP_OFFSET(cFrie);
-		cFrie = pFrie[iFrie];
-		goto NextChar;
-	}
-	if (cText == cFrie) {
-		fprintf(stderr, "Match\n");
-		prevmatch = true;
-		cText = pText[++iText];
-		cFrie = pFrie[++iFrie];
-		goto NextChar;
-	}
+	goto *exactStartDisp[pFrie != NULL];
 
-	fprintf(stderr, "Skip\n");
-	prevmatch = false;
+/* ---- Line comment ---- */
+LineComChar:
+	WRITEMETA(iStart, 1, TOK_COMMENT, TOK_KIND_COMMENT);
+	iText++;
+	goto NextToken;
+LineComEnd:
+	WRITEMETA(iStart, 1, '\n', TOK_KIND_WHITESPACE);
+	disp = codeDisp;
+	iText++;
+	goto NextToken;
+
+/* ---- Block comment ---- */
+BlkComChar:
+	WRITEMETA(iStart, 1, TOK_COMMENT, TOK_KIND_COMMENT);
+	iText++;
+	goto NextToken;
+BlkComNewline:
+	WRITEMETA(iStart, 1, '\n', TOK_KIND_WHITESPACE);
+	iText++;
+	goto NextToken;
+BlkComStar:
+	goto *blkComStarDisp[(u8)pText[iText + 1] & 0x7F];
+BlkComStarNoEnd:
+	WRITEMETA(iStart, 1, TOK_COMMENT, TOK_KIND_COMMENT);
+	iText++;
+	goto NextToken;
+BlkComEnd:
+	WRITEMETA(iStart, 2, TOK_RBLOCK_COMMENT, TOK_KIND_COMMENT);
+	iText += 2;
+	disp = codeDisp;
+	goto NextToken;
+
+/* ---- Double-quote string ---- */
+DquoteChar:
+	WRITEMETA(iStart, 1, TOK_STRING, TOK_KIND_STRING);
+	iText++;
+	goto NextToken;
+DquoteClose:
+	WRITEMETA(iStart, 1, TOK_DQUOTE, TOK_KIND_QUOTE);
+	disp = codeDisp;
+	iText++;
+	goto NextToken;
+DquoteNewline:
+	WRITEMETA(iStart, 1, '\n', TOK_KIND_WHITESPACE);
+	disp = codeDisp;
+	iText++;
+	goto NextToken;
+DquoteEscape:
+	{
+		int can = (pText[iText + 1] != '\0');
+		WRITEMETA(iStart, 1 + can, TOK_BACKSLASH, TOK_KIND_ESCAPE);
+		iText += 1 + can;
+	}
+	goto NextToken;
+
+/* ---- Single-quote char literal ---- */
+SquoteChar:
+	WRITEMETA(iStart, 1, TOK_STRING, TOK_KIND_STRING);
+	iText++;
+	goto NextToken;
+SquoteClose:
+	WRITEMETA(iStart, 1, TOK_SQUOTE, TOK_KIND_QUOTE);
+	disp = codeDisp;
+	iText++;
+	goto NextToken;
+SquoteNewline:
+	WRITEMETA(iStart, 1, '\n', TOK_KIND_WHITESPACE);
+	disp = codeDisp;
+	iText++;
+	goto NextToken;
+SquoteEscape:
+	{
+		int can = (pText[iText + 1] != '\0');
+		WRITEMETA(iStart, 1 + can, TOK_BACKSLASH, TOK_KIND_ESCAPE);
+		iText += 1 + can;
+	}
+	goto NextToken;
+
+/* ================================================================
+ * Exact-length frie traversal  (keywords and PP directives)
+ *
+ * iText already sits at the first non-ident char after the word.
+ * iScan walks pText from iStart+1 forward.
+ * A TOK_DELIM node in pFrie matches any IS_DELIM_CHAR in the text.
+ * ================================================================ */
+ExactSetup:
+	iFrie = 0;
+	cFrie = pFrie[0];
+	iScan = iStart + 1;
+ExactMatchStep:
+	goto *exactSignDisp[(u16)cFrie >> 15];
+ExactMatchPos:
+	goto *exactPosDisp[(u8)cFrie];
+ExactJump:
+	iFrie += JUMP_OFFSET(cFrie);
+	cFrie  = pFrie[iFrie];
+	goto ExactMatchStep;
+ExactVal:
+	frieVal = cFrie;
+	cFrie   = pFrie[++iFrie];
+	goto ExactMatchStep;
+ExactChar:
+	{
+		int m  = ((u8)pText[iScan] == (u8)cFrie);
+		iScan += m;
+		cFrie  = pFrie[++iFrie];
+		goto *exactCharResult[m];
+	}
+ExactDelim:
+	{
+		int m  = IS_DELIM_CHAR(pText[iScan]);
+		iScan += m;
+		cFrie  = pFrie[++iFrie];
+		goto *exactCharResult[m];
+	}
+ExactFailStep:
+	goto *exactFailSign[(u16)cFrie >> 15];
+ExactFailByByte:
+	goto *exactFailByByte[(u8)cFrie];
+ExactFailChar:
+	{
+		int m  = ((u8)pText[iScan] == (u8)cFrie);
+		iScan += m;
+		cFrie  = pFrie[++iFrie];
+		goto *exactCharResult[m];   /* [0]=ExactFailStep, [1]=ExactMatchStep */
+	}
+ExactFailDelim:
+	{
+		int m  = IS_DELIM_CHAR(pText[iScan]);
+		iScan += m;
+		cFrie  = pFrie[++iFrie];
+		goto *exactCharResult[m];
+	}
+ExactFailAdv:
 	cFrie = pFrie[++iFrie];
-	goto NextChar;
+	goto ExactFailStep;
+ExactEnd:
+	goto *exactKwDisp[(frieVal >= TOK_KEYWORD_BEGIN)];
+ExactFallback:
+	goto *ppFallbackDisp[isPP];
+ExactEmitKw:
+	WRITEMETA(iStart, iText - iStart, frieVal, TOK_BASE_DEFS[frieVal].kind);
+	goto NextToken;
 
+EmitIdent:
+	WRITEMETA(iStart, iText - iStart, TOK_IDENTIFIER, TOK_KIND_IDENTIFIER);
+	goto NextToken;
+EmitPP:
+	WRITEMETA(iStart, 1, TOK_HASH, TOK_KIND_PP);
+	goto *ppIdentDisp[(iText - iStart > 1)];
+EmitPPIdent:
+	WRITEMETA(iStart + 1, iText - iStart - 1, TOK_IDENTIFIER, TOK_KIND_IDENTIFIER);
+	goto NextToken;
+
+/* ================================================================
+ * Maximal-munch frie traversal  (operators and punctuation)
+ *
+ * iScan advances on each char match.
+ * frieMatchEnd records iScan at each VAL node so that
+ * tokLen = frieMatchEnd - iStart after traversal ends.
+ * ================================================================ */
+MunchSetup:
+	iFrie = 0;
+	cFrie = pFrie[0];
+	iScan = iStart + 1;
+MunchMatchStep:
+	goto *munchSignDisp[(u16)cFrie >> 15];
+MunchMatchPos:
+	goto *munchPosDisp[(u8)cFrie];
+MunchJump:
+	iFrie += JUMP_OFFSET(cFrie);
+	cFrie  = pFrie[iFrie];
+	goto MunchMatchStep;
+MunchVal:
+	frieVal      = cFrie;
+	frieMatchEnd = iScan;
+	cFrie        = pFrie[++iFrie];
+	goto MunchMatchStep;
+MunchChar:
+	{
+		int m  = ((u8)pText[iScan] == (u8)cFrie);
+		iScan += m;
+		cFrie  = pFrie[++iFrie];
+		goto *munchCharResult[m];
+	}
+MunchFailStep:
+	goto *munchFailSign[(u16)cFrie >> 15];
+MunchFailByByte:
+	goto *munchFailByByte[(u8)cFrie];
+MunchFailChar:
+	{
+		int m  = ((u8)pText[iScan] == (u8)cFrie);
+		iScan += m;
+		cFrie  = pFrie[++iFrie];
+		goto *munchCharResult[m];   /* [0]=MunchFailStep, [1]=MunchMatchStep */
+	}
+MunchFailAdv:
+	cFrie = pFrie[++iFrie];
+	goto MunchFailStep;
+MunchEnd:
+	goto *munchEmitDisp[(frieVal != 0)];
+MunchEmitNoMatch:
+	opTok  = (TOK)(u8)pText[iStart];
+	opKind = TOK_KIND_ERROR;
+	opLen  = 1;
+	goto PreEmitScope;
+MunchEmitMatch:
+	opTok  = (TOK)frieVal;
+	opKind = (TOK_KIND)TOK_BASE_DEFS[frieVal].kind;
+	opLen  = frieMatchEnd - iStart;
+
+/* ================================================================
+ * Operator emit: scope tracking then mode switching
+ * ================================================================ */
+PreEmitScope:
+	goto *preEmitDisp[(u8)opTok];
+PreEmitLBrace:
+	braceLevel++;
+	goto DoWriteMeta;
+PreEmitLBracket:
+	bracketLevel++;
+	goto DoWriteMeta;
+PreEmitLParen:
+	parenLevel++;
+	goto DoWriteMeta;
+PreEmitDefault:
+DoWriteMeta:
+	WRITEMETA(iStart, opLen, opTok, opKind);
+	iText = iStart + opLen;
+	goto *postEmitDisp[(u8)opTok];
+PostEmitRBrace:
+	braceLevel -= (u8)(braceLevel > 0);
+	goto PostEmitDefault;
+PostEmitRBracket:
+	bracketLevel -= (u8)(bracketLevel > 0);
+	goto PostEmitDefault;
+PostEmitRParen:
+	parenLevel -= (u8)(parenLevel > 0);
+PostEmitDefault:
+	goto *modeDisp[(u8)opTok];
+ModeNoChange:
+	goto NextToken;
+ModeLineComment:
+	disp = lineComDisp;
+	goto NextToken;
+ModeBlockComment:
+	disp = blkComDisp;
+	goto NextToken;
+ModeDquote:
+	disp = dquoteDisp;
+	goto NextToken;
+ModeSquote:
+	disp = squoteDisp;
+	goto NextToken;
+
+	#undef WRITEMETA
+	goto RESULT_SUCCESS;
 RESULT_SUCCESS:
 	return RESULT_SUCCESS;
 }
@@ -3006,7 +3458,15 @@ int main(void)
 		memcpy(pCode->pText, loadedFile, pCode->textCount + 1);
 		free(loadedFile);
 
+		struct timespec bench_start, bench_end;
+		clock_gettime(CLOCK_MONOTONIC, &bench_start);
+		for (int i = 0; i < 10; ++i)
 		MUST(CodeBoxProcessMeta2(pCode) == RESULT_SUCCESS);
+		clock_gettime(CLOCK_MONOTONIC, &bench_end);
+		double bench_ms = (bench_end.tv_sec - bench_start.tv_sec) * 1000.0
+		                 + (bench_end.tv_nsec - bench_start.tv_nsec) / 1e6;
+		// CodeBoxProcessMeta2: 3.186 ms
+		LOG("CodeBoxProcessMeta2: %.3f ms\n", bench_ms);
 	}
 
 /*
