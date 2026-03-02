@@ -179,6 +179,7 @@ Alt + " - ...
 #include <string.h>
 #include <assert.h>
 #include <limits.h>
+#include <time.h>
 
 #include "raylib.h"
 #include "raymath.h"
@@ -1483,7 +1484,6 @@ RESULT_SUCCESS:
 
 static i16 FrieGet2(FrieRoot *pRoot, int keyLen, const char* key)
 {
-	LOG("FrieGet key:'%.*s' length:%d\n", keyLen, key, keyLen);
 	int iLen  = keyLen;
 	u16 iKey  = 0;
 	u16 iFrie = 0;
@@ -1493,81 +1493,41 @@ static i16 FrieGet2(FrieRoot *pRoot, int keyLen, const char* key)
 	i16 value = pEntry->startValue;
 	if (pFrie == NULL) goto RESULT_SUCCESS;
 
-	bool prevmatch = true; // Start true for TOK_SINGLE_CHAR
+	bool prevmatch = true;
 	frie_char cFrie = pFrie[iFrie];
 	cKey = key[++iKey];
 
 NextChar:
-	fprintf(stderr, "iBuf:%d iKey:%d cBuf:%c:%d cKey:%c:%d... ", iFrie, iKey,  cFrie, cFrie, cKey, cKey);
 	if (cFrie == 0) goto RESULT_SUCCESS;
 
-	// switch (IS_TOK(cFrie)<<3 | IS_JUMP(cFrie)<<2 | prevmatch<<1 | (cKey == cFrie)) 
-	// {
-	// 	// Only accept JUMP or TOK if prev matched
-	// 	case        true<<3 |       /*false<<2*/      true<<1       /*fasle*/: {
-	// 		// fprintf(stderr, "Tok %d\n", cBuf);
-	// 		value = cFrie;
-	// 		cFrie = pFrie[++iFrie];
-	// 		goto NextChar;
-	// 	}
-	// 	case 	 /*fasle<<3*/          true<<2 |      true<<1       /*fasle*/: {
-	// 		// fprintf(stderr, "Jump %d\n", JUMP_VALUE(cBuf)+iBuf);
-	// 		iFrie += JUMP_VALUE(cFrie);
-	// 		cFrie = pFrie[iFrie];
-	// 		goto NextChar;
-	// 	}
-	// 	case     /*fasle<<3 |         false<<2*/      true<<1 |         true :
-	// 	case     /*fasle<<3 |         false<<2 |     false<<1*/         true : {
-	// 		// fprintf(stderr, "Match\n");
-	// 		prevmatch = true;
-	// 		cKey = key[++iKey];
-	// 		cFrie = pFrie[++iFrie];
-	// 		goto NextChar;
-	// 	}
-	// 	default: {
-	// 		prevmatch = false;
-	// 		// fprintf(stderr, "Skip\n");
-	// 		cFrie = pFrie[++iFrie];
-	// 		goto NextChar;
-	// 	}
-	// }
-
-	// TODO Benchmark if vs switch
-	// Only accept JUMP or TOK if prev matched
 	if (prevmatch && IS_VAL(cFrie)) {
-		fprintf(stderr, "Tok %d\n", cFrie);
 		value = cFrie;
 		cFrie = pFrie[++iFrie];
 		goto NextChar;
 	}
 	if (prevmatch && IS_JUMP(cFrie)) {
-		fprintf(stderr, "Jump\n");
 		iFrie += JUMP_OFFSET(cFrie);
 		cFrie = pFrie[iFrie];
 		goto NextChar;
 	}
 	if (cKey == cFrie) {
-		fprintf(stderr, "Match\n");
 		prevmatch = true;
 		cKey = key[++iKey];
 		cFrie = pFrie[++iFrie];
 		goto NextChar;
 	}
-	if (cKey == TOK_DELIM && IS_DELIM_CHAR(cFrie)) {
-		fprintf(stderr, "Delim Match\n");
+	if (IS_DELIM_CHAR(cKey) && cFrie == TOK_DELIM) {
 		prevmatch = true;
 		cKey = key[++iKey];
 		cFrie = pFrie[++iFrie];
 		goto NextChar;
 	}
 
-	fprintf(stderr, "Skip\n");
 	prevmatch = false;
 	cFrie = pFrie[++iFrie];
 	goto NextChar;
 
 RESULT_SUCCESS:
-	// fprintf(stderr, "Found:%d\n", value);
 	return value == TOK_SINGLE_CHAR ? key[0] : value;
 }
 
@@ -2073,91 +2033,262 @@ static inline Vector2 GetBoxLocalToWorld(Vector2 point, Rectangle rect) {
 
 static RESULT CodeBoxProcessMeta2(CodeBox* pCode)
 {
-	/* State */
 	const int  textCount = pCode->textCount;
-	char	  *pText     = pCode->pText;
+	char      *pText     = pCode->pText;
 	TextMeta  *pMeta     = pCode->pTextMeta;
 	FrieRoot  *pRoot     = &TOK_BASE_FRIE;
 
-	bool prevmatch = true; 
-	i16 val  = 0;
-	int iLen = 0;
-	int iFrie = 0;
+	u8 braceLevel   = 0;
+	u8 bracketLevel = 0;
+	u8 parenLevel   = 0;
+
+	typedef enum { LEX_CODE, LEX_LINE_COMMENT, LEX_BLOCK_COMMENT, LEX_DQUOTE, LEX_SQUOTE } LexMode;
+	LexMode mode = LEX_CODE;
+
+	/* Write TextMeta for a span of _len chars starting at _iStart. */
+	#define WRITEMETA(_iStart, _len, _tok, _kind) \
+		for (int _wi = 0; _wi < (_len); ++_wi) \
+			pMeta[(_iStart) + _wi] = (TextMeta){ \
+				.tok       = { (TOK)(_tok), (TOK_KIND)(_kind) }, \
+				.tokOffset = { (u8)_wi, (u8)((_len) - 1 - _wi) }, \
+				.braceLevel   = braceLevel, \
+				.bracketLevel = bracketLevel, \
+				.parenLevel   = parenLevel, \
+			}
+
+	/* Frie traversal state - shared between ExactFrieStep and MunchFrieStep */
+	frie_char *pFrie     = NULL;
+	int        iFrie     = 0;
+	frie_char  cFrie     = 0;
+	bool       prevmatch = true;
+	i16        frieVal   = 0;
+	int        iScan     = 0;   /* scanning cursor into pText */
+	int        frieMatchEnd = 0; /* iScan when frieVal was last updated (munch only) */
+	bool       isPP      = false;
+
 	int iText = 0;
-	int iTextStart = 0;
-	frie_char cFrie = 0;
-	frie_char cText = pText[iText];
+	while (iText < textCount) {
+		char c = pText[iText];
+		if (c == '\0') break;
+		int iStart = iText;
 
-	FrieLenEntry *pEntry = &pRoot->ascii[cText].len[MAXIMAL_MUNCH_LEN];
-	frie_char    *pFrie  =  pEntry->pBuf;
+		/* ---- Line comment mode ---- */
+		if (mode == LEX_LINE_COMMENT) {
+			if (c == '\n') {
+				WRITEMETA(iStart, 1, '\n', TOK_KIND_WHITESPACE);
+				mode = LEX_CODE;
+			} else {
+				WRITEMETA(iStart, 1, TOK_COMMENT, TOK_KIND_COMMENT);
+			}
+			iText++;
+			continue;
+		}
 
-	cFrie = pFrie != NULL ? pFrie[iFrie] : 0;
-	cText = pText[++iText];
+		/* ---- Block comment mode ---- */
+		if (mode == LEX_BLOCK_COMMENT) {
+			if (c == '*' && pText[iText + 1] == '/') {
+				WRITEMETA(iStart, 2, TOK_RBLOCK_COMMENT, TOK_KIND_COMMENT);
+				iText += 2;
+				mode = LEX_CODE;
+			} else if (c == '\n') {
+				WRITEMETA(iStart, 1, '\n', TOK_KIND_WHITESPACE);
+				iText++;
+			} else {
+				WRITEMETA(iStart, 1, TOK_COMMENT, TOK_KIND_COMMENT);
+				iText++;
+			}
+			continue;
+		}
 
-	// for (int i = 0; i < textCount; ++i) {
-	// 	pMeta[i].tok.val  = pText[i];
-	// 	pMeta[i].tok.kind = TOK_KIND_IDENTIFIER;
-	// }
-	
-	int count = 10;
+		/* ---- String / char literal mode ---- */
+		if (mode == LEX_DQUOTE || mode == LEX_SQUOTE) {
+			char closeChar = (mode == LEX_DQUOTE) ? '"' : '\'';
+			if (c == closeChar) {
+				WRITEMETA(iStart, 1, c, TOK_KIND_QUOTE);
+				mode = LEX_CODE;
+				iText++;
+			} else if (c == '\n') {
+				/* Unterminated literal - treat newline as end */
+				WRITEMETA(iStart, 1, '\n', TOK_KIND_WHITESPACE);
+				mode = LEX_CODE;
+				iText++;
+			} else if (c == '\\' && iText + 1 < textCount) {
+				WRITEMETA(iStart, 2, TOK_BACKSLASH, TOK_KIND_ESCAPE);
+				iText += 2;
+			} else {
+				WRITEMETA(iStart, 1, TOK_STRING, TOK_KIND_STRING);
+				iText++;
+			}
+			continue;
+		}
 
-NextChar:
-	if (iText == 100 || count--<0) goto RESULT_SUCCESS;;
+		/* ---- Normal code mode ---- */
 
-	fprintf(stderr, "iText:%d iFrie:%d cText:%c:%d cFrie:%c:%d...\n", iText, iFrie,  cText, cText, cFrie, cFrie);
+		/* Whitespace */
+		if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f') {
+			WRITEMETA(iStart, 1, c, TOK_KIND_WHITESPACE);
+			iText++;
+			continue;
+		}
 
-	if (cFrie == 0 && val == 0) {
-		while (!IS_DELIM_CHAR(cText)) cText = pText[++iText];
-		int len = (iText - iTextStart) + 1; // + 1 delim
-		fprintf(stderr, "Delim `%.*s` len:%d\n", len, pText + iTextStart, len);
-		val = FrieGet2(pRoot, len, pText + iTextStart);
-		fprintf(stderr, "Found %d\n", val);
-		cText = pText[++iText];
-		iTextStart = iText;
+		/* Identifier or keyword/type: alpha or '_', but not digit */
+		if (IS_IDENT_CHAR(c) && !(c >= '0' && c <= '9')) {
+			while (iText < textCount && IS_IDENT_CHAR(pText[iText])) iText++;
+			int wordLen = iText - iStart;
+			/* wordLen+1 selects the exact-length bucket (DLM suffix makes keys keyLen = wordLen+1) */
+			int keyLen = wordLen + 1;
+			isPP = false;
+			if (keyLen < FRIE_LEN_ENTRY_CAPACITY) {
+				FrieLenEntry *pLenEntry = &pRoot->ascii[(u8)c].len[keyLen];
+				pFrie    = pLenEntry->pBuf;
+				frieVal  = pLenEntry->startValue;
+				if (pFrie != NULL) {
+					iFrie    = 0;
+					prevmatch = true;
+					cFrie    = pFrie[0];
+					iScan    = iStart + 1;
+					goto ExactFrieStep;
+				}
+			} else {
+				frieVal = 0;
+			}
+			goto EmitIdent;
+		}
 
-		pEntry = &pRoot->ascii[cText].len[MAXIMAL_MUNCH_LEN];
-		pFrie  =  pEntry->pBuf;
-		cFrie  =  pFrie != NULL ? pFrie[iFrie] : 0;
-		goto NextChar;
-	}
+		/* Number literal */
+		if (c >= '0' && c <= '9') {
+			while (iText < textCount && IS_IDENT_CHAR(pText[iText])) iText++;
+			WRITEMETA(iStart, iText - iStart, TOK_NUMBER, TOK_KIND_NUMBER);
+			continue;
+		}
 
+		/* PP directive: '#' followed by ident chars (e.g. #include, #define) */
+		if (c == '#' && iText + 1 < textCount && IS_IDENT_CHAR(pText[iText + 1])) {
+			iText++; /* skip '#' */
+			while (iText < textCount && IS_IDENT_CHAR(pText[iText])) iText++;
+			/* keyLen = total chars (incl '#') + 1 for delimiter */
+			int keyLen = (iText - iStart) + 1;
+			isPP = true;
+			if (keyLen < FRIE_LEN_ENTRY_CAPACITY) {
+				FrieLenEntry *pLenEntry = &pRoot->ascii[(u8)c].len[keyLen];
+				pFrie    = pLenEntry->pBuf;
+				frieVal  = pLenEntry->startValue;
+				if (pFrie != NULL) {
+					iFrie    = 0;
+					prevmatch = true;
+					cFrie    = pFrie[0];
+					iScan    = iStart + 1;
+					goto ExactFrieStep;
+				}
+			} else {
+				frieVal = 0;
+			}
+			goto EmitPP;
+		}
 
-	if (cFrie == 0) {
-		fprintf(stderr, "Final Val %d\n", cFrie);
-		cText = pText[++iText];
-		goto NextChar;
-	}
+		/* Operators and other punctuation: maximal munch via len[0] bucket */
+		{
+			FrieLenEntry *pLenEntry = &pRoot->ascii[(u8)c].len[0];
+			pFrie        = pLenEntry->pBuf;
+			frieVal      = pLenEntry->startValue;
+			frieMatchEnd = iStart + 1; /* default: single char consumed */
+			if (pFrie != NULL) {
+				iFrie    = 0;
+				prevmatch = true;
+				cFrie    = pFrie[0];
+				iScan    = iStart + 1;
+				goto MunchFrieStep;
+			}
+			goto EmitOp;
+		}
 
-	if (pFrie == NULL) {
-		goto RESULT_SUCCESS;
-	}
-
-	// Only accept JUMP or TOK if prev matched
-	if (prevmatch && IS_VAL(cFrie)) {
-		fprintf(stderr, "Tok %d\n", cFrie);
-		val = cFrie;
+	/* ---- Exact-length frie traversal (keywords and PP directives) ----
+	 * Traverses pFrie with iScan stepping through pText from iStart+1.
+	 * pText[iText] is the delimiter char (first non-ident char after the word).
+	 * A TOK_DELIM node in pFrie matches any IS_DELIM_CHAR in the text.         */
+	ExactFrieStep:
+		if (cFrie == 0) goto EmitExact;
+		if (prevmatch && IS_VAL(cFrie)) { frieVal = cFrie; cFrie = pFrie[++iFrie]; goto ExactFrieStep; }
+		if (prevmatch && IS_JUMP(cFrie)) { iFrie += JUMP_OFFSET(cFrie); cFrie = pFrie[iFrie]; goto ExactFrieStep; }
+		if ((frie_char)(u8)pText[iScan] == cFrie) { prevmatch = true; iScan++; cFrie = pFrie[++iFrie]; goto ExactFrieStep; }
+		if (IS_DELIM_CHAR(pText[iScan]) && cFrie == TOK_DELIM) { prevmatch = true; iScan++; cFrie = pFrie[++iFrie]; goto ExactFrieStep; }
+		prevmatch = false;
 		cFrie = pFrie[++iFrie];
-		goto NextChar;
-	}
-	if (prevmatch && IS_JUMP(cFrie)) {
-		fprintf(stderr, "Jump\n");
-		iFrie += JUMP_OFFSET(cFrie);
-		cFrie = pFrie[iFrie];
-		goto NextChar;
-	}
-	if (cText == cFrie) {
-		fprintf(stderr, "Match\n");
-		prevmatch = true;
-		cText = pText[++iText];
+		goto ExactFrieStep;
+
+	EmitExact:
+		if (frieVal == TOK_SINGLE_CHAR) frieVal = (i16)(u8)pText[iStart];
+		if (frieVal >= TOK_KEYWORD_BEGIN) {
+			WRITEMETA(iStart, iText - iStart, frieVal, TOK_BASE_DEFS[frieVal].kind);
+			continue;
+		}
+		if (isPP) goto EmitPP;
+		goto EmitIdent;
+
+	/* ---- Maximal-munch frie traversal (operators and punctuation) ----
+	 * Traverses pFrie with iScan advancing through pText on each char match.
+	 * frieVal is updated each time a VAL node is found; frieMatchEnd records iScan
+	 * at that point so tokLen = frieMatchEnd - iStart after traversal.          */
+	MunchFrieStep:
+		if (cFrie == 0) goto EmitOp;
+		if (prevmatch && IS_VAL(cFrie)) { frieVal = cFrie; frieMatchEnd = iScan; cFrie = pFrie[++iFrie]; goto MunchFrieStep; }
+		if (prevmatch && IS_JUMP(cFrie)) { iFrie += JUMP_OFFSET(cFrie); cFrie = pFrie[iFrie]; goto MunchFrieStep; }
+		if ((frie_char)(u8)pText[iScan] == cFrie) { prevmatch = true; iScan++; cFrie = pFrie[++iFrie]; goto MunchFrieStep; }
+		prevmatch = false;
 		cFrie = pFrie[++iFrie];
-		goto NextChar;
+		goto MunchFrieStep;
+
+	EmitOp:
+		{
+			if (frieVal == TOK_SINGLE_CHAR) frieVal = (i16)(u8)pText[iStart];
+			TOK      tok;
+			TOK_KIND kind;
+			int      tokLen;
+			if (frieVal) {
+				tok    = (TOK)frieVal;
+				kind   = (TOK_KIND)TOK_BASE_DEFS[frieVal].kind;
+				tokLen = frieMatchEnd - iStart;
+			} else {
+				tok    = (TOK)(u8)c;
+				kind   = TOK_KIND_ERROR;
+				tokLen = 1;
+			}
+
+			/* Scope: increment BEFORE writing openers so {/(/[ store their new level */
+			if      (tok == TOK_LBRACE)   braceLevel++;
+			else if (tok == TOK_LBRACKET)  bracketLevel++;
+			else if (tok == TOK_LPAREN)    parenLevel++;
+
+			WRITEMETA(iStart, tokLen, tok, kind);
+			iText = iStart + tokLen;
+
+			/* Scope: decrement AFTER writing closers so }/)/] store the same level as their opener */
+			if      (tok == TOK_RBRACE   && braceLevel   > 0) braceLevel--;
+			else if (tok == TOK_RBRACKET && bracketLevel > 0) bracketLevel--;
+			else if (tok == TOK_RPAREN   && parenLevel   > 0) parenLevel--;
+
+			/* Mode switch */
+			if      (tok == TOK_LINE_COMMENT)  mode = LEX_LINE_COMMENT;
+			else if (tok == TOK_LBLOCK_COMMENT) mode = LEX_BLOCK_COMMENT;
+			else if (tok == TOK_DQUOTE)         mode = LEX_DQUOTE;
+			else if (tok == TOK_SQUOTE)         mode = LEX_SQUOTE;
+		}
+		continue;
+
+	EmitIdent:
+		WRITEMETA(iStart, iText - iStart, TOK_IDENTIFIER, TOK_KIND_IDENTIFIER);
+		continue;
+
+	EmitPP:
+		/* Unrecognized PP directive: '#' as TOK_HASH, word as identifier */
+		WRITEMETA(iStart, 1, TOK_HASH, TOK_KIND_PP);
+		if (iText - iStart > 1)
+			WRITEMETA(iStart + 1, iText - iStart - 1, TOK_IDENTIFIER, TOK_KIND_IDENTIFIER);
+		continue;
 	}
 
-	fprintf(stderr, "Skip\n");
-	prevmatch = false;
-	cFrie = pFrie[++iFrie];
-	goto NextChar;
-
+	#undef WRITEMETA
+	goto RESULT_SUCCESS;
 RESULT_SUCCESS:
 	return RESULT_SUCCESS;
 }
@@ -3006,7 +3137,15 @@ int main(void)
 		memcpy(pCode->pText, loadedFile, pCode->textCount + 1);
 		free(loadedFile);
 
-		MUST(CodeBoxProcessMeta2(pCode) == RESULT_SUCCESS);
+		struct timespec bench_start, bench_end;
+		clock_gettime(CLOCK_MONOTONIC, &bench_start);
+		for (int i = 0; i < 10; ++i)
+			MUST(CodeBoxProcessMeta2(pCode) == RESULT_SUCCESS);
+		clock_gettime(CLOCK_MONOTONIC, &bench_end);
+		double bench_ms = (bench_end.tv_sec - bench_start.tv_sec) * 1000.0
+		                 + (bench_end.tv_nsec - bench_start.tv_nsec) / 1e6;
+		// CodeBoxProcessMeta2: 9.198 ms
+		LOG("CodeBoxProcessMeta2: %.3f ms\n", bench_ms);
 	}
 
 /*
