@@ -1509,27 +1509,27 @@ static i16 FrieGet2(FrieRoot *pRoot, int keyLen, const char* key)
 
 	static void *frie_disp[16] = {
 		[0 ... 15]                                            = &&FRIE_SKIP,
-		/* RESULT_SUCCESS: cFrie==0 */
+		/* RESULT_SUCCESS: cFrie==0 (skip=0) */
 		[false<<3 | false<<2 | false<<1 | false]              = &&RESULT_SUCCESS,
 		[false<<3 | false<<2 | false<<1 | true ]              = &&RESULT_SUCCESS,
-		[false<<3 | false<<2 | true <<1 | false]              = &&RESULT_SUCCESS,
-		[false<<3 | false<<2 | true <<1 | true ]              = &&RESULT_SUCCESS,
-		/* FRIE_MATCH: char matched, advance key and frie */
-		[false<<3 | true <<2 | false<<1 | true ]              = &&FRIE_MATCH,
-		[false<<3 | true <<2 | true <<1 | true ]              = &&FRIE_MATCH,
-		/* FRIE_JUMP: prevmatch, skip to next branch */
-		[true <<3 | false<<2 | true <<1 | false]              = &&FRIE_JUMP,
-		[true <<3 | false<<2 | true <<1 | true ]              = &&FRIE_JUMP,
-		/* FRIE_VAL: prevmatch, store token value */
-		[true <<3 | true <<2 | true <<1 | false]              = &&FRIE_VAL,
-		[true <<3 | true <<2 | true <<1 | true ]              = &&FRIE_VAL,
+		/* FRIE_MATCH: char matched (skip=1, match=1) */
+		[false<<3 | false<<2 | true <<1 | true ]              = &&FRIE_MATCH,
+		/* FRIE_JUMP: prevmatch && jump (skip=1) */
+		[false<<3 | true <<2 | true <<1 | false]              = &&FRIE_JUMP,
+		[false<<3 | true <<2 | true <<1 | true ]              = &&FRIE_JUMP,
+		/* FRIE_VAL: prevmatch && val (skip=1) */
+		[true <<3 | false<<2 | true <<1 | false]              = &&FRIE_VAL,
+		[true <<3 | false<<2 | true <<1 | true ]              = &&FRIE_VAL,
 	};
 
 #pragma GCC diagnostic pop
 
 #define FRIE_DISPATCH() { \
-		bool match = (cKey == cFrie) | ((cFrie == TOK_DELIM) & IS_DELIM_CHAR(cKey)); \
-		goto *frie_disp[IS_VAL_JUMP(cFrie)<<3 | IS_VAL_CHAR(cFrie)<<2 | prevmatch<<1 | match]; \
+		int frieVal  = prevmatch & IS_VAL(cFrie); \
+		int frieJump = prevmatch & IS_JUMP(cFrie); \
+		int skip     = (cFrie != 0); \
+		int match    = (cKey == cFrie) | ((cFrie == TOK_DELIM) & IS_DELIM_CHAR(cKey)); \
+		goto *frie_disp[frieVal<<3 | frieJump<<2 | skip<<1 | match]; \
 	}
 	
 	FRIE_DISPATCH();
@@ -1540,7 +1540,7 @@ FRIE_VAL: {
 	FRIE_DISPATCH();
 }
 FRIE_JUMP: {
-	iFrie    = JUMP_OFFSET(cFrie);
+	iFrie   += JUMP_OFFSET(cFrie);
 	cFrie    = pFrie[iFrie];
 	FRIE_DISPATCH();
 }
@@ -1560,35 +1560,35 @@ FRIE_SKIP: {
 
 #elif defined(GET_SWITCH)
 NextChar: {
-	int match = (cKey == cFrie) | ((cFrie == TOK_DELIM) & IS_DELIM_CHAR(cKey));
-	switch (IS_VAL_JUMP(cFrie)<<3 | IS_VAL_CHAR(cFrie)<<2 | prevmatch<<1 | match)
+	bool frieVal  = prevmatch & IS_VAL(cFrie);
+	bool frieJump = prevmatch & IS_JUMP(cFrie);
+	int  skip     = (cFrie != 0);
+	int  match    = (cKey == cFrie) | ((cFrie == TOK_DELIM) & IS_DELIM_CHAR(cKey));
+	switch (frieVal<<3 | frieJump<<2 | skip<<1 | match)
 	{
-		/* RESULT_SUCCESS: cFrie==0 */
+		/* RESULT_SUCCESS: cFrie==0 (skip=0) */
 		case false<<3 | false<<2 | false<<1 | false:
-		case false<<3 | false<<2 | false<<1 | true :
-		case false<<3 | false<<2 | true <<1 | false:
-		case false<<3 | false<<2 | true <<1 | true : {
+		case false<<3 | false<<2 | false<<1 | true : {
 			goto RESULT_SUCCESS;
 		}
-		/* FRIE_MATCH: char matched, advance key and frie */
-		case false<<3 | true <<2 | false<<1 | true :
-		case false<<3 | true <<2 | true <<1 | true : {
+		/* FRIE_MATCH: char matched (skip=1, match=1) */
+		case false<<3 | false<<2 | true <<1 | true : {
 			prevmatch  = true;
 			iKey      += 1;
 			cKey       = key[iKey];
 			cFrie      = pFrie[++iFrie];
 			goto NextChar;
 		}
-		/* FRIE_JUMP: prevmatch, skip to next branch */
-		case true <<3 | false<<2 | true <<1 | false:
-		case true <<3 | false<<2 | true <<1 | true : {
+		/* FRIE_JUMP: prevmatch && jump (skip=1) */
+		case false<<3 | true <<2 | true <<1 | false:
+		case false<<3 | true <<2 | true <<1 | true : {
 			iFrie    += JUMP_OFFSET(cFrie);
 			cFrie     = pFrie[iFrie];
 			goto NextChar;
 		}
-		/* FRIE_VAL: prevmatch, store token value */
-		case true <<3 | true <<2 | true <<1 | false:
-		case true <<3 | true <<2 | true <<1 | true : {
+		/* FRIE_VAL: prevmatch && val (skip=1) */
+		case true <<3 | false<<2 | true <<1 | false:
+		case true <<3 | false<<2 | true <<1 | true : {
 			value     = cFrie;
 			cFrie     = pFrie[++iFrie];
 			goto NextChar;
@@ -1604,30 +1604,31 @@ NextChar: {
 
 #elif defined(GET_IF)
 NextChar:
-	if (cFrie == 0) goto RESULT_SUCCESS;
 
-	// TODO Benchmark if vs switch
-	// Only accept JUMP or TOK if prev matched
-	if (prevmatch && IS_VAL(cFrie)) {
+	if (cKey == cFrie | ((cFrie == TOK_DELIM) & IS_DELIM_CHAR(cKey))) {
+		prevmatch = true;
+		cKey      = key[++iKey];
+		cFrie     = pFrie[++iFrie];
+		goto NextChar;
+	}
+
+	if (prevmatch & IS_VAL(cFrie)) {
 		value = cFrie;
 		cFrie = pFrie[++iFrie];
 		goto NextChar;
 	}
-	if (prevmatch && IS_JUMP(cFrie)) {
+
+	if (prevmatch & IS_JUMP(cFrie)) {
 		iFrie += JUMP_OFFSET(cFrie);
 		cFrie  = pFrie[iFrie];
 		goto NextChar;
 	}
-	if (cKey == cFrie || (cFrie == TOK_DELIM && IS_DELIM_CHAR(cKey))) {
-		prevmatch = true;
-		cKey  = key[++iKey];
-		cFrie = pFrie[++iFrie];
-		goto NextChar;
-	}
 
-	// fprintf(stderr, "Skip\n");
+	if (cFrie == 0) 
+		goto RESULT_SUCCESS;
+
 	prevmatch = false;
-	cFrie = pFrie[++iFrie];
+	cFrie     = pFrie[++iFrie];
 	goto NextChar;
 #endif
 
