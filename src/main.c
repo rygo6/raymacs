@@ -1240,6 +1240,7 @@ STATIC_ASSERT(sizeof(FrieNode) == 4);
 #define FRIE_ASCII_ENTRY_CAPACITY 128
 #define FRIE_LEN_ENTRY_CAPACITY 32
 typedef i16 frie_char;
+static const frie_char frie_empty[1] = {0};
 typedef struct FrieLenEntry {
 	u16 length;
 	u16 capacity;
@@ -1352,6 +1353,8 @@ DEF_ENUM(FRIE_LOOKUP);
 #define IS_END(_i16)  (_i16 == 0)
 #define IS_VAL(_i16)  (_i16 >= VAL_INDEX_BEGIN)
 #define IS_JUMP(_i16) (_i16 < 0)
+#define IS_VAL_JUMP(_i16) (((u16)_i16) >= VAL_INDEX_BEGIN)
+#define IS_VAL_CHAR(_i16) (_i16 > 0)
 #define JUMP_OFFSET(_i16) (-_i16)
 
 static void FrieLenEntryPrint(FrieLenEntry *pEntry) 
@@ -1487,80 +1490,137 @@ RESULT_SUCCESS:
 
 static i16 FrieGet2(FrieRoot *pRoot, int keyLen, const char* key)
 {
-	// LOG("FrieGet key:'%.*s' length:%d\n", keyLen, key, keyLen);
-	int iLen  = keyLen;
-	u16 iKey  = 0;
-	u16 iFrie = 0;
-	frie_char cKey = key[iKey];
+	u16           iKey   =  0;
+	u16           iFrie  =  0;
+	int           iLen   =  keyLen;
+	frie_char     cKey   =  key[iKey];
 	FrieLenEntry *pEntry = &pRoot->ascii[cKey].len[iLen];
-	frie_char *pFrie = pEntry->pBuf;
-	i16 value = pEntry->startValue;
-	if (pFrie == NULL) goto RESULT_SUCCESS;
-
-	bool prevmatch = true; // Start true for TOK_SINGLE_CHAR
-	frie_char cFrie = pFrie[iFrie];
+	frie_char    *pFrie  =  pEntry->pBuf ? pEntry->pBuf : (frie_char *)frie_empty;
+	i16           value  =  pEntry->startValue;
+	frie_char     cFrie  =  pFrie[iFrie];
+	bool      prevmatch  =  true; // Start true for TOK_SINGLE_CHAR
 	cKey = key[++iKey];
 
-NextChar:
-	// fprintf(stderr, "iBuf:%d iKey:%d cBuf:%c:%d cKey:%c:%d... ", iFrie, iKey,  cFrie, cFrie, cKey, cKey);
-	if (cFrie == 0) goto RESULT_SUCCESS;
+#define GET_GOTO
 
-	// switch (IS_TOK(cFrie)<<3 | IS_JUMP(cFrie)<<2 | prevmatch<<1 | (cKey == cFrie)) 
-	// {
-	// 	// Only accept JUMP or TOK if prev matched
-	// 	case        true<<3 |       /*false<<2*/      true<<1       /*fasle*/: {
-	// 		// fprintf(stderr, "Tok %d\n", cBuf);
-	// 		value = cFrie;
-	// 		cFrie = pFrie[++iFrie];
-	// 		goto NextChar;
-	// 	}
-	// 	case 	 /*fasle<<3*/          true<<2 |      true<<1       /*fasle*/: {
-	// 		// fprintf(stderr, "Jump %d\n", JUMP_VALUE(cBuf)+iBuf);
-	// 		iFrie += JUMP_VALUE(cFrie);
-	// 		cFrie = pFrie[iFrie];
-	// 		goto NextChar;
-	// 	}
-	// 	case     /*fasle<<3 |         false<<2*/      true<<1 |         true :
-	// 	case     /*fasle<<3 |         false<<2 |     false<<1*/         true : {
-	// 		// fprintf(stderr, "Match\n");
-	// 		prevmatch = true;
-	// 		cKey = key[++iKey];
-	// 		cFrie = pFrie[++iFrie];
-	// 		goto NextChar;
-	// 	}
-	// 	default: {
-	// 		prevmatch = false;
-	// 		// fprintf(stderr, "Skip\n");
-	// 		cFrie = pFrie[++iFrie];
-	// 		goto NextChar;
-	// 	}
-	// }
+#ifdef GET_GOTO
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Woverride-init"
+
+	static void *frie_disp[16] = {
+		[0 ... 15]                                            = &&FRIE_SKIP,
+		/* RESULT_SUCCESS: cFrie==0 */
+		[false<<3 | false<<2 | false<<1 | false]              = &&RESULT_SUCCESS,
+		[false<<3 | false<<2 | false<<1 | true ]              = &&RESULT_SUCCESS,
+		[false<<3 | false<<2 | true <<1 | false]              = &&RESULT_SUCCESS,
+		[false<<3 | false<<2 | true <<1 | true ]              = &&RESULT_SUCCESS,
+		/* FRIE_MATCH: char matched, advance key and frie */
+		[false<<3 | true <<2 | false<<1 | true ]              = &&FRIE_MATCH,
+		[false<<3 | true <<2 | true <<1 | true ]              = &&FRIE_MATCH,
+		/* FRIE_JUMP: prevmatch, skip to next branch */
+		[true <<3 | false<<2 | true <<1 | false]              = &&FRIE_JUMP,
+		[true <<3 | false<<2 | true <<1 | true ]              = &&FRIE_JUMP,
+		/* FRIE_VAL: prevmatch, store token value */
+		[true <<3 | true <<2 | true <<1 | false]              = &&FRIE_VAL,
+		[true <<3 | true <<2 | true <<1 | true ]              = &&FRIE_VAL,
+	};
+
+#pragma GCC diagnostic pop
+
+#define FRIE_DISPATCH() { \
+		bool match = (cKey == cFrie) | ((cFrie == TOK_DELIM) & IS_DELIM_CHAR(cKey)); \
+		goto *frie_disp[IS_VAL_JUMP(cFrie)<<3 | IS_VAL_CHAR(cFrie)<<2 | prevmatch<<1 | match]; \
+	}
+	
+	FRIE_DISPATCH();
+
+FRIE_VAL: {
+	value    = cFrie;
+	cFrie    = pFrie[++iFrie];
+	FRIE_DISPATCH();
+}
+FRIE_JUMP: {
+	iFrie    = JUMP_OFFSET(cFrie);
+	cFrie    = pFrie[iFrie];
+	FRIE_DISPATCH();
+}
+FRIE_MATCH: {
+	prevmatch = true;
+	cKey      = key[++iKey];
+	cFrie     = pFrie[++iFrie];
+	FRIE_DISPATCH();
+}
+FRIE_SKIP: {
+	prevmatch = false;
+	cFrie     = pFrie[++iFrie];
+	FRIE_DISPATCH();
+}
+
+#undef FRIE_DISPATCH
+
+#elif defined(GET_SWITCH)
+NextChar: {
+	int match = (cKey == cFrie) | ((cFrie == TOK_DELIM) & IS_DELIM_CHAR(cKey));
+	switch (IS_VAL_JUMP(cFrie)<<3 | IS_VAL_CHAR(cFrie)<<2 | prevmatch<<1 | match)
+	{
+		/* done: valJump=0, valChar=0 */
+		case false<<3 | false<<2 | false<<1 | false:
+		case false<<3 | false<<2 | false<<1 | true :
+		case false<<3 | false<<2 | true <<1 | false:
+		case false<<3 | false<<2 | true <<1 | true : {
+			goto RESULT_SUCCESS;
+		}
+		/* char && match: valJump=0, valChar=1, match=1 */
+		case false<<3 | true <<2 | false<<1 | true :
+		case false<<3 | true <<2 | true <<1 | true : {
+			prevmatch  = true;
+			iKey      += 1;
+			cKey       = key[iKey];
+			cFrie      = pFrie[++iFrie];
+			goto NextChar;
+		}
+		/* prevmatch && jump: valJump=1, valChar=0, prevmatch=1 */
+		case true <<3 | false<<2 | true <<1 | false:
+		case true <<3 | false<<2 | true <<1 | true : {
+			iFrie    += JUMP_OFFSET(cFrie);
+			cFrie     = pFrie[iFrie];
+			goto NextChar;
+		}
+		/* prevmatch && val: valJump=1, valChar=1, prevmatch=1 */
+		case true <<3 | true <<2 | true <<1 | false:
+		case true <<3 | true <<2 | true <<1 | true : {
+			value     = cFrie;
+			cFrie     = pFrie[++iFrie];
+			goto NextChar;
+		}
+		/* skip: everything else */
+		default: {
+			prevmatch  = false;
+			cFrie      = pFrie[++iFrie];
+			goto NextChar;
+		}
+	}
+}
+
+#elif defined(GET_IF)
+NextChar:
+	if (cFrie == 0) goto RESULT_SUCCESS;
 
 	// TODO Benchmark if vs switch
 	// Only accept JUMP or TOK if prev matched
 	if (prevmatch && IS_VAL(cFrie)) {
-		// fprintf(stderr, "Tok %d\n", cFrie);
 		value = cFrie;
 		cFrie = pFrie[++iFrie];
 		goto NextChar;
 	}
 	if (prevmatch && IS_JUMP(cFrie)) {
-		// fprintf(stderr, "Jump\n");
 		iFrie += JUMP_OFFSET(cFrie);
-		cFrie = pFrie[iFrie];
+		cFrie  = pFrie[iFrie];
 		goto NextChar;
 	}
-	if (cKey == cFrie) {
-		// fprintf(stderr, "Match\n");
+	if (cKey == cFrie || (cFrie == TOK_DELIM && IS_DELIM_CHAR(cKey))) {
 		prevmatch = true;
-		cKey = key[++iKey];
-		cFrie = pFrie[++iFrie];
-		goto NextChar;
-	}
-	if (IS_DELIM_CHAR(cKey) && cFrie == TOK_DELIM) {
-		// fprintf(stderr, "Delim Match\n");
-		prevmatch = true;
-		cKey = key[++iKey];
+		cKey  = key[++iKey];
 		cFrie = pFrie[++iFrie];
 		goto NextChar;
 	}
@@ -1569,9 +1629,9 @@ NextChar:
 	prevmatch = false;
 	cFrie = pFrie[++iFrie];
 	goto NextChar;
+#endif
 
 RESULT_SUCCESS:
-	// fprintf(stderr, "Found:%d\n", value);
 	return value == TOK_SINGLE_CHAR ? key[0] : value;
 }
 
@@ -2116,8 +2176,8 @@ TOK_ASCII_CHAR:
 	if (count--<0) goto RESULT_SUCCESS;;
 	cText  =  pText[iText];
 	pEntry = &pRoot->ascii[cText].len[MAXIMAL_MUNCH_LEN];
-	pFrie  =  pEntry->pBuf;
-	cFrie  =  pFrie != NULL ? pFrie[iFrie] : 0;
+	pFrie  =  pEntry->pBuf ? pEntry->pBuf : (frie_char *)frie_empty;
+	cFrie  =  pFrie[iFrie];
 	iTextStart = iText;
 
 	fprintf(stderr, "iText:%d iFrie:%d cText:%c:%d cFrie:%c:%d tok:%d...\n", iText, iFrie,  cText, cText, cFrie, cFrie, tok);
@@ -2136,9 +2196,6 @@ TOK_ASCII_CHAR:
 		fprintf(stderr, "Final Val %d\n", cFrie);
 		cText = pText[++iText];
 		goto TOK_ASCII_CHAR;
-	}
-	if (pFrie == NULL) {
-		goto RESULT_SUCCESS;
 	}
 
 	// // Only accept JUMP or TOK if prev matched
@@ -2177,8 +2234,8 @@ TOK_ASCII_CHAR:
 		iText++;
 		cText  =  pText[iText];
 		pEntry = &pRoot->ascii[cText].len[MAXIMAL_MUNCH_LEN];
-		pFrie  =  pEntry->pBuf;
-		cFrie  =  pFrie != NULL ? pFrie[iFrie] : 0;
+		pFrie  =  pEntry->pBuf ? pEntry->pBuf : (frie_char *)frie_empty;
+		cFrie  =  pFrie[iFrie];
 		iTextStart = iText;
 
 		goto *disp[cText];
