@@ -1563,14 +1563,14 @@ NextChar: {
 	int match = (cKey == cFrie) | ((cFrie == TOK_DELIM) & IS_DELIM_CHAR(cKey));
 	switch (IS_VAL_JUMP(cFrie)<<3 | IS_VAL_CHAR(cFrie)<<2 | prevmatch<<1 | match)
 	{
-		/* done: valJump=0, valChar=0 */
+		/* RESULT_SUCCESS: cFrie==0 */
 		case false<<3 | false<<2 | false<<1 | false:
 		case false<<3 | false<<2 | false<<1 | true :
 		case false<<3 | false<<2 | true <<1 | false:
 		case false<<3 | false<<2 | true <<1 | true : {
 			goto RESULT_SUCCESS;
 		}
-		/* char && match: valJump=0, valChar=1, match=1 */
+		/* FRIE_MATCH: char matched, advance key and frie */
 		case false<<3 | true <<2 | false<<1 | true :
 		case false<<3 | true <<2 | true <<1 | true : {
 			prevmatch  = true;
@@ -1579,21 +1579,21 @@ NextChar: {
 			cFrie      = pFrie[++iFrie];
 			goto NextChar;
 		}
-		/* prevmatch && jump: valJump=1, valChar=0, prevmatch=1 */
+		/* FRIE_JUMP: prevmatch, skip to next branch */
 		case true <<3 | false<<2 | true <<1 | false:
 		case true <<3 | false<<2 | true <<1 | true : {
 			iFrie    += JUMP_OFFSET(cFrie);
 			cFrie     = pFrie[iFrie];
 			goto NextChar;
 		}
-		/* prevmatch && val: valJump=1, valChar=1, prevmatch=1 */
+		/* FRIE_VAL: prevmatch, store token value */
 		case true <<3 | true <<2 | true <<1 | false:
 		case true <<3 | true <<2 | true <<1 | true : {
 			value     = cFrie;
 			cFrie     = pFrie[++iFrie];
 			goto NextChar;
 		}
-		/* skip: everything else */
+		/* FRIE_SKIP: no match, advance frie */
 		default: {
 			prevmatch  = false;
 			cFrie      = pFrie[++iFrie];
