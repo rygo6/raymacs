@@ -650,6 +650,7 @@ DEF_SCHEME(DEF_COLOR)
 #define TOK_ASCII_BEGIN 32  /* ' ' */
 #define TOK_ASCII_END   127 /* '~' */
 #define TOK_ASCII_RANGE TOK_ASCII_BEGIN ... TOK_ASCII_END
+#define TOK_ASCII_CAPACITY 128
 
 #define TOK_KEYWORD_BEGIN 128
 #define TOK_KEYWORD_END   255
@@ -658,6 +659,8 @@ DEF_SCHEME(DEF_COLOR)
 #define TOK_ALL_BEGIN 0
 #define TOK_ALL_END   255
 #define TOK_ALL_RANGE TOK_ALL_BEGIN ... TOK_ALL_END
+
+#define TOK_ALL_WILDCARD '\002'
 
 #define DELIM_WILDCARD '\003'
 #define IS_DELIM_TOKEN(_c)   (_c == DELIM_WILDCARD)
@@ -763,6 +766,7 @@ static const Color TOK_SCOPE_COLORS[] = {
 	/* Special */\
 	DEF(TOK_NONE,        /*NUL*/'\000')\
 	DEF(TOK_ERR,         /*ENQ*/'\001')\
+	DEF(TOK_ALL,      TOK_ALL_WILDCARD)\
 	DEF(TOK_DELIM,      DELIM_WILDCARD)\
 	/* White Spaces */\
 	DEF(TOK_TAB,          /* 9*/'\t')\
@@ -1483,7 +1487,7 @@ RESULT_SUCCESS:
 
 static i16 FrieGet2(FrieRoot *pRoot, int keyLen, const char* key)
 {
-	LOG("FrieGet key:'%.*s' length:%d\n", keyLen, key, keyLen);
+	// LOG("FrieGet key:'%.*s' length:%d\n", keyLen, key, keyLen);
 	int iLen  = keyLen;
 	u16 iKey  = 0;
 	u16 iFrie = 0;
@@ -1498,7 +1502,7 @@ static i16 FrieGet2(FrieRoot *pRoot, int keyLen, const char* key)
 	cKey = key[++iKey];
 
 NextChar:
-	fprintf(stderr, "iBuf:%d iKey:%d cBuf:%c:%d cKey:%c:%d... ", iFrie, iKey,  cFrie, cFrie, cKey, cKey);
+	// fprintf(stderr, "iBuf:%d iKey:%d cBuf:%c:%d cKey:%c:%d... ", iFrie, iKey,  cFrie, cFrie, cKey, cKey);
 	if (cFrie == 0) goto RESULT_SUCCESS;
 
 	// switch (IS_TOK(cFrie)<<3 | IS_JUMP(cFrie)<<2 | prevmatch<<1 | (cKey == cFrie)) 
@@ -1535,33 +1539,33 @@ NextChar:
 	// TODO Benchmark if vs switch
 	// Only accept JUMP or TOK if prev matched
 	if (prevmatch && IS_VAL(cFrie)) {
-		fprintf(stderr, "Tok %d\n", cFrie);
+		// fprintf(stderr, "Tok %d\n", cFrie);
 		value = cFrie;
 		cFrie = pFrie[++iFrie];
 		goto NextChar;
 	}
 	if (prevmatch && IS_JUMP(cFrie)) {
-		fprintf(stderr, "Jump\n");
+		// fprintf(stderr, "Jump\n");
 		iFrie += JUMP_OFFSET(cFrie);
 		cFrie = pFrie[iFrie];
 		goto NextChar;
 	}
 	if (cKey == cFrie) {
-		fprintf(stderr, "Match\n");
+		// fprintf(stderr, "Match\n");
 		prevmatch = true;
 		cKey = key[++iKey];
 		cFrie = pFrie[++iFrie];
 		goto NextChar;
 	}
-	if (cKey == TOK_DELIM && IS_DELIM_CHAR(cFrie)) {
-		fprintf(stderr, "Delim Match\n");
+	if (IS_DELIM_CHAR(cKey) && cFrie == TOK_DELIM) {
+		// fprintf(stderr, "Delim Match\n");
 		prevmatch = true;
 		cKey = key[++iKey];
 		cFrie = pFrie[++iFrie];
 		goto NextChar;
 	}
 
-	fprintf(stderr, "Skip\n");
+	// fprintf(stderr, "Skip\n");
 	prevmatch = false;
 	cFrie = pFrie[++iFrie];
 	goto NextChar;
@@ -2073,90 +2077,136 @@ static inline Vector2 GetBoxLocalToWorld(Vector2 point, Rectangle rect) {
 
 static RESULT CodeBoxProcessMeta2(CodeBox* pCode)
 {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Woverride-init"
+
+	static void *disp[] = {
+		[TOK_ASCII_RANGE] = &&TOK_ASCII_CHAR,
+		[TOK_WHITE_RANGE] = &&TOK_ASCII_CHAR,
+		[' ']             = &&TOK_WHITESPACE,
+		[TOK_NONE] = &&TOK_NONE,
+		[TOK_ALL]  = &&TOK_ALL,
+	};
+
+#pragma GCC diagnostic pop // ignored "-Woverride-init"
+
 	/* State */
 	const int  textCount = pCode->textCount;
 	char	  *pText     = pCode->pText;
 	TextMeta  *pMeta     = pCode->pTextMeta;
 	FrieRoot  *pRoot     = &TOK_BASE_FRIE;
 
+	TextMeta meta  = {};
 	bool prevmatch = true; 
-	i16 val  = 0;
-	int iLen = 0;
+	i16 tok   = 0;
+	int iLen  = 0;
 	int iFrie = 0;
-	int iText = 0;
-	int iTextStart = 0;
-	frie_char cFrie = 0;
-	frie_char cText = pText[iText];
+	int iText = -1;
 
-	FrieLenEntry *pEntry = &pRoot->ascii[cText].len[MAXIMAL_MUNCH_LEN];
-	frie_char    *pFrie  =  pEntry->pBuf;
+	int iTextStart;
+	frie_char     cFrie;
+	frie_char     cText;
+	FrieLenEntry *pEntry;
+	frie_char    *pFrie;
 
-	cFrie = pFrie != NULL ? pFrie[iFrie] : 0;
-	cText = pText[++iText];
+	int count = 50;
+	fprintf(stderr, "%.*s\n", count, pText);
 
-	// for (int i = 0; i < textCount; ++i) {
-	// 	pMeta[i].tok.val  = pText[i];
-	// 	pMeta[i].tok.kind = TOK_KIND_IDENTIFIER;
-	// }
-	
-	int count = 10;
+TOK_ASCII_CHAR:
+	if (count--<0) goto RESULT_SUCCESS;;
+	cText  =  pText[iText];
+	pEntry = &pRoot->ascii[cText].len[MAXIMAL_MUNCH_LEN];
+	pFrie  =  pEntry->pBuf;
+	cFrie  =  pFrie != NULL ? pFrie[iFrie] : 0;
+	iTextStart = iText;
 
-NextChar:
-	if (iText == 100 || count--<0) goto RESULT_SUCCESS;;
+	fprintf(stderr, "iText:%d iFrie:%d cText:%c:%d cFrie:%c:%d tok:%d...\n", iText, iFrie,  cText, cText, cFrie, cFrie, tok);
 
-	fprintf(stderr, "iText:%d iFrie:%d cText:%c:%d cFrie:%c:%d...\n", iText, iFrie,  cText, cText, cFrie, cFrie);
-
-	if (cFrie == 0 && val == 0) {
+	if (cFrie == 0 && tok == 0) {
+		// find delim
 		while (!IS_DELIM_CHAR(cText)) cText = pText[++iText];
 		int len = (iText - iTextStart) + 1; // + 1 delim
-		fprintf(stderr, "Delim `%.*s` len:%d\n", len, pText + iTextStart, len);
-		val = FrieGet2(pRoot, len, pText + iTextStart);
-		fprintf(stderr, "Found %d\n", val);
-		cText = pText[++iText];
-		iTextStart = iText;
-
-		pEntry = &pRoot->ascii[cText].len[MAXIMAL_MUNCH_LEN];
-		pFrie  =  pEntry->pBuf;
-		cFrie  =  pFrie != NULL ? pFrie[iFrie] : 0;
-		goto NextChar;
+		tok = FrieGet2(pRoot, len, pText + iTextStart);
+		fprintf(stderr, "Delim `%.*s` len:%d found:%d\n", len, pText + iTextStart, len, tok);
+		i16 dispt = tok == 0 ? 0 : TOK_ALL;
+		goto *disp[dispt];
 	}
-
 
 	if (cFrie == 0) {
 		fprintf(stderr, "Final Val %d\n", cFrie);
 		cText = pText[++iText];
-		goto NextChar;
+		goto TOK_ASCII_CHAR;
 	}
-
 	if (pFrie == NULL) {
 		goto RESULT_SUCCESS;
 	}
 
-	// Only accept JUMP or TOK if prev matched
-	if (prevmatch && IS_VAL(cFrie)) {
-		fprintf(stderr, "Tok %d\n", cFrie);
-		val = cFrie;
-		cFrie = pFrie[++iFrie];
-		goto NextChar;
-	}
-	if (prevmatch && IS_JUMP(cFrie)) {
-		fprintf(stderr, "Jump\n");
-		iFrie += JUMP_OFFSET(cFrie);
-		cFrie = pFrie[iFrie];
-		goto NextChar;
-	}
-	if (cText == cFrie) {
-		fprintf(stderr, "Match\n");
-		prevmatch = true;
-		cText = pText[++iText];
-		cFrie = pFrie[++iFrie];
-		goto NextChar;
+	// // Only accept JUMP or TOK if prev matched
+	// if (prevmatch && IS_VAL(cFrie)) {
+	// 	fprintf(stderr, "Tok %d\n", cFrie);
+	// 	tok = cFrie;
+	// 	cFrie = pFrie[++iFrie];
+	// 	goto NextChar;
+	// }
+	// if (prevmatch && IS_JUMP(cFrie)) {
+	// 	fprintf(stderr, "Jump\n");
+	// 	iFrie += JUMP_OFFSET(cFrie);
+	// 	cFrie = pFrie[iFrie];
+	// 	goto NextChar;
+	// }
+	// if (IS_DELIM_CHAR(cText) && cFrie == TOK_DELIM) {
+	// 	fprintf(stderr, "Match\n");
+	// 	prevmatch = true;
+	// 	cText = pText[++iText];
+	// 	cFrie = pFrie[++iFrie];
+	// 	goto NextChar;
+	// }
+
+	// fprintf(stderr, "Skip\n");
+	// prevmatch = false;
+	// cFrie = pFrie[++iFrie];
+	// goto NextChar;
+
+	TOK_WHITESPACE: {
+		meta.tok.val  = cText;
+		meta.tok.kind = TOK_KIND_WHITESPACE;
+		ZERO(&meta.tokOffset);
+		fprintf(stderr, "TOK_WHITESPACE iTextStart:%d iText:%d %s %s\n", iTextStart, iText, string_TOK(meta.tok.val), string_TOK_KIND(meta.tok.kind));
+		pMeta[iText] = meta;
+
+		iText++;
+		cText  =  pText[iText];
+		pEntry = &pRoot->ascii[cText].len[MAXIMAL_MUNCH_LEN];
+		pFrie  =  pEntry->pBuf;
+		cFrie  =  pFrie != NULL ? pFrie[iFrie] : 0;
+		iTextStart = iText;
+
+		goto *disp[cText];
 	}
 
-	fprintf(stderr, "Skip\n");
-	prevmatch = false;
-	cFrie = pFrie[++iFrie];
-	goto NextChar;
+	TOK_ALL: {
+		meta.tok.val  = tok;
+		meta.tok.kind = TOK_BASE_DEFS[tok].kind;
+		fprintf(stderr, "TOK_ALL iTextStart:%d iText:%d %s %s\n", iTextStart, iText, string_TOK(meta.tok.val), string_TOK_KIND(meta.tok.kind));
+		for (int i = iTextStart; i < iText; ++i) {
+			meta.tokOffset = (u8_span){ i - iTextStart, (iText-1) - i };
+			pMeta[i] = meta;
+		}
+		tok = 0;
+		goto *disp[cText];
+	}
+
+	TOK_NONE: {
+		fprintf(stderr, "TOK_NONE iTextStart:%d iText:%d\n", iTextStart, iText);
+		meta.tok.val  = TOK_ERR;
+		meta.tok.kind = TOK_KIND_ERROR;
+		ZERO(&meta.tokOffset);
+		for (int i = iTextStart; i < iText; ++i)
+			pMeta[i] = meta;
+
+		iText++;
+		goto TOK_ASCII_CHAR;
+	}
 
 RESULT_SUCCESS:
 	return RESULT_SUCCESS;
