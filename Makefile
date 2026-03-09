@@ -99,12 +99,14 @@ all: raylib $(OUTPUT)
 raylib: $(RAYLIB_LIB)
 
 $(RAYLIB_LIB):
-	@echo Downloading raylib $(RAYLIB_VERSION)...
-	@curl -L -o raylib.tar.gz $(RAYLIB_URL)
-	@echo Extracting raylib...
-	@tar -xzf raylib.tar.gz
-	@mv raylib-$(RAYLIB_VERSION) $(RAYLIB_PATH)
-	@rm raylib.tar.gz
+	@if [ ! -f "$(RAYLIB_SRC)/raylib.h" ]; then \
+		echo "Downloading raylib $(RAYLIB_VERSION)..."; \
+		curl -L -o raylib.tar.gz $(RAYLIB_URL); \
+		echo "Extracting raylib..."; \
+		tar -xzf raylib.tar.gz; \
+		mv raylib-$(RAYLIB_VERSION) $(RAYLIB_PATH); \
+		rm raylib.tar.gz; \
+	fi
 	@echo Building raylib...
 	@$(RAYLIB_MAKE)
 	@echo Raylib built successfully!
