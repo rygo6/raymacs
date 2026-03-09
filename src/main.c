@@ -2180,12 +2180,10 @@ static RESULT CodeBoxProcessMeta2(CodeBox* pCode)
   FrieLenEntry *pEntry;
   frie_char    *pFrie;
 
-  int count = 50;
+  int count = 200;
   fprintf(stderr, "%.*s\n", count, pText);
 
   FrieEntry: {
-    if (count--<0) goto RESULT_SUCCESS;
-
     prevdelim = false;
     prevmatch = false;
     cKey   =  pText[iText];
@@ -2200,6 +2198,7 @@ static RESULT CodeBoxProcessMeta2(CodeBox* pCode)
     fprintf(stderr, "FrieEntry iText:%d iFrie:%d cText:%c:%d cFrie:%c:%d tok:%d...\n", iText, iFrie,  cText, cText, cFrie, cFrie, tok);
   }
   FrieNextChar: {
+    if (count--<0) goto RESULT_SUCCESS;
     fprintf(stderr, "iText:%d iFrie:%d cText:%c:%d cFrie:%c:%d tok:%d...\n", iText, iFrie,  cText, cText, cFrie, cFrie, tok);
     if (cFrie == 0) {
       
