@@ -2180,7 +2180,7 @@ static RESULT CodeBoxProcessMeta2(CodeBox* pCode)
   FrieLenEntry *pEntry;
   frie_char    *pFrie;
 
-  int count = 80;
+  int count = 100;
   fprintf(stderr, "%.*s\n", count, pText);
 
   goto FrieEntry;
@@ -2205,35 +2205,36 @@ static RESULT CodeBoxProcessMeta2(CodeBox* pCode)
     iFrie  =  0;
     cFrie  =  pFrie[iFrie];
     iTextStart = iText;
+
+    // No Maximal Munch Entry
+    // No Frie Entry and no Tok from startValue = no entry
+    // If not found, search for delim to calc length and get non-maximal munch table
+    if (cFrie == 0 && tok == 0) { 
+      fprintf(stderr, "no maximal munch entry... ");
+      // find delim
+      int       iDlm = iText;
+      frie_char cDlm = pText[iDlm];
+      while (!IS_DELIM_CHAR(cDlm)) cDlm = pText[++iDlm];
+      iLen = (iDlm - iTextStart); 
+      fprintf(stderr, "found delim len:%d for %.*s\n", iLen, iLen, pText + iTextStart);
+      
+      // load entry for len
+      iText  = iTextStart;
+      pEntry = &pRoot->ascii[cKey].len[iLen+1]; // + 1 delim
+      tok    = pEntry->startValue;
+      pFrie  =  pEntry->pBuf ? pEntry->pBuf : (frie_char*)frie_empty;
+      cFrie  =  pFrie[iFrie];
+      cText  =  pText[++iText];
+    }
+
     fprintf(stderr, "FrieEntry iText:%d iFrie:%d cText:%c:%d cFrie:%c:%d tok:%d...\n", iText, iFrie,  cText, cText, cFrie, cFrie, tok);
   }
   FrieNextChar: {
     if (count--<0) goto RESULT_SUCCESS;
     fprintf(stderr, "iText:%d iFrie:%d cText:%c:%d cFrie:%c:%d tok:%d...\n", iText, iFrie,  cText, cText, cFrie, cFrie, tok);
-    if (cFrie == 0) {
-      
-      // The first run through traversal will try to find maximal munch.
-      // If not found, search for delim to calc length and get non-maximal munch table
-      if (tok == 0 && iLen == 0) {
-        fprintf(stderr, "no maximal munch entry... ");
-        // find delim
-        int       iDlm = iText;
-        frie_char cDlm = pText[iDlm];
-        while (!IS_DELIM_CHAR(cText)) cText = pText[++iDlm];
-        iLen = (iDlm - iTextStart); 
-        fprintf(stderr, "found delim len:%d for %.*s\n", iLen, iLen, pText + iTextStart);
-        
-        // load entry for len
-        iText  = iTextStart;
-        pEntry = &pRoot->ascii[cKey].len[iLen+1]; // + 1 delim
-        tok    = pEntry->startValue;
-        pFrie  =  pEntry->pBuf ? pEntry->pBuf : (frie_char*)frie_empty;
-        cFrie  =  pFrie[iFrie];
-        cText  =  pText[++iText];
-        goto FrieNextChar;
-      }
-
-      fprintf(stderr, "`%.*s` len:%d tok:%d\n", iLen, pText + iTextStart, iLen, tok);
+    if (cFrie == 0) { // No Entry
+      if (iLen == 0) fprintf(stderr, "startValue `%c` iTextStart:%d len:%d tok:%d\n", tok, iTextStart, iLen, tok);
+      else           fprintf(stderr, "`%.*s` iTextStart:%d len:%d tok:%d\n", iLen, pText + iTextStart, iTextStart, iLen, tok);
       goto *disp[tok];
     }
     if ((cText == cFrie)) {
@@ -2346,7 +2347,7 @@ static RESULT CodeBoxProcessMeta2(CodeBox* pCode)
     fprintf(stderr, "TOK_ALL iTextStart:%d iText:%d %s %s\n", iTextStart, iText, string_TOK(meta.tok.val), string_TOK_KIND(meta.tok.kind));
     iText += !prevdelim;
     for (int i = iTextStart; i <= iText; ++i) {
-      meta.tokOffset = (u8_span){ i - iTextStart, (iText-1) - i };
+      meta.tokOffset = (u8_span){ i - iTextStart, iText - i };
       pMeta[i] = meta;
     }
     goto FrieEntry;
@@ -2356,11 +2357,11 @@ static RESULT CodeBoxProcessMeta2(CodeBox* pCode)
     meta.tok.kind = TOK_KIND_ERROR;
     iText = iTextStart + iLen - prevdelim;
     for (int i = iTextStart; i <= iText; ++i) {
-      meta.tokOffset = (u8_span){ i - iTextStart, (iText-1) - i };
+      meta.tokOffset = (u8_span){ i - iTextStart, iText - i };
       pMeta[i] = meta;
     }
     fprintf(stderr, "TOK_NONE iTextStart:%d iText:%d iFrie:%d cText:%c:%d cFrie:%c:%d tok:%d\n", iTextStart, iText, iFrie, cText, cText, cFrie, cFrie, tok);
-    goto FrieEntry;
+    goto FrieEntryNext;
   }
 
 RESULT_SUCCESS:
