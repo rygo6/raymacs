@@ -2180,9 +2180,19 @@ static RESULT CodeBoxProcessMeta2(CodeBox* pCode)
   FrieLenEntry *pEntry;
   frie_char    *pFrie;
 
-  int count = 200;
+  int count = 80;
   fprintf(stderr, "%.*s\n", count, pText);
 
+  goto FrieEntry;
+
+  /*
+   * Conditions labels
+   */
+
+  FrieEntryNext: {
+    iText++;
+    // fallthrough
+  }
   FrieEntry: {
     prevdelim = false;
     prevmatch = false;
@@ -2259,6 +2269,15 @@ static RESULT CodeBoxProcessMeta2(CodeBox* pCode)
     cFrie     = pFrie[++iFrie];
     goto FrieNextChar;
   }
+  TOK_SQUOTE: {
+    fprintf(stderr, "TOK_SQUOTE iText:%d\n", iText);
+    meta.tok.val  = tok;
+    meta.tok.kind = TOK_BASE_DEFS[tok].kind;
+    ZERO(&meta.tokOffset);
+    meta.parenLevel++;
+    pMeta[iText] = meta;
+    goto FrieEntryNext;
+  }
   TOK_LPAREN: {
     fprintf(stderr, "TOK_LPAREN iText:%d\n", iText);
     meta.tok.val  = tok;
@@ -2266,8 +2285,7 @@ static RESULT CodeBoxProcessMeta2(CodeBox* pCode)
     ZERO(&meta.tokOffset);
     meta.parenLevel++;
     pMeta[iText] = meta;
-    iText++;
-    goto FrieEntry;
+    goto FrieEntryNext;
   }
   TOK_RPAREN: {
     fprintf(stderr, "TOK_RPAREN iText:%d\n", iText);
@@ -2276,8 +2294,7 @@ static RESULT CodeBoxProcessMeta2(CodeBox* pCode)
     ZERO(&meta.tokOffset);
     pMeta[iText] = meta;
     meta.parenLevel--;
-    iText++;
-    goto FrieEntry;
+    goto FrieEntryNext;
   }
   TOK_LBRACE: {
     fprintf(stderr, "TOK_LBRACE iText:%d\n", iText);
@@ -2286,8 +2303,7 @@ static RESULT CodeBoxProcessMeta2(CodeBox* pCode)
     ZERO(&meta.tokOffset);
     meta.braceLevel++;
     pMeta[iText] = meta;
-    iText++;
-    goto FrieEntry;
+    goto FrieEntryNext;
   }
   TOK_RBRACE: {
     fprintf(stderr, "TOK_RBRACE iText:%d\n", iText);
@@ -2296,8 +2312,7 @@ static RESULT CodeBoxProcessMeta2(CodeBox* pCode)
     ZERO(&meta.tokOffset);
     pMeta[iText] = meta;
     meta.braceLevel--;
-    iText++;
-    goto FrieEntry;
+    goto FrieEntryNext;
   }
   TOK_LBRACKET: {
     fprintf(stderr, "TOK_LBRACKET iText:%d\n", iText);
@@ -2306,8 +2321,7 @@ static RESULT CodeBoxProcessMeta2(CodeBox* pCode)
     ZERO(&meta.tokOffset);
     meta.bracketLevel++;
     pMeta[iText] = meta;
-    iText++;
-    goto FrieEntry;
+    goto FrieEntryNext;
   }
   TOK_RBRACKET: {
     fprintf(stderr, "TOK_RBRACKET iText:%d\n", iText);
@@ -2316,8 +2330,7 @@ static RESULT CodeBoxProcessMeta2(CodeBox* pCode)
     ZERO(&meta.tokOffset);
     pMeta[iText] = meta;
     meta.bracketLevel--;
-    iText++;
-    goto FrieEntry;
+    goto FrieEntryNext;
   }
   TOK_WHITESPACE: {
     meta.tok.val  = cText;
@@ -2325,9 +2338,8 @@ static RESULT CodeBoxProcessMeta2(CodeBox* pCode)
     ZERO(&meta.tokOffset);
     fprintf(stderr, "TOK_WHITESPACE iTextStart:%d iText:%d %s %s\n", iTextStart, iText, string_TOK(meta.tok.val), string_TOK_KIND(meta.tok.kind));
     pMeta[iText] = meta;
-    iText++;
-    goto FrieEntry;
-  }
+    goto FrieEntryNext;
+  } 
   TOK_ALL: {
     meta.tok.val  = tok;
     meta.tok.kind = TOK_BASE_DEFS[tok].kind;
